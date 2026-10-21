@@ -265,6 +265,14 @@ async function main() {
         colorScheme: "dark",
       }),
     };
+    // Show the demo prompt's host instead of the capturing machine's hostname.
+    for (const context of Object.values(contexts)) {
+      await context.route("**/api/config", async (route) => {
+        const response = await route.fetch();
+        const json = { ...(await response.json()), hostname: "dev" };
+        await route.fulfill({ response, json });
+      });
+    }
     const desktop = await contexts.desktop.newPage();
     const mobile = await contexts.mobile.newPage();
 
@@ -321,7 +329,10 @@ async function main() {
     await desktop
       .getByRole("button", { name: "修改 books.go", exact: true })
       .click();
-    await desktop.locator(".code-reader:visible .cm-line").first().waitFor();
+    await desktop
+      .locator(".code-diff-reader:visible [data-code]")
+      .first()
+      .waitFor();
     await shoot(desktop, "desktop-diff.png");
 
     // Session overview.
@@ -356,7 +367,10 @@ async function main() {
     await mobile
       .getByRole("button", { name: "修改 books.go", exact: true })
       .click();
-    await mobile.locator(".code-reader:visible .cm-line").first().waitFor();
+    await mobile
+      .locator(".code-diff-reader:visible [data-code]")
+      .first()
+      .waitFor();
     await shoot(mobile, "mobile-diff.png");
   } finally {
     await browser.close();
