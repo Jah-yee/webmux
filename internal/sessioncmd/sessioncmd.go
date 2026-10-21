@@ -142,8 +142,18 @@ func Run(ctx context.Context, e Env, args []string) int {
 	if len(env) > 0 {
 		request["env"] = map[string]string(env)
 	}
+	// An attached run needs a terminal: check before creating anything.
+	var console Console
+	if !*detach {
+		if console, code = e.openConsole(); console == nil {
+			return code
+		}
+	}
 	var created sessionInfo
 	if err := client.Do(ctx, http.MethodPost, "/api/sessions", request, &created); err != nil {
+		if console != nil {
+			_ = console.Restore()
+		}
 		return e.Fail(err)
 	}
 	if *detach {
@@ -154,7 +164,15 @@ func Run(ctx context.Context, e Env, args []string) int {
 		_, _ = fmt.Fprintf(e.Stdout, "%s\t%s\n", created.ID, link)
 		return contract.ExitOK
 	}
-	return e.attach(ctx, client, created.ID, false)
+	// Tell the user where to find the session (for example on a phone)
+	// before the session's output starts; stdout stays the session's. The
+	// terminal is already raw, so the line ends with CR LF.
+	if link, err := link(ctx, client, created.ID); err == nil {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · %s · Ctrl+] to detach\r\n", created.ID, link)
+	} else {
+		_, _ = fmt.Fprintf(e.Stderr, "webmux: session %s · Ctrl+] to detach\r\n", created.ID)
+	}
+	return e.attach(ctx, client, created.ID, false, console)
 }
 
 // Attach implements `attach <id> [--observe]`.
@@ -172,18 +190,28 @@ func Attach(ctx context.Context, e Env, args []string) int {
 		return code
 	}
 	defer client.Close()
-	return e.attach(ctx, client, flags.Arg(0), *observe)
+	console, code := e.openConsole()
+	if console == nil {
+		return code
+	}
+	return e.attach(ctx, client, flags.Arg(0), *observe, console)
 }
 
-func (e Env) attach(ctx context.Context, client *localclient.Client, id string, observe bool) int {
+// openConsole enters raw mode; a missing terminal is a usage error.
+func (e Env) openConsole() (Console, int) {
 	console, err := e.OpenConsole()
 	if errors.Is(err, attach.ErrNotTerminal) {
-		_, _ = fmt.Fprintln(e.Stderr, "webmux attach:", err)
-		return contract.ExitUsage
+		_, _ = fmt.Fprintln(e.Stderr, "webmux:", err)
+		return nil, contract.ExitUsage
 	}
 	if err != nil {
-		return e.Fail(err)
+		return nil, e.Fail(err)
 	}
+	return console, contract.ExitOK
+}
+
+// attach runs until detach or exit and restores console before returning.
+func (e Env) attach(ctx context.Context, client *localclient.Client, id string, observe bool, console Console) int {
 	result, err := attach.Run(ctx, client, id, console, attach.Options{Observe: observe, Label: e.Label})
 	_ = console.Restore()
 	switch {

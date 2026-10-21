@@ -89,7 +89,7 @@ func TestRunAttachDetachAndExitCode(t *testing.T) {
 	if code := run.wait(); code != 7 {
 		t.Fatalf("exit code %d; output %q", code, run.output())
 	}
-	if !strings.Contains(run.output(), "30 100") || !strings.Contains(run.output(), "hi there:answer") {
+	if !strings.Contains(run.output(), "30 100") || !strings.Contains(run.output(), "hi there:answer") || !strings.Contains(run.output(), "webmux: session ") || !strings.Contains(run.output(), "Ctrl+] to detach") {
 		t.Fatalf("output %q", run.output())
 	}
 
@@ -128,9 +128,18 @@ func TestRunAttachDetachAndExitCode(t *testing.T) {
 
 func TestSessionCommandsWithoutServer(t *testing.T) {
 	f := newFixture(t, "")
-	for _, args := range [][]string{{"ls"}, {"run", "--", "true"}, {"open", "abcdefgh"}} {
+	// Without a terminal only detached runs get as far as the server.
+	for _, args := range [][]string{{"ls"}, {"run", "--detach", "--", "true"}, {"open", "abcdefgh"}} {
 		if _, stderr, code := f.session(t, args...); code != 3 || !strings.Contains(stderr, "not running") {
 			t.Errorf("%v: %d %q", args, code, stderr)
 		}
+	}
+}
+
+func TestAttachedRunWithoutServerOnTerminal(t *testing.T) {
+	f := newFixture(t, "")
+	run := f.ptyStart(t, "run", "--", "claude")
+	if code := run.wait(); code != 3 || !strings.Contains(run.output(), "not running") {
+		t.Fatalf("exit %d output %q", code, run.output())
 	}
 }

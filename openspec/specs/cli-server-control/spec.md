@@ -14,6 +14,7 @@
 - `version`：输出版本，行为不变；
 - `status`、`stop`、`bridge`：见下文；
 - `config`：见 `cli-config`；
+- `run`、`attach`、`ls`、`open`：见 `terminal-session-cli`；
 - 其他值：向标准错误输出“未知子命令”与可用子命令列表，退出码 2，SHALL NOT 启动服务。
 
 客户端子命令 SHALL 接受 `--config <path>`，配置解析规则（默认路径、缺失文件、显式路径不存在即失败、默认值）SHALL 与服务启动完全一致；客户端据此确定状态目录，进而定位运行时记录与本机套接字。

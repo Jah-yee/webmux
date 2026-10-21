@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rainchan/webmux/internal/attach"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
 )
@@ -84,7 +84,7 @@ func env(t *testing.T, f *fakeServer) (Env, *bytes.Buffer, *bytes.Buffer, *[]str
 		Connect:        func() (*localclient.Client, error) { return localclient.New(localclient.UnixDialer{Path: socket}), nil },
 		Stdout:         &stdout,
 		Stderr:         &stderr,
-		OpenConsole:    func() (Console, error) { return nil, errors.New("no console in tests") },
+		OpenConsole:    func() (Console, error) { return &fakeConsole{}, nil },
 		OpenBrowser:    func(url string) error { *opened = append(*opened, url); return nil },
 		ResolveCwd:     func(_ context.Context, cwd string) (string, error) { return "/mnt/c/work/" + cwd, nil },
 		NotRunningHint: "start it",
@@ -140,5 +140,32 @@ func TestListAndOpen(t *testing.T) {
 	}
 	if code := Open(context.Background(), e, []string{"missing"}); code != 1 {
 		t.Fatalf("open missing %d", code)
+	}
+}
+
+// fakeConsole is a terminal whose input is already closed.
+type fakeConsole struct{ restored bool }
+
+func (c *fakeConsole) Read([]byte) (int, error)    { return 0, io.EOF }
+func (c *fakeConsole) Write(p []byte) (int, error) { return len(p), nil }
+func (c *fakeConsole) Size() (int, int, error)     { return 80, 24, nil }
+func (c *fakeConsole) Restore() error              { c.restored = true; return nil }
+
+func TestAttachedRunAnnouncesSessionAndNeedsTerminal(t *testing.T) {
+	f := &fakeServer{}
+	e, stdout, stderr, _ := env(t, f)
+	console := &fakeConsole{}
+	e.OpenConsole = func() (Console, error) { return console, nil }
+	// The fake server has no WebSocket endpoint, so attaching then fails.
+	code := Run(context.Background(), e, []string{"--", "claude"})
+	if code != 1 || stdout.Len() != 0 || !console.restored {
+		t.Fatalf("attached run %d stdout %q restored %v", code, stdout.String(), console.restored)
+	}
+	if !strings.HasPrefix(stderr.String(), "webmux: session newsess1 · http://127.0.0.1:7681/s/newsess1 · Ctrl+] to detach\r\n") {
+		t.Fatalf("announcement %q", stderr.String())
+	}
+	e.OpenConsole = func() (Console, error) { return nil, attach.ErrNotTerminal }
+	if code := Run(context.Background(), e, []string{"--", "claude"}); code != contract.ExitUsage || len(f.bodies) != 1 {
+		t.Fatalf("no terminal: exit %d, %d sessions created", code, len(f.bodies))
 	}
 }
