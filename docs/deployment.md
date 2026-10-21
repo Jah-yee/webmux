@@ -28,15 +28,17 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 
 ### 命令行
 
-无子命令或第一个参数以 `-` 开头时启动服务，与 `serve` 相同；未知子命令退出码 2。客户端子命令都接受 `--config`，按与服务相同的规则找到状态目录、运行时记录与本机套接字。
+无子命令或使用 `--listen` 等服务参数时启动服务，与 `serve` 相同；未知子命令退出码 2。客户端子命令都接受 `--config`，按与服务相同的规则找到状态目录、运行时记录与本机套接字。
 
-| 命令                                             | 说明                                                                                                                           |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `webmux serve [--log-file PATH]`                 | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                   |
-| `webmux status [--json] [--reveal-token]`        | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token        |
-| `webmux stop [--timeout 15s] [--force] [--json]` | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号        |
-| `webmux bridge`                                  | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                        |
-| `webmux config path\|show\|validate\|init`       | 定位、查看生效配置（不含 Token）、校验（含 TOML 行列号）、以模板和随机 Token 初始化（已存在需 `--force`，原文件保留为 `.bak`） |
+| 命令                                              | 说明                                                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `webmux serve [--log-file PATH]`                  | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                   |
+| `webmux status [--json] [--reveal-token]`         | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token        |
+| `webmux stop [--timeout 15s] [--force] [--json]`  | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号        |
+| `webmux bridge`                                   | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                        |
+| `webmux config path\|show\|validate\|check\|init` | 定位、查看生效配置（不含 Token）、校验（含 TOML 行列号）、以模板和随机 Token 初始化（已存在需 `--force`，原文件保留为 `.bak`） |
+
+`webmux config check` 是 `config validate` 的别名；`webmux help` 显示全部命令。
 
 JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置只在启动时读取；`status` 的 `drift` 列出已修改但尚未通过重启生效的 `listen`、`token`。
 
@@ -67,7 +69,34 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 - 同一状态目录只能由一个实例使用；多个实例请配置不同的 `state_dir`。第二个实例照常提供终端服务，但不写运行时记录、不创建本机套接字，并在日志中警告。
 - 清单损坏、文件锁冲突或存储不可用时，仓库管理功能被禁用，但终端服务照常运行，损坏的清单不会被覆盖。
 
+## 服务管理命令
+
+先将二进制放到稳定位置（源码构建可执行 `make install`），再以日常用户运行，不要使用 sudo：
+
+```sh
+webmux service install
+webmux service status
+webmux service logs            # 最近 100 行
+webmux service logs --follow   # 持续查看，Ctrl-C 退出；也支持 -f
+webmux service stop
+webmux service start
+webmux service restart
+webmux service uninstall
+```
+
+- `install` 写入用户服务定义并立即启用、启动；缺少默认配置时自动创建带随机 token 的配置。显式 `--config PATH` 指定的文件必须已经存在且有效。
+- 服务使用当前可执行文件和配置文件的绝对路径，不复制二进制。移动二进制后，需在新位置执行 `service install --force` 更新定义。
+- 已有服务定义需要 `service install --force` 才能替换，并会重启服务。`service install --dry-run` 只输出服务定义，不写文件、不创建配置、不操作服务；可与 `--config` 配合使用。
+- `stop`、`restart`、覆盖安装和卸载会结束当前所有终端会话，滚屏不会在重启后恢复。`uninstall` 保留二进制、配置、日志和状态目录。
+- 安装会保存当前 PATH 中的绝对目录，并补充常见 agent 安装目录，只保存 PATH、shell、locale 和 `XDG_STATE_HOME` 等指定环境变量。更新 agent 安装路径后可重新执行 `install --force`。
+- 服务工作目录为用户主目录；配置中的 `default_cwd`、`state_dir` 建议使用绝对路径或支持的 `~` 路径；自定义 shell/预设的可执行程序使用绝对路径或 PATH 中的命令名，避免依赖安装时的工作目录。
+- Linux 需要可用的 systemd 用户管理器；macOS 需要已登录的 GUI 会话。服务启用成功不代表 HTTP 端口已成功监听，遇到端口冲突等启动失败时查看 `status` 和 `logs`。
+
+`webmux help` 显示命令概览；`webmux service install --help` 等显示子命令参数。
+
 ## systemd 用户服务（Linux）
+
+推荐使用 `webmux service install`，生成位置为 `$XDG_CONFIG_HOME/systemd/user/webmux.service`（默认 `~/.config/systemd/user/webmux.service`）。也可手工使用模板：
 
 ```sh
 make install
@@ -87,6 +116,8 @@ loginctl enable-linger "$USER"
 服务使用 `KillMode=mixed`：WebMux 先自行清理会话，超时后由 systemd 清理整个 cgroup。
 
 ## launchd 用户代理（macOS）
+
+推荐使用 `webmux service install`，自动生成 `~/Library/LaunchAgents/com.webmux.plist` 并填写绝对路径，日志位于 `~/Library/Logs/webmux.log`。也可手工使用模板：
 
 ```sh
 make install

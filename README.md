@@ -111,10 +111,24 @@ make install        # 安装到 ~/.local/bin/webmux
 默认读取 `~/.config/webmux/config.toml`（不存在时使用默认值）。命令行参数 `--config`、`--listen`、`--token` 优先于配置文件。
 
 ```sh
-mkdir -p ~/.config/webmux
-cp deploy/config.example.toml ~/.config/webmux/config.toml
-chmod 600 ~/.config/webmux/config.toml
+webmux config init   # 创建 0600 配置文件，自动生成随机 token；不覆盖已有文件
+webmux config path   # 查看配置路径，读取文件中的 token 后在浏览器登录
+webmux config check  # 校验配置
 ```
+
+安装为当前用户的后台服务（Linux systemd / macOS launchd，无需 sudo）：
+
+```sh
+webmux service install       # 安装并启动；缺少默认配置时自动创建
+webmux service status
+webmux service logs -f
+webmux service restart       # 重启会结束所有终端会话
+webmux service stop
+webmux service start
+webmux service uninstall     # 停止并移除服务，保留配置、日志和状态目录
+```
+
+服务引用当前二进制的绝对路径，请先将它放到 `~/.local/bin/webmux` 等稳定位置。`webmux service install --dry-run` 可预览服务文件，`--force` 可更新服务定义并重启。`webmux help` 查看全部命令；前台启动也可写成 `webmux serve`。
 
 | 配置项               | 默认值                       | 说明                                           |
 | -------------------- | ---------------------------- | ---------------------------------------------- |

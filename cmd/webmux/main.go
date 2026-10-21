@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -30,11 +31,51 @@ func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const subcommands = "serve, version, status, stop, bridge, config, run, attach, ls, open"
+const subcommands = "serve, version, status, stop, bridge, config, service, run, attach, ls, open, help"
+
+const cliHelp = `Usage: webmux [command] [options]
+
+Commands:
+  serve             Run the server in the foreground (default)
+  version           Print the version
+  status            Show server health and access URLs
+  stop              Stop the server through its local control API
+  config            Initialize, locate, show or validate configuration
+  service install   Install and start a service for the current user
+  service uninstall Stop and remove the user service; keep configuration
+  service start     Start the installed user service
+  service stop      Stop the user service (ends all terminal sessions)
+  service restart   Restart the user service (ends all terminal sessions)
+  service status    Show the user service manager's status
+  service logs      Show recent logs; add --follow (-f) to stream
+  run               Create a terminal session
+  attach            Attach to a terminal session
+  ls                List terminal sessions
+  open              Open WebMux in the browser
+  bridge            Bridge the local socket over standard input/output
+  help              Show this help
+
+Server options: --config PATH, --listen HOST:PORT, --token TOKEN,
+                --tunnel, --log-file PATH
+Service install options: --config PATH, --force, --dry-run
+
+Linux uses systemd --user; macOS uses a launchd LaunchAgent. Do not use sudo.
+Run "webmux <command> --help" for command options.
+`
 
 // dispatch routes by the first argument. No argument or a flag first keeps
 // the original server invocation used by existing service templates.
 func dispatch(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "help", "--help", "-help", "-h":
+			_, _ = fmt.Fprint(stdout, cliHelp)
+			return contract.ExitOK
+		case "--version":
+			_, _ = fmt.Fprintln(stdout, "webmux", version)
+			return contract.ExitOK
+		}
+	}
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return runServe(args)
 	}
@@ -54,6 +95,8 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 		return sessionCommand(args[0], args[1:], stdout, stderr)
 	case "config":
 		return configCommand(args[1:], stdout, stderr)
+	case "service":
+		return serviceCommand(args[1:], stdout, stderr)
 	}
 	_, _ = fmt.Fprintf(stderr, "webmux: unknown subcommand %q\navailable subcommands: %s\n", args[0], subcommands)
 	return contract.ExitUsage
@@ -80,6 +123,9 @@ func loadConfig(args []string) (serverRun, error) {
 	logFile := flags.String("log-file", "", "write stdout and stderr to this file, keeping the previous one as .1")
 	if err := flags.Parse(args); err != nil {
 		return serverRun{}, err
+	}
+	if flags.NArg() != 0 {
+		return serverRun{}, fmt.Errorf("unexpected argument %q; see webmux help", flags.Arg(0))
 	}
 	explicit := map[string]bool{}
 	flags.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
@@ -139,6 +185,9 @@ func ensureTunnelToken(c *config.Config) error {
 
 func runServe(args []string) int {
 	if err := run(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return contract.ExitOK
+		}
 		slog.Error("webmux failed", "error", err)
 		return contract.ExitError
 	}

@@ -18,7 +18,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 )
 
-const configUsage = "usage: webmux config path|show|validate|init [--config PATH] [--json]"
+const configUsage = "usage: webmux config path|show|validate|check|init [--config PATH] [--json]"
 
 func configCommand(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
@@ -26,11 +26,14 @@ func configCommand(args []string, stdout, stderr io.Writer) int {
 		return contract.ExitUsage
 	}
 	switch args[0] {
+	case "--help", "-h", "help":
+		_, _ = fmt.Fprintln(stdout, configUsage)
+		return contract.ExitOK
 	case "path":
 		return configPath(args[1:], stdout, stderr)
 	case "show":
 		return configShow(args[1:], stdout, stderr)
-	case "validate":
+	case "validate", "check":
 		return configValidate(args[1:], stdout, stderr)
 	case "init":
 		return configInit(args[1:], stdout, stderr)
