@@ -55,6 +55,14 @@ jobs:
         run: pnpm --dir web exec vite build
       - name: Run Go race tests
         run: go test -race -parallel=4 ./...
+      # No Windows runner: hosted runners lack a usable WSL 2, so the tray is
+      # cross-compiled and vetted here and its WSL behavior verified by hand.
+      - name: Cross-compile the Windows tray
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/webmux-tray
+          CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o /dev/null ./cmd/webmux-tray
+      - name: Vet the Windows tray
+        run: GOOS=windows go vet ./cmd/webmux-tray ./internal/tray/... ./internal/wslclient
       - name: Warm the E2E backend build cache
         run: go build -o /dev/null ./cmd/webmux
       - name: Save Go cache

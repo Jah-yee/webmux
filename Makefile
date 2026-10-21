@@ -6,7 +6,7 @@ BASELINE_SAMPLES ?= 30
 BASELINE_OUTPUT ?= baseline/results/latest.json
 LDFLAGS = -s -w -X main.version=$(VERSION)
 
-.PHONY: web build release check test test-unit test-browser test-e2e test-browsers-install format format-check install baseline
+.PHONY: web build tray release check test test-unit test-browser test-e2e test-browsers-install format format-check install baseline
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -14,7 +14,13 @@ web:
 build: web
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux ./cmd/webmux
 
-release: web
+# The Windows tray needs no frontend build; its icon and version resources
+# come from the committed cmd/webmux-tray/rsrc_windows_*.syso files.
+tray:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS) -H=windowsgui" -o bin/webmux-tray-windows-amd64.exe ./cmd/webmux-tray
+	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS) -H=windowsgui" -o bin/webmux-tray-windows-arm64.exe ./cmd/webmux-tray
+
+release: web tray
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-linux-amd64 ./cmd/webmux
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-linux-arm64 ./cmd/webmux
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/webmux-darwin-amd64 ./cmd/webmux

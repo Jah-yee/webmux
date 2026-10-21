@@ -109,6 +109,72 @@ launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.webmux.plist
 - 代理在用户登录后运行，`KeepAlive` 在异常退出后重启。
 - 系统睡眠会暂停所有会话进程；长时间运行 agent 时可使用 `caffeinate` 防止睡眠。
 
+## Windows（WSL）
+
+WebMux 不原生运行在 Windows 上，而是运行在 WSL 2 发行版中，由托盘程序 `webmux-tray.exe` 在 Windows 通知区域启动、监控和停止。托盘只是 WebMux 的客户端：配置解析、链接推导和停止都由 WSL 中的 `webmux` 完成。
+
+### 前置条件
+
+- Windows 10 22H2 及以上或 Windows 11（amd64 / arm64），无需管理员权限。
+- 从 Microsoft Store 安装的 WSL 2：托盘依赖 `wsl.exe --version`、`--exec`、`--cd` 与 `WSL_UTF8`，系统自带的旧版 WSL 不支持。在 PowerShell 中执行 `wsl --update` 可升级。
+- 至少一个已安装的发行版。`wsl.exe --version` 失败或没有发行版时，托盘图标显示异常，状态行提示“未检测到 WSL 发行版”。
+
+### 在发行版中安装 webmux
+
+在发行版的终端中把 Linux 版二进制安装到 `~/.local/bin/webmux`（托盘默认路径），并生成带随机 token 的配置：
+
+```sh
+install -m 755 webmux-linux-amd64 ~/.local/bin/webmux # arm64 设备用 webmux-linux-arm64
+webmux config init
+```
+
+也可以跳过 `config init`，之后在托盘菜单中点击“初始化配置（生成 Token）”。托盘只在配置文件不存在时提供该入口，从不改写已有配置；修改配置请用“打开 WebMux 配置文件”。WSL 中的 `webmux` 版本过旧（不支持本机 API 与 `bridge`）时，状态行提示升级。
+
+### 放置托盘与登录启动
+
+把 `webmux-tray-windows-amd64.exe`（或 `-arm64.exe`）放到固定位置（例如 `%LOCALAPPDATA%\Programs\WebMux\`）后双击运行。同一 Windows 用户只运行一个实例，再次启动只会让已有实例弹出状态通知。勾选菜单中的“登录时自动启动”会在 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 中登记当前 exe 路径；移动 exe 后复选项变为未勾选，重新勾选即可。
+
+托盘设置保存在 `%APPDATA%\WebMux\tray.json`（“编辑托盘设置”用记事本打开，保存后 2 秒内自动生效；文件无效时托盘以默认值运行并在状态行提示，不会覆盖该文件）：
+
+| 字段          | 默认值                             | 说明                                                   |
+| ------------- | ---------------------------------- | ------------------------------------------------------ |
+| `distro`      | 空（系统默认发行版）               | 目标发行版，也可在“发行版”子菜单中选择                 |
+| `mode`        | `auto`                             | 启动方式：`auto` / `tray`（托盘托管）/ `systemd`       |
+| `webmux`      | `~/.local/bin/webmux`              | WSL 中的可执行文件                                     |
+| `config`      | 空（WebMux 默认配置路径）          | WSL 中的配置文件，绝对路径或 `~/` 开头                 |
+| `logFile`     | `~/.local/state/webmux/webmux.log` | 托盘托管方式下的服务日志                               |
+| `startWebMux` | `true`                             | 托盘启动时自动启动 WebMux                              |
+| `autoRestart` | `true`                             | 托盘托管方式下意外退出后自动重启（10 分钟内最多 5 次） |
+| `forward`     | `[]`                               | 已勾选的转发地址，由“远程访问”子菜单维护               |
+
+路径类设置在下次启动 WebMux 时生效；切换发行版或启动方式会先停止由托盘管理的实例（有会话时先确认）。托盘日志位于 `%LOCALAPPDATA%\WebMux\tray.log`（1 MiB 轮转），不记录 token。
+
+### 两种启动方式
+
+- **托盘托管**：托盘在发行版中以参数数组（不经 shell）运行 `<webmux> serve --log-file <logFile> [--config <config>]`，WebMux 把启动方记为 `windows-tray`；该进程独立于托盘，并保持发行版存活。意外退出时托盘通知并按退避重启。
+- **systemd 用户服务**：发行版启用了 systemd 且已按上文“systemd 用户服务（Linux）”安装 `webmux.service` 时，托盘通过 `systemctl --user start|stop|restart webmux` 管理该单元，重启策略交给单元自身；托盘另外维持一个 `wsl.exe --exec sleep infinity` 保活进程，避免发行版因没有 WSL 客户端而被关闭，停止 WebMux 时一并结束。
+- **自动**（默认）：每次启动前检测，满足 systemd 条件时用 systemd，否则托盘托管。
+
+在 WSL 终端中手动运行的实例、或启动方与当前方式不符的实例显示为“外部实例”：托盘只提供访问类操作，不会停止或重启它。“仅退出托盘”后 WebMux 继续运行，重新打开托盘即恢复控制；Windows 注销或关机时托盘直接退出。
+
+### localhost 转发诊断
+
+托盘从 Windows 侧直接请求 `http://127.0.0.1:<端口>/api/health`（不带 token、不经系统代理）。WebMux 在 WSL 中健康但 Windows 无法访问时，图标显示异常，状态行提示检查 WSL 的 `localhostForwarding` / `networkingMode`。常见原因：`%USERPROFILE%\.wslconfig` 中设置了 `localhostForwarding=false`、VPN 或安全软件劫持了回环地址、WebMux 只监听了 WSL 内部地址。修改 `.wslconfig` 后执行 `wsl --shutdown` 使其生效（会结束所有会话）。
+
+### 远程访问
+
+NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流量不会进入 WSL，手机无法直接访问 WebMux。三种途径，按推荐顺序：
+
+1. **mirrored 网络模式**：在 `.wslconfig` 的 `[wsl2]` 下设置 `networkingMode=mirrored`，WSL 与 Windows 共享网卡，按上文“手机访问（Tailscale）”配置即可。托盘的“远程访问”子菜单会显示“无需转发（镜像网络模式）”。
+2. **在 WSL 内安装 Tailscale**：发行版获得自己的 Tailscale 地址，WebMux 直接监听该地址；状态报告了远程链接时托盘同样提示无需转发。
+3. **托盘转发**：在“远程访问”子菜单中勾选 Windows 主机的地址（Tailscale 地址置顶），托盘在该地址与 WebMux 相同的端口上监听，并把 HTTP 与 WebSocket 原样转给本机链接。转发默认关闭，只在 WebMux 运行且健康、配置了 token、Windows 侧可达时启用，条件不满足时暂停、恢复后自动继续；只接受 `Host` 与 `Origin` 恰为该地址的请求，认证仍由 WebMux 完成。勾选的地址保存在 `tray.json` 中，下次启动自动恢复；端口被占用时该条目显示失败原因。转发随托盘退出而停止，需要常驻远程访问时请改用前两种途径。
+
+首次在非回环地址上监听时，Windows 防火墙可能弹出授权提示（允许需要管理员确认）；托盘不会自动修改防火墙规则。只为可信网络（如 Tailscale）放行。
+
+### Token 与剪贴板
+
+托盘不在 Windows 侧保存 token。点击“复制 Token”时才经本机 API 从 WSL 读取，写入剪贴板后立即丢弃；剪贴板内容标记为不进入 Windows 剪贴板历史（Win+V）与跨设备云剪贴板，60 秒后若剪贴板仍是该 token 则自动清空（期间复制了其他内容则保持不变）。复制的链接从不包含 token。
+
 ## agent 的 PATH
 
 systemd 和 launchd 都不会加载交互 shell 的初始化文件。服务模板的 `PATH` 已包含 `~/.local/bin`、pnpm / npm 全局目录（macOS 另含 Homebrew）。如果 agent 安装在 nvm 等其他位置：
