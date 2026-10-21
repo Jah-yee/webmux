@@ -232,7 +232,7 @@ func TestSessionEnv(t *testing.T) {
 		"WARP_CLI_AGENT_PROTOCOL_VERSION=9", "TMUX=/tmp/tmux-1/default,1,0", "TMUX_PANE=%1",
 		"STY=1.pts", "ZELLIJ=0", "ZELLIJ_SESSION_NAME=x", "KITTY_WINDOW_ID=1", "ITERM_SESSION_ID=w0",
 		"LC_TERMINAL=iTerm2", "LC_TERMINAL_VERSION=3", "WEZTERM_PANE=0", "GHOSTTY_RESOURCES_DIR=/g",
-		"WT_SESSION=x", "WT_PROFILE_ID=y", "VTE_VERSION=7600", "WEBMUX_SESSION_ID=parent",
+		"WT_SESSION=x", "WT_PROFILE_ID=y", "VTE_VERSION=7600", "WEBMUX_SESSION_ID=parent", "WEBMUX_LAUNCHER=windows-tray",
 		"TERMINFO=/usr/share/terminfo",
 	}
 	want := []string{"HOME=/home/u", "PATH=/bin", "LANG=C.UTF-8", "TERMINFO=/usr/share/terminfo",

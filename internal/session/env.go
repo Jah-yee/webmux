@@ -9,6 +9,8 @@ var hostTerminalNames = map[string]bool{
 	"TERM_PROGRAM": true, "TERM_PROGRAM_VERSION": true, "TMUX": true, "TMUX_PANE": true,
 	"STY": true, "LC_TERMINAL": true, "LC_TERMINAL_VERSION": true, "WT_SESSION": true,
 	"WT_PROFILE_ID": true, "VTE_VERSION": true,
+	// Describes how the server was started, not the session's programs.
+	"WEBMUX_LAUNCHER": true,
 	// Set explicitly below.
 	"TERM": true, "COLORTERM": true, "WEBMUX_SESSION_ID": true,
 }

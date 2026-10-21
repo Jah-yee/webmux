@@ -45,11 +45,11 @@ test-browsers-install:
 	$(PNPM) --dir web exec playwright install --with-deps chromium
 
 format:
-	$(GOFMT) -w cmd internal web/embed.go
+	$(GOFMT) -w cmd internal web/embed.go deploy/embed.go
 	web/node_modules/.bin/oxfmt README.md CONTRIBUTING.md SECURITY.md docs .oxfmtrc.json web
 
 format-check:
-	@files="$$($(GOFMT) -l cmd internal web/embed.go)"; \
+	@files="$$($(GOFMT) -l cmd internal web/embed.go deploy/embed.go)"; \
 		if [ -n "$$files" ]; then printf 'Unformatted Go files:\n%s\n' "$$files"; exit 1; fi
 	web/node_modules/.bin/oxfmt --check README.md CONTRIBUTING.md SECURITY.md docs .oxfmtrc.json web
 

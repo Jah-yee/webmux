@@ -131,7 +131,7 @@ func startTunnelServe(t *testing.T) *tunnelRun {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &tunnelRun{dir: dir, out: &syncBuffer{}, cancel: cancel, result: make(chan error, 1)}
-	go func() { r.result <- serve(ctx, c, r.out) }()
+	go func() { r.result <- serve(ctx, serverRun{Config: c}, r.out) }()
 	t.Cleanup(func() {
 		cancel()
 		<-r.result
@@ -220,7 +220,7 @@ func TestServePrintsTokenFragmentOnlyWithTunnel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	out := &syncBuffer{}
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, c, out) }()
+	go func() { done <- serve(ctx, serverRun{Config: c}, out) }()
 	eventually(t, "local URL", func() bool {
 		return strings.Contains(out.String(), "WebMux local:  http://127.0.0.1:")
 	})
@@ -245,7 +245,7 @@ func TestServeFailsBeforeListeningWithoutCloudflared(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := &syncBuffer{}
-	if err := serve(context.Background(), c, out); err == nil || !strings.Contains(err.Error(), "tunnel.cloudflared") {
+	if err := serve(context.Background(), serverRun{Config: c}, out); err == nil || !strings.Contains(err.Error(), "tunnel.cloudflared") {
 		t.Fatalf("serve error %v", err)
 	}
 	if out.String() != "" {

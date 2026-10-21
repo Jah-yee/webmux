@@ -205,3 +205,70 @@ interface SessionInfo {
 | `4410` | 会话已退出（先发送快照与退出帧）           |
 
 认证失败在握手阶段直接返回 HTTP 401，不升级连接。
+
+## 本机 API（Unix 套接字）
+
+服务端在 `<state_dir>/run/webmux.sock`（路径超过平台 `sun_path` 上限时改用 `$XDG_RUNTIME_DIR/webmux/<摘要>.sock`，实际路径写入运行时记录）上提供与 TCP 完全相同的 `/api/*`、`/ws/*`，认证方式改为对端进程的有效 UID，不检查 Token、Host 与 Origin。示例：
+
+```sh
+curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessions
+```
+
+套接字额外提供以下接口；它们不在 TCP 上提供（返回 404）。响应为 JSON，错误为 `{"error": "..."}`。`v1` 内只增加可选字段，不兼容变更使用新的路径版本。
+
+| 路由                      | 说明                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /local/v1/status`    | 状态 JSON（与 `webmux status --json` 契约 v1 相同，`record`、`localApi` 为 `true`，`drift` 由服务端重读配置文件计算）                       |
+| `POST /local/v1/shutdown` | 可选请求体 `{"force": bool}`；systemd / launchd 启动且未设 `force` 时 409 并给出管理命令；否则 202，按 SIGTERM 流程退出。会话内部的连接 403 |
+| `GET /local/v1/token`     | `{"token": "..."}`；未配置 Token 时 404；会话内部的连接 403                                                                                 |
+
+`webmux bridge` 把一条套接字连接原样桥接到标准输入输出（HTTP/1.1 keep-alive 与 WebSocket 升级照常工作）；连接失败时不写标准输出，服务未运行退出码 3，其他错误 1。
+
+## 控制面 JSON 契约
+
+`webmux status|stop|config ... --json` 向标准输出写入恰好一个 JSON 对象，诊断只写标准错误。所有对象带 `v`（当前 `1`）；同一版本内只增加可选字段，不删除或改变既有字段含义，不兼容变更提升 `v`。退出码：`0` 运行中且健康或操作成功，`1` 其他错误，`2` 用法错误，`3` 未运行（`status`、`bridge`）。
+
+`status`（亦为 `/local/v1/status`）：
+
+```jsonc
+{
+  "v": 1,
+  "state": "running", // running | stopped | unresponsive | error
+  "record": true, // 来自有效运行时记录或本机 API
+  "localApi": true, // 经本机 API 获取
+  "pid": 1234, // 未运行时为 null
+  "version": "0.1.0",
+  "launcher": "manual", // manual | systemd | launchd | windows-tray
+  "listen": "127.0.0.1:7681", // 实际监听地址
+  "sessions": 2, // 健康时的会话数，否则为 null
+  "health": { "status": "ok", "message": "" }, // ok | unauthorized | refused | timeout | not-webmux | error
+  "urls": {
+    "local": "http://127.0.0.1:7681",
+    "remote": [
+      {
+        "url": "http://100.64.0.5:7681",
+        "interface": "tailscale0",
+        "kind": "tailscale",
+      },
+    ],
+  },
+  "tokenConfigured": true,
+  "drift": [], // 配置已修改但未重启的字段：listen、token
+  "warnings": [],
+  "config": {
+    "path": "/home/u/.config/webmux/config.toml",
+    "exists": true,
+    "error": "",
+  },
+  "logFile": "",
+  "socket": "/home/u/.local/state/webmux/run/webmux.sock",
+  "startedAt": "2026-01-01T00:00:00Z",
+  "token": "...", // 仅 --reveal-token 且配置了 Token 时出现
+}
+```
+
+链接不带路径、查询参数或 Token。回环监听的远程链接为空数组；通配监听列出启用中的非回环、非链路本地 IPv4 地址，Tailscale（100.64.0.0/10）在前，WSL NAT 模式下的虚拟网卡地址不列出；通配监听且未配置 Token 时 `warnings` 含暴露警告。
+
+`stop`：`{"v": 1, "result": "stopped" | "killed" | "not-running" | "refused" | "error", "message": "..."}`。
+
+`config show`：`{"v", "path", "exists", "listen", "tokenConfigured", "defaultCwd", "stateDir", "allowedOrigins", "presets": [{"name", "label", "argv", "allowArgs"}]}`，不含 Token。`config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。

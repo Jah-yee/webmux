@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"github.com/rainchan/webmux/internal/api"
+	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tunnel"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -16,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -24,29 +27,75 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "version" {
-		fmt.Println("webmux", version)
-		return
-	}
-	if err := run(); err != nil {
-		slog.Error("webmux failed", "error", err)
-		os.Exit(1)
-	}
+	os.Exit(dispatch(os.Args[1:], os.Stdout, os.Stderr))
 }
-func loadConfig(args []string) (config.Config, error) {
-	flags := flag.NewFlagSet("webmux", flag.ContinueOnError)
+
+const subcommands = "serve, version, status, stop, bridge, config"
+
+// dispatch routes by the first argument. No argument or a flag first keeps
+// the original server invocation used by existing service templates.
+func dispatch(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return runServe(args)
+	}
+	switch args[0] {
+	case "serve":
+		return runServe(args[1:])
+	case "version":
+		_, _ = fmt.Fprintln(stdout, "webmux", version)
+		return contract.ExitOK
+	case "status":
+		return statusCommand(args[1:], stdout, stderr)
+	case "stop":
+		return stopCommand(args[1:], stdout, stderr)
+	case "bridge":
+		return bridgeCommand(args[1:], os.Stdin, stdout, stderr)
+	case "config":
+		return configCommand(args[1:], stdout, stderr)
+	}
+	_, _ = fmt.Fprintf(stderr, "webmux: unknown subcommand %q\navailable subcommands: %s\n", args[0], subcommands)
+	return contract.ExitUsage
+}
+
+// serverRun is the validated server configuration plus how it was obtained.
+type serverRun struct {
+	config.Config
+	ConfigPath     string
+	ConfigExplicit bool
+	// ConfigFound reports whether the configuration file existed at start.
+	ConfigFound bool
+	LogFile     string
+	// TokenGenerated marks a per-process tunnel token.
+	TokenGenerated bool
+}
+
+func loadConfig(args []string) (serverRun, error) {
+	flags := flag.NewFlagSet("webmux serve", flag.ContinueOnError)
 	path := flags.String("config", config.DefaultPath(), "TOML configuration path")
 	listen := flags.String("listen", "", "HTTP listen address")
 	token := flags.String("token", "", "optional shared token")
 	tunnelFlag := flags.Bool("tunnel", false, "expose webmux through a Cloudflare Tunnel")
+	logFile := flags.String("log-file", "", "write stdout and stderr to this file, keeping the previous one as .1")
 	if err := flags.Parse(args); err != nil {
-		return config.Config{}, err
+		return serverRun{}, err
 	}
 	explicit := map[string]bool{}
 	flags.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
-	c, err := config.Load(*path, explicit["config"])
+	run := serverRun{ConfigExplicit: explicit["config"]}
+	var err error
+	if run.ConfigPath, err = client.ExpandHome(*path); err != nil {
+		return run, err
+	}
+	if *logFile != "" {
+		if run.LogFile, err = client.ExpandHome(*logFile); err != nil {
+			return run, err
+		}
+	}
+	_, statErr := os.Stat(run.ConfigPath)
+	run.ConfigFound = statErr == nil
+	c, err := config.Load(run.ConfigPath, run.ConfigExplicit)
 	if err != nil {
-		return c, err
+		return run, err
 	}
 	if explicit["listen"] {
 		c.Listen = *listen
@@ -58,12 +107,15 @@ func loadConfig(args []string) (config.Config, error) {
 		c.Tunnel.Enabled = *tunnelFlag
 	}
 	if err = c.Validate(); err != nil {
-		return c, err
+		return run, err
 	}
+	hadToken := c.Token != ""
 	if err = ensureTunnelToken(&c); err != nil {
-		return c, err
+		return run, err
 	}
-	return c, nil
+	run.Config = c
+	run.TokenGenerated = !hadToken && c.Token != ""
+	return run, nil
 }
 
 // ensureTunnelToken keeps a public entry point authenticated: an empty token
@@ -83,10 +135,23 @@ func ensureTunnelToken(c *config.Config) error {
 	return nil
 }
 
-func run() error {
-	c, err := loadConfig(os.Args[1:])
+func runServe(args []string) int {
+	if err := run(args); err != nil {
+		slog.Error("webmux failed", "error", err)
+		return contract.ExitError
+	}
+	return contract.ExitOK
+}
+
+func run(args []string) error {
+	c, err := loadConfig(args)
 	if err != nil {
 		return err
+	}
+	if c.LogFile != "" {
+		if err := redirectOutput(c.LogFile); err != nil {
+			return fmt.Errorf("log file: %w", err)
+		}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -96,7 +161,7 @@ func run() error {
 // serve runs until ctx ends. c must come from loadConfig, which generates or
 // vets the tunnel token. Access URLs go to out, never to slog, so tokens stay
 // out of structured logs.
-func serve(ctx context.Context, c config.Config, out io.Writer) error {
+func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	host, _, _ := net.SplitHostPort(c.Listen)
 	if (host == "0.0.0.0" || host == "::" || host == "") && c.Token == "" {
 		slog.Warn("SHELL EXPOSED: listening on all interfaces without token; isolate with Tailscale/WireGuard")
@@ -125,8 +190,9 @@ func serve(ctx context.Context, c config.Config, out io.Writer) error {
 	if c.Tunnel.Enabled {
 		public = &api.PublicOrigin{}
 	}
+	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, cancel)
 	server := &http.Server{
-		Handler:           api.New(c, m, workspaces, public, codes),
+		Handler:           api.New(c.Config, m, workspaces, public, codes),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -134,6 +200,7 @@ func serve(ctx context.Context, c config.Config, out io.Writer) error {
 	}
 	ended := make(chan error, 1)
 	go func() { ended <- server.Serve(listener) }()
+	rt.serve()
 	slog.Info("webmux listening", "address", listener.Addr(), "version", version)
 	local := localOrigin(listener.Addr())
 	localLink := local
@@ -170,6 +237,7 @@ func serve(ctx context.Context, c config.Config, out io.Writer) error {
 		_ = server.Close()
 		slog.Warn("forced HTTP shutdown", "error", shutdownErr)
 	}
+	rt.close(shutdown)
 	if err != nil && err != http.ErrServerClosed {
 		return err
 	}

@@ -30,15 +30,33 @@ type Server struct {
 	Public    *PublicOrigin
 }
 
-// New builds the HTTP handler. public is the runtime tunnel origin; nil means
-// no tunnel.
+// New builds the TCP handler. public is the runtime tunnel origin; nil means
+// no tunnel. Local-only endpoints are not found here.
 func New(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, codes ...*codeview.Service) http.Handler {
+	s := newServer(c, m, workspaces, public, codes)
+	mux := s.routes()
+	return s.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/local/") {
+			http.NotFound(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}))
+}
+
+func newServer(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, codes []*codeview.Service) *Server {
 	s := &Server{Config: c, Manager: m, Workspace: workspaces, Public: public}
 	if len(codes) > 0 {
 		s.Code = codes[0]
 	} else {
 		s.Code = codeview.New(m)
 	}
+	return s
+}
+
+// routes registers the /api, /ws and static routes shared by both listeners.
+func (s *Server) routes() *http.ServeMux {
+	c, m, workspaces := s.Config, s.Manager, s.Workspace
 	mux := http.NewServeMux()
 	s.codeRoutes(mux)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +81,7 @@ func New(c config.Config, m *session.Manager, workspaces *workspace.Service, pub
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 	mux.HandleFunc("GET /ws/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 	mux.HandleFunc("GET /", s.static)
-	return s.middleware(mux)
+	return mux
 }
 func reply(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -88,17 +106,23 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	return true
 }
+
+// baseHeaders sets the response headers and panic recovery both listeners
+// share; it returns the deferred recovery.
+func baseHeaders(w http.ResponseWriter) func() {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	return func() {
+		if p := recover(); p != nil {
+			slog.Error("request panic", "panic", p)
+			http.Error(w, "internal error", 500)
+		}
+	}
+}
 func (s *Server) middleware(next http.Handler) http.Handler {
 	hostAllowed := hostCheck(s.Config)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		defer func() {
-			if p := recover(); p != nil {
-				slog.Error("request panic", "panic", p)
-				http.Error(w, "internal error", 500)
-			}
-		}()
+		defer baseHeaders(w)()
 		if !hostAllowed(r.Host) && !s.Public.hostAllowed(authorityHostname(r.Host)) {
 			failure(w, http.StatusForbidden, errors.New("host not allowed"))
 			return

@@ -52,7 +52,7 @@ export default async function globalSetup() {
     // A concurrent make web / E2E run may replace the checkout's web/dist.
     await mkdir(join(root, "web"));
     await Promise.all([
-      ...["cmd", "internal", "go.mod", "go.sum"].map((name) =>
+      ...["cmd", "internal", "deploy", "go.mod", "go.sum"].map((name) =>
         cp(join(repoRoot, name), join(root, name), { recursive: true }),
       ),
       cp(join(webRoot, "embed.go"), join(root, "web/embed.go")),

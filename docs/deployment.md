@@ -11,21 +11,34 @@
 ## 配置
 
 ```sh
-mkdir -p ~/.config/webmux
-cp deploy/config.example.toml ~/.config/webmux/config.toml
-chmod 600 ~/.config/webmux/config.toml
+webmux config init                 # 生成 0600 的 ~/.config/webmux/config.toml，含随机 Token
+# 或：mkdir -p ~/.config/webmux && cp deploy/config.example.toml ~/.config/webmux/config.toml && chmod 600 ~/.config/webmux/config.toml
 ```
 
 示例见 [`deploy/config.example.toml`](../deploy/config.example.toml)。加载规则：
 
-- 默认路径为 `~/.config/webmux/config.toml`，不存在时全部使用默认值；通过 `--config` 显式指定的文件不存在时启动失败。
+- 默认路径为 `~/.config/webmux/config.toml`，不存在时全部使用默认值；通过 `--config` 显式指定的文件不存在时启动失败。`--config` 与 `--log-file` 支持 `~/`。
 - 命令行 `--listen`、`--token` 优先于配置文件，显式传入空 token 也会覆盖配置。
 - `webmux version` 输出版本号。
 
 ```sh
-webmux --config ~/.config/webmux/config.toml
+webmux --config ~/.config/webmux/config.toml   # 等同于 webmux serve --config ...
 curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 ```
+
+### 命令行
+
+无子命令或第一个参数以 `-` 开头时启动服务，与 `serve` 相同；未知子命令退出码 2。客户端子命令都接受 `--config`，按与服务相同的规则找到状态目录、运行时记录与本机套接字。
+
+| 命令                                             | 说明                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `webmux serve [--log-file PATH]`                 | 启动服务；`--log-file` 把标准输出与标准错误写入文件（0600），旧文件保留为 `.1`，启动方关闭管道后服务照常运行                   |
+| `webmux status [--json] [--reveal-token]`        | 优先经本机 API，退回运行时记录 + TCP 健康检查；退出码 0 健康、3 未运行、1 其他；只有 `--json --reveal-token` 输出 Token        |
+| `webmux stop [--timeout 15s] [--force] [--json]` | 优先经本机 API 停止，卡死时退回 SIGTERM，超时 SIGKILL；systemd / launchd 实例需 `--force`；没有记录时不向任何进程发信号        |
+| `webmux bridge`                                  | 把本机套接字桥接到标准输入输出，供 Windows 客户端经 `wsl.exe --exec webmux bridge` 使用                                        |
+| `webmux config path\|show\|validate\|init`       | 定位、查看生效配置（不含 Token）、校验（含 TOML 行列号）、以模板和随机 Token 初始化（已存在需 `--force`，原文件保留为 `.bak`） |
+
+JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置只在启动时读取；`status` 的 `drift` 列出已修改但尚未通过重启生效的 `listen`、`token`。
 
 ### 配置项
 
@@ -49,9 +62,9 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 
 ### 状态目录
 
-`state_dir` 只保存仓库清单 `repositories.json`，不保存会话、终端内容或 token。目录权限 0700、文件 0600，通过原子替换写入。
+`state_dir` 保存仓库清单 `repositories.json` 与运行时子目录 `run/`（运行时记录 `server.json`、锁 `server.lock`、本机套接字 `webmux.sock`），不保存会话、终端内容或 token。目录权限 0700、文件 0600，通过原子替换写入。
 
-- 同一状态目录只能由一个实例使用；多个实例请配置不同的 `state_dir`。
+- 同一状态目录只能由一个实例使用；多个实例请配置不同的 `state_dir`。第二个实例照常提供终端服务，但不写运行时记录、不创建本机套接字，并在日志中警告。
 - 清单损坏、文件锁冲突或存储不可用时，仓库管理功能被禁用，但终端服务照常运行，损坏的清单不会被覆盖。
 
 ## systemd 用户服务（Linux）
