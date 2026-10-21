@@ -65,16 +65,18 @@
           aria-hidden="true"
         />
       </Item.Title>
+      <!-- Fixed tracks keep each item in place as its text changes; the text
+           spans share the status badge's border and padding to align lines. -->
       <div
-        class="mt-2 grid auto-rows-[minmax(2.5rem,auto)] grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] items-start gap-x-4 gap-y-1 text-xs text-muted-foreground"
+        class="mt-2 grid auto-rows-[minmax(2.5rem,auto)] grid-cols-[repeat(auto-fill,minmax(min(100%,8rem),8rem))] items-start gap-x-4 gap-y-1 text-xs text-muted-foreground"
       >
         <SessionStatus {session} />
-        <span
+        <span class="border border-transparent py-0.5"
           >{session.clients
             ? `${session.clients} 个设备已连接`
             : "后台会话"}</span
         >
-        <span>{relative}</span>
+        <span class="border border-transparent py-0.5">{relative}</span>
       </div>
     </div>
     <pre
