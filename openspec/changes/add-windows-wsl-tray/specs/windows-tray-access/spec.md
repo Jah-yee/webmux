@@ -6,14 +6,14 @@
 
 ### Requirement: 链接来源
 
-托盘显示与复制的本机链接、远程链接及暴露警告 SHALL 直接取自 WebMux 本机 API 报告的状态，托盘 SHALL NOT 自行解析 WebMux 配置文件或另行推导链接。链接 SHALL NOT 包含 Token。
+托盘显示与复制的本机链接、远程链接及暴露警告 SHALL 直接取自 WebMux 本机 API 报告的状态，托盘 SHALL NOT 自行解析 WebMux 配置文件或另行推导链接。菜单与通知中显示的链接 SHALL NOT 包含 Token；复制规则见“复制链接带 Token”。
 
 状态报告配置与运行实例不一致（`drift` 非空）时，状态行 SHALL 提示“配置已修改，重启 WebMux 后生效”，复制的链接仍对应当前运行实例。
 
 #### Scenario: 默认配置
 
 - **WHEN** WSL 中 WebMux 使用默认配置运行
-- **THEN** “复制本机链接”写入 `http://127.0.0.1:7681`，菜单不显示“复制 Token”和“复制远程链接”
+- **THEN** “复制本机链接”写入 `http://127.0.0.1:7681`（未配置 Token），菜单不显示“复制 Token”和“复制远程链接”
 
 #### Scenario: 运行中修改监听地址
 
@@ -45,6 +45,15 @@
 - **WHEN** `listen = "0.0.0.0:7681"`、`token = ""`，发行版内有 Tailscale 地址 100.64.0.5
 - **THEN** 远程链接子菜单顶部显示无 Token 警告，其下第一项为 `http://100.64.0.5:7681`
 
+### Requirement: 复制链接带 Token
+
+配置了 Token 时，每个“复制…链接”（本机、远程、经托盘转发、公网）SHALL 在点击时按“复制 Token”的方式取得 Token，复制 `<链接>/#token=<Token>`，并 SHALL 按与“复制 Token”相同的规则排除剪贴板历史与云剪贴板、60 秒后若未被替换则清空。未配置 Token 时 SHALL 复制原链接。
+
+#### Scenario: 复制带 Token 的本机链接
+
+- **WHEN** WebMux 配置了 Token，用户点击“复制本机链接”
+- **THEN** 剪贴板内容为 `http://127.0.0.1:7681/#token=<Token>`，通知只显示 `http://127.0.0.1:7681`，60 秒后自动清除
+
 ### Requirement: 复制 Token
 
 仅当状态报告配置了 Token 时，菜单 SHALL 显示“复制 Token”。托盘 SHALL 只在用户点击时经桥接请求本机 API 的 Token 接口，写入剪贴板后 SHALL 立即丢弃，不在托盘中缓存，也 SHALL NOT 写入任何 Windows 侧文件。复制的内容 SHALL 只有 Token 本身，写入剪贴板时 SHALL 标记为不进入 Windows 剪贴板历史与跨设备云剪贴板；托盘 SHALL 在 60 秒后若剪贴板内容仍为该 Token 则清空剪贴板。
@@ -63,7 +72,7 @@
 
 ### Requirement: 复制反馈
 
-每次复制操作成功后，托盘 SHALL 给出简短的 Windows 通知（例如“已复制 http://127.0.0.1:7681”）；复制 Token 的通知 SHALL NOT 包含 Token。剪贴板被其他程序占用导致写入失败时 SHALL 通知失败原因。
+每次复制操作成功后，托盘 SHALL 给出简短的 Windows 通知（例如“已复制 http://127.0.0.1:7681”）；复制 Token 与带 Token 链接的通知 SHALL NOT 包含 Token。剪贴板被其他程序占用导致写入失败时 SHALL 通知失败原因。
 
 #### Scenario: 复制成功提示
 

@@ -25,7 +25,7 @@
 ## 4. 托盘隧道开关
 
 - [x] 4.1 `Service` 增加 `SetTunnel`；Supervisor 在隧道 `starting` 时以 `StartingInterval` 轮询，`starting/ready → failed` 时通知一次；自动重启前隧道开启则通知附加“公网隧道已关闭”；补对应 supervisor 测试
-- [x] 4.2 菜单：仅在状态含 `tunnel` 且实例健康时显示“公网隧道（Cloudflare）”勾选项、状态/地址行与“复制公网链接”（不含 Token）；开启前 `messageBox` 风险确认，取消不发请求；409 时显示原因并在无配置时提供“初始化配置”
+- [x] 4.2 菜单：仅在状态含 `tunnel` 且实例健康时显示“公网隧道（Cloudflare）”勾选项、状态/地址行与“复制公网链接”（带 Token 片段，同“复制 Token”的剪贴板保护）；开启前 `messageBox` 风险确认，取消不发请求；409 时显示原因并在无配置时提供“初始化配置”
 - [x] 4.3 `GOOS=windows` 编译 `cmd/webmux-tray`、`go vet`，确认菜单逻辑相关的纯函数有测试
 
 ## 5. 发布流水线

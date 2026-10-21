@@ -4,14 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/rainchan/webmux/internal/api"
-	"github.com/rainchan/webmux/internal/client"
-	"github.com/rainchan/webmux/internal/codeview"
-	"github.com/rainchan/webmux/internal/config"
-	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/session"
-	"github.com/rainchan/webmux/internal/tunnel"
-	"github.com/rainchan/webmux/internal/workspace"
 	"io"
 	"log/slog"
 	"net"
@@ -21,6 +13,15 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/rainchan/webmux/internal/api"
+	"github.com/rainchan/webmux/internal/client"
+	"github.com/rainchan/webmux/internal/codeview"
+	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/tunnel"
+	"github.com/rainchan/webmux/internal/workspace"
 )
 
 var version = "dev"
@@ -154,6 +155,7 @@ func run(args []string) error {
 			return fmt.Errorf("log file: %w", err)
 		}
 	}
+	applyLaunchEnv()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return serve(ctx, c, os.Stdout)
@@ -209,7 +211,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		// Tunnel mode always prints the token because the operator cannot
 		// otherwise know the generated one. A configured non-tunnel token
 		// stays out of captured stdout, which a service manager persists.
-		localLink = accessURL(local, c.Token)
+		localLink = contract.AccessURL(local, c.Token)
 	}
 	_, _ = fmt.Fprintln(out, "WebMux local:  "+localLink)
 	if c.Tunnel.Enabled {

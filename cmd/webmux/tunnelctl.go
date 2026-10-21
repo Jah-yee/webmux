@@ -196,7 +196,7 @@ func (tc *tunnelController) announcePlain(origin string) {
 }
 
 func (tc *tunnelController) announceWithToken(origin string) {
-	link := accessURL(origin, tc.token)
+	link := contract.AccessURL(origin, tc.token)
 	code, err := renderQR(link)
 	if err != nil {
 		tc.logger.Error("render QR code", "error", err)

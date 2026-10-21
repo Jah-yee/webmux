@@ -530,16 +530,37 @@ func (a *App) openLocal() {
 	}
 }
 
+// copyLink copies url with the token fragment, so the link opens signed
+// in. The token is fetched for this click only and the clipboard entry is
+// handled like "复制 Token": kept out of history and cleared after 60 s.
 func (a *App) copyLink(url string) {
 	if url == "" {
 		a.fail("复制失败", errNotRunning)
 		return
 	}
-	if err := a.clip.Write(url, false); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	token, err := a.svc.Current().Token(ctx)
+	if err != nil {
 		a.fail("复制失败", err)
 		return
 	}
-	a.notifier.Show("WebMux", "已复制 "+url)
+	if token == "" {
+		if err := a.clip.Write(url, false); err != nil {
+			a.fail("复制失败", err)
+			return
+		}
+		a.notifier.Show("WebMux", "已复制 "+url)
+		return
+	}
+	release := a.log.Redact(token)
+	err = a.clip.Write(contract.AccessURL(url, token), true)
+	release()
+	if err != nil {
+		a.fail("复制失败", err)
+		return
+	}
+	a.notifier.Show("WebMux", "已复制 "+url+"（含 Token，60 秒后自动清除）")
 }
 
 // copyToken fetches the token for this click only; it is redacted from the

@@ -40,12 +40,12 @@ WebMux 运行且健康时，托盘菜单 SHALL 显示“公网隧道（Cloudflar
 
 ### Requirement: 公网地址复制
 
-隧道 `ready` 时，托盘 SHALL 提供“复制公网链接”，复制内容 SHALL NOT 包含 Token；Token 仍只能通过“复制 Token”获得。
+隧道 `ready` 时，托盘 SHALL 提供“复制公网链接”，按与其他复制链接相同的规则复制带 Token 片段的链接；菜单与通知中的公网地址 SHALL NOT 包含 Token。
 
 #### Scenario: 复制链接
 
 - **WHEN** 隧道就绪，用户点击“复制公网链接”
-- **THEN** 剪贴板内容为 `https://<公网主机>/`，不含 `#token=`
+- **THEN** 剪贴板内容为 `https://<公网主机>/#token=<Token>`，60 秒后自动清除，通知不含 Token
 
 ### Requirement: 隧道失败通知
 

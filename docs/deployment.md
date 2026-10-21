@@ -175,11 +175,11 @@ NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流�
 
 ### 公网隧道
 
-WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、不影响会话的情况下开启或关闭 Cloudflare Tunnel（按 WebMux 配置的 `[tunnel]` 选择 Quick Tunnel 或 Named Tunnel，cloudflared 的定位与下载规则见下文“公网访问（Cloudflare Tunnel）”）。每次开启前托盘都会确认风险；要求 WebMux 已配置至少 43 个字符的 Token（`webmux config init` 生成的即可），否则拒绝开启。就绪后菜单显示公网地址，“复制公网链接”不含 Token。隧道断开时托盘通知一次且不自动重开；开关状态不保存，WebMux 重启后隧道关闭。
+WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、不影响会话的情况下开启或关闭 Cloudflare Tunnel（按 WebMux 配置的 `[tunnel]` 选择 Quick Tunnel 或 Named Tunnel，cloudflared 的定位与下载规则见下文“公网访问（Cloudflare Tunnel）”）。每次开启前托盘都会确认风险；要求 WebMux 已配置至少 43 个字符的 Token（`webmux config init` 生成的即可），否则拒绝开启。就绪后菜单显示公网地址，“复制公网链接”与其他复制链接一样带 Token。隧道断开时托盘通知一次且不自动重开；开关状态不保存，WebMux 重启后隧道关闭。
 
 ### Token 与剪贴板
 
-托盘不在 Windows 侧保存 token。点击“复制 Token”时才经本机 API 从 WSL 读取，写入剪贴板后立即丢弃；剪贴板内容标记为不进入 Windows 剪贴板历史（Win+V）与跨设备云剪贴板，60 秒后若剪贴板仍是该 token 则自动清空（期间复制了其他内容则保持不变）。复制的链接从不包含 token。
+托盘不在 Windows 侧保存 token。点击“复制 Token”时才经本机 API 从 WSL 读取，写入剪贴板后立即丢弃；剪贴板内容标记为不进入 Windows 剪贴板历史（Win+V）与跨设备云剪贴板，60 秒后若剪贴板仍是该 token 则自动清空（期间复制了其他内容则保持不变）。所有“复制…链接”在配置了 token 时同样当场读取 token，复制 `<链接>/#token=<token>`（片段不会发送到服务器，打开即登录），并按同样规则排除剪贴板历史、60 秒后自动清除；通知中只显示不含 token 的地址。未配置 token 时复制普通链接。
 
 ## agent 的 PATH
 
@@ -196,6 +196,8 @@ Environment=PATH=/home/YOU/.local/bin:/home/YOU/.nvm/versions/node/v24.20.0/bin:
 ```
 
 macOS 直接编辑 plist 的 `EnvironmentVariables` 后重新加载。
+
+Windows 托盘经 `wsl.exe --exec` 启动 WebMux，同样不经过登录 shell；托盘启动的实例会在 `PATH` 前补上服务模板中的 `~/.local/bin`、`~/.local/share/pnpm`、`~/.npm-global/bin`（已存在的保持原位）。安装在其他位置的 agent 请改用 systemd 启动方式并按上面添加 drop-in，或把它链接到 `~/.local/bin`。
 
 ## 手机访问（Tailscale）
 
