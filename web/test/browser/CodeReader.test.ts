@@ -60,3 +60,23 @@ test("renders HTML and control-looking content as code text", async () => {
   ).toBeUndefined();
   expect(document.querySelectorAll(".cm-line")).toHaveLength(3);
 });
+
+test("keeps syntax highlighting across language and view extensions", async () => {
+  render(Harness, {
+    text: "const answer = 42; // highlighted",
+    path: "test.ts",
+  });
+  const keyword = page
+    .elementLocator(document.querySelector(".cm-content")!)
+    .getByText("const", { exact: true });
+  await expect.element(keyword).toBeVisible();
+  await expect
+    .poll(() => getComputedStyle(keyword.element()).color)
+    .toBe("rgb(119, 0, 136)");
+  const comment = page
+    .elementLocator(document.querySelector(".cm-content")!)
+    .getByText("// highlighted", { exact: true });
+  await expect
+    .poll(() => getComputedStyle(comment.element()).color)
+    .toBe("rgb(153, 68, 0)");
+});
