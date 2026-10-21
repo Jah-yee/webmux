@@ -371,3 +371,193 @@ test("loads changes beyond 1000 lazily, virtualizes rows, filters and refreshes 
     .element(page.getByRole("button", { name: "加载更多修改", exact: true }))
     .toBeEnabled();
 });
+
+// A same-origin iframe stands in for the pop-out window: a second document
+// the panel moves into, closed through the window's pagehide.
+function fakeWindow() {
+  let frame: HTMLIFrameElement | undefined;
+  return {
+    get window() {
+      return frame?.contentWindow ?? null;
+    },
+    open() {
+      frame = document.createElement("iframe");
+      frame.title = "popout";
+      document.body.append(frame);
+      const win = frame.contentWindow!;
+      const close = () => {
+        win.dispatchEvent(new Event("pagehide"));
+        frame?.remove();
+        frame = undefined;
+      };
+      Object.defineProperty(win, "close", { value: close });
+      return win;
+    },
+  };
+}
+function fakePictureInPicture(refuse?: Error) {
+  const fake = fakeWindow();
+  const api = {
+    get window() {
+      return fake.window;
+    },
+    async requestWindow() {
+      if (refuse) throw refuse;
+      return fake.open();
+    },
+  };
+  vi.stubGlobal("documentPictureInPicture", api);
+  return api;
+}
+// Leaves every other media query to the real browser.
+function pointer(fine: boolean) {
+  const real = window.matchMedia.bind(window);
+  vi.stubGlobal("matchMedia", (query: string) =>
+    query === "(pointer: fine)"
+      ? Object.defineProperty(real(query), "matches", { value: fine })
+      : real(query),
+  );
+}
+function popoutButton(win: Window, name: string) {
+  return [...win.document.querySelectorAll("button")].find(
+    (button) =>
+      button.getAttribute("aria-label") === name ||
+      button.textContent?.trim() === name,
+  );
+}
+
+test("touch-only devices without Picture-in-Picture get no pop-out control", async () => {
+  serve();
+  vi.stubGlobal("documentPictureInPicture", undefined);
+  pointer(false);
+  render(Harness);
+  await expect
+    .element(page.getByRole("button", { name: "file-0.txt", exact: true }))
+    .toBeVisible();
+  expect(
+    page.getByRole("button", { name: "在独立窗口中显示代码" }).elements(),
+  ).toHaveLength(0);
+});
+
+test("desktop browsers without Picture-in-Picture pop out into an ordinary popup", async () => {
+  serve();
+  vi.stubGlobal("documentPictureInPicture", undefined);
+  pointer(true);
+  const popup = fakeWindow();
+  const open = vi.spyOn(window, "open").mockImplementation(() => popup.open());
+  render(Harness);
+  await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
+  await page
+    .getByRole("button", { name: "在独立窗口中显示代码", exact: true })
+    .click();
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  expect(open).toHaveBeenCalledWith(
+    "",
+    "_blank",
+    expect.stringMatching(/^popup,width=\d+,height=\d+$/),
+  );
+  const win = popup.window!;
+  popoutButton(win, "file-1.txt")!.click();
+  await expect
+    .poll(
+      () =>
+        win.document.querySelector("[role=tabpanel]:not(.hidden) .cm-content")
+          ?.textContent,
+    )
+    .toContain("original file 1");
+  // Reloading or leaving the opener must not strand the panel in the popup.
+  window.dispatchEvent(new Event("pagehide"));
+  expect(popup.window).toBeNull();
+  await expect
+    .element(page.getByRole("tab", { name: /^file-1\.txt/ }))
+    .toHaveAttribute("aria-selected", "true");
+});
+
+test("a blocked popup keeps the panel in place and says why", async () => {
+  serve();
+  vi.stubGlobal("documentPictureInPicture", undefined);
+  pointer(true);
+  vi.spyOn(window, "open").mockReturnValue(null);
+  render(Harness);
+  await page
+    .getByRole("button", { name: "在独立窗口中显示代码", exact: true })
+    .click();
+  await expect
+    .element(page.getByRole("alert"))
+    .toMatchTextContent("弹出窗口被浏览器拦截");
+  expect(page.getByText("代码已在独立窗口中显示").elements()).toHaveLength(0);
+  expect(document.querySelector(".code-panel")).not.toBeNull();
+});
+
+test("a popped-out panel stays interactive in the other document and returns with its tabs", async () => {
+  serve();
+  const pip = fakePictureInPicture();
+  render(Harness);
+  await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
+  await page
+    .getByRole("button", { name: "在独立窗口中显示代码", exact: true })
+    .click();
+  await expect.element(page.getByText("代码已在独立窗口中显示")).toBeVisible();
+  const win = pip.window!;
+  expect(document.querySelector(".code-panel")).toBeNull();
+  expect(win.document.querySelector(".code-panel")).not.toBeNull();
+  // Delegated Svelte handlers fire for clicks inside the other document.
+  popoutButton(win, "file-1.txt")!.click();
+  await expect
+    .poll(() =>
+      [
+        ...win.document.querySelectorAll('[aria-label="文件标签"] [role=tab]'),
+      ].map((tab) => tab.textContent),
+    )
+    .toEqual(["file-0.txt · worktree", "file-1.txt · worktree"]);
+  await expect
+    .poll(
+      () =>
+        win.document.querySelector("[role=tabpanel]:not(.hidden) .cm-content")
+          ?.textContent,
+    )
+    .toContain("original file 1");
+  // Hiding the opener's pane does not pause a popped-out panel.
+  await page.getByRole("button", { name: "Toggle code visibility" }).click();
+  const previous = checks;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await expect.poll(() => checks).toBeGreaterThan(previous);
+
+  popoutButton(win, "收回代码窗口")!.click();
+  await expect
+    .element(page.getByText("代码已在独立窗口中显示"))
+    .not.toBeInTheDocument();
+  expect(pip.window).toBeNull();
+  await expect
+    .element(page.getByRole("tab", { name: /^file-1\.txt/ }))
+    .toHaveAttribute("aria-selected", "true");
+  await expect
+    .element(page.getByRole("tabpanel").getByLabelText("只读代码"))
+    .toMatchTextContent(new RegExp("original file 1"));
+  await page.getByRole("button", { name: "file-2.txt", exact: true }).click();
+  await expect
+    .element(page.getByRole("tab", { name: /^file-2\.txt/ }))
+    .toHaveAttribute("aria-selected", "true");
+});
+
+test("a refused pop-out window keeps the panel in place and says why", async () => {
+  serve();
+  fakePictureInPicture(
+    new DOMException(
+      "Document PiP requires user activation",
+      "NotAllowedError",
+    ),
+  );
+  render(Harness);
+  await page
+    .getByRole("button", { name: "在独立窗口中显示代码", exact: true })
+    .click();
+  await expect
+    .element(page.getByRole("alert"))
+    .toMatchTextContent("Document PiP requires user activation");
+  expect(page.getByText("代码已在独立窗口中显示").elements()).toHaveLength(0);
+  await page.getByRole("button", { name: "file-0.txt", exact: true }).click();
+  await expect
+    .element(page.getByLabelText("只读代码"))
+    .toMatchTextContent(new RegExp("original file 0"));
+});

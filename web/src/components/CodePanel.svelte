@@ -20,10 +20,14 @@
   import {
     IconLayoutSidebarLeftCollapse,
     IconLayoutSidebarLeftExpand,
+    IconPictureInPictureOff,
+    IconPictureInPictureOn,
     IconRefresh,
   } from "@tabler/icons-svelte";
+  import { EditorView } from "@codemirror/view";
   import CodeDocumentView from "./CodeDocumentView.svelte";
   import type { TextInsertion } from "../terminal-draft.svelte";
+  import { popoutAvailable, popOut, type Popout } from "../codePopout";
   let {
     id,
     visible,
@@ -59,6 +63,35 @@
   const navMin = 120,
     navMax = 640;
   let navWidth = $state(180);
+  let section = $state<HTMLElement>();
+  // Popped out, the panel stays live in its own window regardless of whether
+  // the opener still shows the code pane.
+  let popout = $state<Popout>();
+  let popping = false;
+  const canPopOut = popoutAvailable();
+  const shown = $derived(visible || !!popout);
+  async function togglePopout() {
+    if (popout) return popout.close();
+    if (!section || popping) return;
+    popping = true;
+    try {
+      popout = await popOut(section, {
+        title: `代码 · ${context?.rootPath ?? id}`,
+        moved(document) {
+          // CodeMirror binds to its root's window; rebind moved editors.
+          for (const editor of section!.querySelectorAll(".cm-editor"))
+            EditorView.findFromDOM(editor as HTMLElement)?.setRoot(document);
+        },
+        returned() {
+          popout = undefined;
+        },
+      });
+    } catch (e) {
+      error = (e as Error).message;
+    } finally {
+      popping = false;
+    }
+  }
   let inner = $state<HTMLDivElement>();
   function setNavWidth(width: number) {
     const limit = Math.min(navMax, (inner?.clientWidth ?? navMax) - 160);
@@ -331,7 +364,14 @@
     );
   }
   async function check() {
-    if (!mounted || !visible || document.hidden || !context || checking) return;
+    if (
+      !mounted ||
+      !shown ||
+      (section?.ownerDocument ?? document).hidden ||
+      !context ||
+      checking
+    )
+      return;
     checking = true;
     checkController = new AbortController();
     const c = checkController;
@@ -425,7 +465,7 @@
       });
     const timer = window.setInterval(() => void check(), 5000);
     const visibility = () => {
-      if (document.hidden) checkController?.abort();
+      if ((section?.ownerDocument ?? document).hidden) checkController?.abort();
       else void check();
     };
     document.addEventListener("visibilitychange", visibility);
@@ -437,10 +477,11 @@
       for (const c of controllers.values()) c.abort();
       clearInterval(timer);
       document.removeEventListener("visibilitychange", visibility);
+      popout?.close();
     };
   });
   $effect(() => {
-    const show = visible;
+    const show = shown;
     const state = connection;
     if (mounted) {
       if (show && state === "connected") void check();
@@ -449,144 +490,167 @@
   });
 </script>
 
-<section
-  class="code-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
-  aria-label="代码工作区"
->
-  <header class="flex shrink-0 items-center gap-2 border-b px-2 py-1">
-    <Button
-      variant="outline"
-      size="icon-sm"
-      aria-label={navOpen ? "收起导航" : "文件导航"}
-      aria-expanded={navOpen}
-      title={navOpen ? "收起导航" : "文件导航"}
-      onclick={() => (navOpen = !navOpen)}
-      >{#if navOpen}<IconLayoutSidebarLeftCollapse
-        />{:else}<IconLayoutSidebarLeftExpand />{/if}</Button
+<!-- The section is the part that moves into the pop-out window; the wrapper
+     stays in the opener and holds the placeholder. -->
+<div class="flex h-full min-h-0 min-w-0 flex-col">
+  {#if popout}<div
+      class="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-sm text-muted-foreground"
     >
-    {#if navStatus}<span
-        role="status"
-        class="min-w-0 flex-1 truncate text-xs text-warning"
-        title={navStatus}>{navStatus}</span
-      ><Button variant="outline" size="sm" onclick={() => void load()}
-        >刷新导航</Button
+      <p>代码已在独立窗口中显示</p>
+      <Button variant="outline" size="sm" onclick={() => popout?.close()}
+        ><IconPictureInPictureOff />收回到此处</Button
       >
-    {:else}<span
-        class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-        title={context?.rootPath}>{context?.rootPath ?? "读取代码目录…"}</span
-      >{/if}
-    <Button
-      variant="outline"
-      size="icon-sm"
-      aria-label="刷新全部"
-      title="刷新全部"
-      disabled={pending}
-      onclick={() => {
-        void load();
-        for (const tab of tabs) void refresh(tab);
-      }}><IconRefresh /></Button
-    >
-  </header>
-  {#if error}<p
-      role="alert"
-      class="shrink-0 px-2 py-1 text-sm break-all text-destructive"
-    >
-      {error}
-    </p>{/if}
-  {#if context?.reason}<p
-      class="shrink-0 px-2 py-1 text-xs text-muted-foreground"
-    >
-      {context.reason}
-    </p>{/if}
-  <div
-    class="code-inner flex min-h-0 flex-1 overflow-hidden"
-    style:--code-nav-width={`${navWidth}px`}
-    bind:this={inner}
+    </div>{/if}
+  <section
+    bind:this={section}
+    class="code-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
+    aria-label="代码工作区"
   >
-    {#if navOpen}<CodeNavigator
-        {context}
-        {listing}
-        {changes}
-        {changesError}
-        {pending}
-        changesEnabled={visible && !changesError && !navStatus}
-        bind:nav
-        bind:query
-        bind:directory
-        bind:includeIgnored
-        bind:changeGroup
-        bind:changeQuery
-        bind:changeSearch
-        load={(append) => void load(append)}
-        openFile={(path, opaqueId) => void openFile(path, opaqueId)}
-        openDiff={(change) => void openDiff(change)}
-      />
-      <!-- A focusable separator with aria-valuenow is an interactive widget (WAI-ARIA window splitter). -->
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-      <div
-        class="code-nav-divider"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="调整导航宽度"
-        aria-valuemin={navMin}
-        aria-valuemax={navMax}
-        aria-valuenow={navWidth}
-        tabindex="0"
-        onpointerdown={resizeStart}
-        onkeydown={resizeKey}
-      ></div>{/if}
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <div
-        class="flex shrink-0 overflow-x-auto border-b [scrollbar-width:thin]"
-        role="tablist"
-        aria-label="文件标签"
+    <header class="flex shrink-0 items-center gap-2 border-b px-2 py-1">
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label={navOpen ? "收起导航" : "文件导航"}
+        aria-expanded={navOpen}
+        title={navOpen ? "收起导航" : "文件导航"}
+        onclick={() => (navOpen = !navOpen)}
+        >{#if navOpen}<IconLayoutSidebarLeftCollapse
+          />{:else}<IconLayoutSidebarLeftExpand />{/if}</Button
       >
-        {#each tabs as tab (tab.key)}
-          {@const path = tab.file?.document.path ?? tab.diff?.new.path ?? ""}
-          {@const meta = `${tab.diff ? tab.diff.change.group : tab.file?.document.source}${tab.status !== "unchanged" ? " ●" : ""}`}
-          <div class="flex shrink-0 items-center border-r">
-            <button
-              role="tab"
-              aria-selected={active === tab.key}
-              aria-label={`${path} · ${meta}`}
-              title={path}
-              class="px-2 py-1.5 text-xs whitespace-nowrap"
-              onclick={() => activate(tab.key)}
-              >{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
-            >
-            <button
-              aria-label={`关闭 ${path}`}
-              class="px-2"
-              onclick={() => close(tab.key)}>×</button
-            >
-          </div>{/each}
-      </div>
-      {#each tabs as tab (tab.key)}<div
-          class="min-h-0 flex-1 overflow-hidden"
-          class:hidden={active !== tab.key}
-          role="tabpanel"
+      {#if navStatus}<span
+          role="status"
+          class="min-w-0 flex-1 truncate text-xs text-warning"
+          title={navStatus}>{navStatus}</span
+        ><Button variant="outline" size="sm" onclick={() => void load()}
+          >刷新导航</Button
         >
-          <CodeDocumentView
-            {id}
-            active={visible && active === tab.key}
-            file={tab.file}
-            diff={tab.diff}
-            status={tab.status}
-            {paste}
-            {draftEnabled}
-            refresh={() => void refresh(tab)}
-            contextId={context?.contextId ?? ""}
-            comparison={tab.comparison}
-            onComparison={(value) => (tab.comparison = value)}
-            onState={(state) => (tab.status = state)}
-            {beginOpen}
-            openSide={(file, intent) =>
-              install(file, undefined, intent === selectionSequence)}
-          />
-        </div>{/each}
-      {#if !tabs.length}<p class="p-4 text-sm text-muted-foreground">
-          选择文件阅读完整内容，或从修改列表打开 Diff。
-        </p>{/if}
+      {:else}<span
+          class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+          title={context?.rootPath}>{context?.rootPath ?? "读取代码目录…"}</span
+        >{/if}
+      <Button
+        variant="outline"
+        size="icon-sm"
+        aria-label="刷新全部"
+        title="刷新全部"
+        disabled={pending}
+        onclick={() => {
+          void load();
+          for (const tab of tabs) void refresh(tab);
+        }}><IconRefresh /></Button
+      >
+      {#if canPopOut}<Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
+          aria-pressed={!!popout}
+          title={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
+          onclick={() => void togglePopout()}
+          >{#if popout}<IconPictureInPictureOff />{:else}<IconPictureInPictureOn
+            />{/if}</Button
+        >{/if}
+    </header>
+    {#if error}<p
+        role="alert"
+        class="shrink-0 px-2 py-1 text-sm break-all text-destructive"
+      >
+        {error}
+      </p>{/if}
+    {#if context?.reason}<p
+        class="shrink-0 px-2 py-1 text-xs text-muted-foreground"
+      >
+        {context.reason}
+      </p>{/if}
+    <div
+      class="code-inner flex min-h-0 flex-1 overflow-hidden"
+      style:--code-nav-width={`${navWidth}px`}
+      bind:this={inner}
+    >
+      {#if navOpen}<CodeNavigator
+          {context}
+          {listing}
+          {changes}
+          {changesError}
+          {pending}
+          changesEnabled={shown && !changesError && !navStatus}
+          bind:nav
+          bind:query
+          bind:directory
+          bind:includeIgnored
+          bind:changeGroup
+          bind:changeQuery
+          bind:changeSearch
+          load={(append) => void load(append)}
+          openFile={(path, opaqueId) => void openFile(path, opaqueId)}
+          openDiff={(change) => void openDiff(change)}
+        />
+        <!-- A focusable separator with aria-valuenow is an interactive widget (WAI-ARIA window splitter). -->
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+        <div
+          class="code-nav-divider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整导航宽度"
+          aria-valuemin={navMin}
+          aria-valuemax={navMax}
+          aria-valuenow={navWidth}
+          tabindex="0"
+          onpointerdown={resizeStart}
+          onkeydown={resizeKey}
+        ></div>{/if}
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div
+          class="flex shrink-0 overflow-x-auto border-b [scrollbar-width:thin]"
+          role="tablist"
+          aria-label="文件标签"
+        >
+          {#each tabs as tab (tab.key)}
+            {@const path = tab.file?.document.path ?? tab.diff?.new.path ?? ""}
+            {@const meta = `${tab.diff ? tab.diff.change.group : tab.file?.document.source}${tab.status !== "unchanged" ? " ●" : ""}`}
+            <div class="flex shrink-0 items-center border-r">
+              <button
+                role="tab"
+                aria-selected={active === tab.key}
+                aria-label={`${path} · ${meta}`}
+                title={path}
+                class="px-2 py-1.5 text-xs whitespace-nowrap"
+                onclick={() => activate(tab.key)}
+                >{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
+              >
+              <button
+                aria-label={`关闭 ${path}`}
+                class="px-2"
+                onclick={() => close(tab.key)}>×</button
+              >
+            </div>{/each}
+        </div>
+        {#each tabs as tab (tab.key)}<div
+            class="min-h-0 flex-1 overflow-hidden"
+            class:hidden={active !== tab.key}
+            role="tabpanel"
+          >
+            <CodeDocumentView
+              {id}
+              active={shown && active === tab.key}
+              file={tab.file}
+              diff={tab.diff}
+              status={tab.status}
+              {paste}
+              {draftEnabled}
+              refresh={() => void refresh(tab)}
+              contextId={context?.contextId ?? ""}
+              comparison={tab.comparison}
+              onComparison={(value) => (tab.comparison = value)}
+              onState={(state) => (tab.status = state)}
+              {beginOpen}
+              openSide={(file, intent) =>
+                install(file, undefined, intent === selectionSequence)}
+            />
+          </div>{/each}
+        {#if !tabs.length}<p class="p-4 text-sm text-muted-foreground">
+            选择文件阅读完整内容，或从修改列表打开 Diff。
+          </p>{/if}
+      </div>
     </div>
-  </div>
-</section>
+  </section>
+</div>
