@@ -355,14 +355,17 @@ test("composition, direct keyboard entry and disconnect never bypass explicit se
   workDir,
 }) => {
   let blockReconnect = false;
-  let disconnect: (() => void) | undefined;
-  await page.routeWebSocket("**/ws/s/*", (socket) => {
-    if (blockReconnect) return;
-    const server = socket.connectToServer();
-    disconnect = () => {
-      socket.close();
-      server.close();
-    };
+  let blockedReconnects = 0;
+  let disconnect: (() => Promise<void>) | undefined;
+  await page.routeWebSocket("**/ws/s/*", async (socket) => {
+    if (blockReconnect) {
+      blockedReconnects++;
+      // Returning alone opens a mocked connection instead of staying offline.
+      await socket.close();
+      return;
+    }
+    socket.connectToServer();
+    disconnect = () => socket.close();
   });
   await createShell(page, "Disconnected draft", workDir);
   const received = await recordInput(page, workDir);
@@ -377,7 +380,11 @@ test("composition, direct keyboard entry and disconnect never bypass explicit se
   await expect(send(page)).toBeEnabled();
   blockReconnect = true;
   expect(disconnect).toBeDefined();
-  disconnect!();
+  await disconnect!();
+  await expect.poll(() => blockedReconnects).toBeGreaterThan(0);
+  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
+    "重连中",
+  );
   await expect(send(page)).toBeDisabled();
   await draft(page).fill("Keep after disconnect");
   expect(await readFile(received, "utf8")).toBe("");

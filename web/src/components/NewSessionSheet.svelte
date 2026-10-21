@@ -66,6 +66,9 @@
   let command = $state(stored("customCommand"));
   let name = $state("");
   let mkdirOpen = $state(false);
+  // Avoid initializing an unused portal on every session-form open. Keep it
+  // mounted after first use so closing animations and focus restoration run.
+  let mkdirMounted = $state(false);
   let error = $state("");
   let busy = $state(false);
   const chosen = $derived(presets.find((p) => p.name === preset));
@@ -167,6 +170,7 @@
         err.message.startsWith("directory:") &&
         err.message.includes("no such file or directory")
       ) {
+        mkdirMounted = true;
         mkdirOpen = true;
       } else error = (err as Error).message;
     } finally {
@@ -441,21 +445,21 @@
   </Drawer.Root>
 {/if}
 
-<AlertDialog.Root bind:open={mkdirOpen}>
-  <AlertDialog.Content>
-    <AlertDialog.Header
-      ><AlertDialog.Title>目录不存在，是否创建？</AlertDialog.Title
-      ><AlertDialog.Description class="break-all"
-        >将在 {cwd} 创建目录，然后启动会话。</AlertDialog.Description
-      ></AlertDialog.Header
-    >
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel>取消</AlertDialog.Cancel>
-      <AlertDialog.Action
-        onclick={() => {
-          void create(true);
-        }}>创建目录并启动</AlertDialog.Action
+{#if mkdirMounted}<AlertDialog.Root bind:open={mkdirOpen}>
+    <AlertDialog.Content>
+      <AlertDialog.Header
+        ><AlertDialog.Title>目录不存在，是否创建？</AlertDialog.Title
+        ><AlertDialog.Description class="break-all"
+          >将在 {cwd} 创建目录，然后启动会话。</AlertDialog.Description
+        ></AlertDialog.Header
       >
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
+      <AlertDialog.Footer>
+        <AlertDialog.Cancel>取消</AlertDialog.Cancel>
+        <AlertDialog.Action
+          onclick={() => {
+            void create(true);
+          }}>创建目录并启动</AlertDialog.Action
+        >
+      </AlertDialog.Footer>
+    </AlertDialog.Content>
+  </AlertDialog.Root>{/if}

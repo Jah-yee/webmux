@@ -145,18 +145,25 @@ test("commands are disabled while the terminal cannot send, but drafts still acc
   workDir,
 }) => {
   let blockReconnect = false;
-  let disconnect: (() => void) | undefined;
-  await page.routeWebSocket("**/ws/s/*", (socket) => {
-    if (blockReconnect) return;
-    const server = socket.connectToServer();
-    disconnect = () => {
-      socket.close();
-      server.close();
-    };
+  let blockedReconnects = 0;
+  let disconnect: (() => Promise<void>) | undefined;
+  await page.routeWebSocket("**/ws/s/*", async (socket) => {
+    if (blockReconnect) {
+      blockedReconnects++;
+      // Returning alone opens a mocked connection instead of staying offline.
+      await socket.close();
+      return;
+    }
+    socket.connectToServer();
+    disconnect = () => socket.close();
   });
   const id = await createShell(page, "Quick unavailable", workDir);
   blockReconnect = true;
-  disconnect!();
+  await disconnect!();
+  await expect.poll(() => blockedReconnects).toBeGreaterThan(0);
+  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
+    "重连中",
+  );
   await quick(page).click();
   await expect(menu(page).getByText("终端未就绪，暂不能发送")).toBeVisible();
   await expect(item(page, "/resume（并回车）")).toBeDisabled();

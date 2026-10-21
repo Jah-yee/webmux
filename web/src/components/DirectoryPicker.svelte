@@ -10,6 +10,9 @@
 
   let { value = $bindable("") }: { value: string } = $props();
   let open = $state(false);
+  // Prepare the floating content only when browsing is first requested, then
+  // retain it through closes so the primitive can restore focus and animate.
+  let browsed = $state(false);
   let query = $state("");
   let selected = $state("");
   let input = $state<HTMLInputElement | null>(null);
@@ -31,6 +34,7 @@
 
   function startBrowse(nextOpen: boolean) {
     if (nextOpen) {
+      browsed = true;
       query = (value || "~").replace(/\/+$/, "") + "/";
       selected = "";
     }
@@ -89,103 +93,106 @@
       <Button {...props} variant="outline" aria-label="浏览目录">浏览</Button>
     {/snippet}
   </Popover.Trigger>
-  <Popover.Content
-    class="directory-picker w-[min(90vw,520px)] gap-0 overflow-hidden p-0"
-    align="end"
-    onOpenAutoFocus={(event) => {
-      event.preventDefault();
-      input?.focus();
-    }}
-  >
-    <Command.Root class="contents" shouldFilter={false} bind:value={selected}>
-      <div class="flex shrink-0 items-center gap-1 border-b px-2 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="上一级目录"
-          title="上一级目录（Alt+↑）"
-          disabled={current === "/"}
-          onclick={parent}><IconArrowUp class="size-4" /></Button
+  {#if browsed}<Popover.Content
+      class="directory-picker w-[min(90vw,520px)] gap-0 overflow-hidden p-0"
+      align="end"
+      onOpenAutoFocus={(event) => {
+        event.preventDefault();
+        input?.focus();
+      }}
+    >
+      <Command.Root class="contents" shouldFilter={false} bind:value={selected}>
+        <div class="flex shrink-0 items-center gap-1 border-b px-2 py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="上一级目录"
+            title="上一级目录（Alt+↑）"
+            disabled={current === "/"}
+            onclick={parent}><IconArrowUp class="size-4" /></Button
+          >
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="用户主目录"
+            onclick={() => enter("~")}><IconHome class="size-4" /></Button
+          >
+          <span
+            class="min-w-0 flex-1 truncate font-mono text-xs"
+            title={current}>{current}</span
+          >
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-pressed={showHidden}
+            onclick={() => (showHidden = !showHidden)}
+            >{showHidden ? "隐藏点目录" : "显示隐藏目录"}</Button
+          >
+        </div>
+        <Command.Input
+          bind:value={query}
+          bind:ref={input}
+          placeholder="输入路径，或筛选目录…"
+          aria-label="目录路径"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck={false}
+          onkeydown={(event) => {
+            if (event.altKey && event.key === "ArrowUp") {
+              event.preventDefault();
+              event.stopPropagation();
+              parent();
+            } else if (event.key === "Tab" && !event.shiftKey && selected) {
+              event.preventDefault();
+              void enter(selected);
+            }
+          }}
+        />
+        <ScrollArea
+          type="always"
+          class="directory-scroll mx-2 mb-2 min-h-0 flex-1 overflow-hidden"
+          scrollbarYClasses="bg-muted/50 [&_[data-slot=scroll-area-thumb]]:bg-muted-foreground"
+        >
+          <Command.List class="max-h-none overflow-visible pr-3">
+            <Command.Empty>
+              {loading
+                ? "正在读取目录…"
+                : error
+                  ? "无法读取目录"
+                  : "没有匹配的子目录"}
+            </Command.Empty>
+            {#each visible as dir (dir)}
+              <Command.Item value={dir} onSelect={() => enter(dir)}>
+                <IconFolder class="size-4 text-muted-foreground" />
+                <span class="min-w-0 flex-1 truncate" title={dir}
+                  >{dir.split("/").pop() || "/"}</span
+                >
+                <span class="text-muted-foreground" aria-hidden="true">›</span>
+              </Command.Item>
+            {/each}
+          </Command.List>
+        </ScrollArea>
+      </Command.Root>
+      {#if error}<p role="alert" class="px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>{/if}
+      <div
+        class="flex shrink-0 items-center justify-between gap-2 border-t p-2"
+      >
+        <span class="text-xs text-muted-foreground"
+          >↑↓ 选择 · Enter / Tab 进入</span
         >
         <Button
           type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="用户主目录"
-          onclick={() => enter("~")}><IconHome class="size-4" /></Button
-        >
-        <span class="min-w-0 flex-1 truncate font-mono text-xs" title={current}
-          >{current}</span
-        >
-        <Button
-          type="button"
-          variant="ghost"
           size="sm"
-          aria-pressed={showHidden}
-          onclick={() => (showHidden = !showHidden)}
-          >{showHidden ? "隐藏点目录" : "显示隐藏目录"}</Button
+          disabled={loading || !!error}
+          onclick={choose}>选择当前目录</Button
         >
       </div>
-      <Command.Input
-        bind:value={query}
-        bind:ref={input}
-        placeholder="输入路径，或筛选目录…"
-        aria-label="目录路径"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck={false}
-        onkeydown={(event) => {
-          if (event.altKey && event.key === "ArrowUp") {
-            event.preventDefault();
-            event.stopPropagation();
-            parent();
-          } else if (event.key === "Tab" && !event.shiftKey && selected) {
-            event.preventDefault();
-            void enter(selected);
-          }
-        }}
-      />
-      <ScrollArea
-        type="always"
-        class="directory-scroll mx-2 mb-2 min-h-0 flex-1 overflow-hidden"
-        scrollbarYClasses="bg-muted/50 [&_[data-slot=scroll-area-thumb]]:bg-muted-foreground"
-      >
-        <Command.List class="max-h-none overflow-visible pr-3">
-          <Command.Empty>
-            {loading
-              ? "正在读取目录…"
-              : error
-                ? "无法读取目录"
-                : "没有匹配的子目录"}
-          </Command.Empty>
-          {#each visible as dir (dir)}
-            <Command.Item value={dir} onSelect={() => enter(dir)}>
-              <IconFolder class="size-4 text-muted-foreground" />
-              <span class="min-w-0 flex-1 truncate" title={dir}
-                >{dir.split("/").pop() || "/"}</span
-              >
-              <span class="text-muted-foreground" aria-hidden="true">›</span>
-            </Command.Item>
-          {/each}
-        </Command.List>
-      </ScrollArea>
-    </Command.Root>
-    {#if error}<p role="alert" class="px-3 py-2 text-xs text-destructive">
-        {error}
-      </p>{/if}
-    <div class="flex shrink-0 items-center justify-between gap-2 border-t p-2">
-      <span class="text-xs text-muted-foreground"
-        >↑↓ 选择 · Enter / Tab 进入</span
-      >
-      <Button
-        type="button"
-        size="sm"
-        disabled={loading || !!error}
-        onclick={choose}>选择当前目录</Button
-      >
-    </div>
-  </Popover.Content>
+    </Popover.Content>{/if}
 </Popover.Root>
 
 <style>

@@ -83,6 +83,7 @@ async function openPicker(initialValue = "/workspace", anchorTop = 0) {
   await expect
     .element(input())
     .toHaveValue(`${initialValue.replace(/\/+$/, "")}/`);
+  await expect.element(input()).toHaveFocus();
   await expect.element(confirm()).toBeEnabled();
 }
 
@@ -265,6 +266,14 @@ test.each(["Enter", "Tab"])(
     await confirm().click();
     await expect.element(committed()).toHaveTextContent("/workspace/projects");
     await expect.element(input()).not.toBeInTheDocument();
+    const trigger = page.getByRole("button", { name: "浏览目录" });
+    await expect.element(trigger).toHaveFocus();
+    await trigger.click();
+    await expect.element(input()).toHaveValue("/workspace/projects/");
+    await expect.element(input()).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(input()).not.toBeInTheDocument();
+    await expect.element(trigger).toHaveFocus();
   },
 );
 
