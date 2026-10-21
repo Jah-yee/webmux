@@ -377,15 +377,19 @@
       <div
         class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-2"
       >
+        <!-- Reserved width keeps the actions still as the text changes; the
+             status sits next to them and truncates long hostnames. -->
         <span
-          class="hidden w-52 min-w-0 items-center gap-2 overflow-hidden text-xs whitespace-nowrap text-muted-foreground sm:flex"
+          class="hidden w-52 min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap text-muted-foreground sm:flex"
           ><span
             class={`status-dot ${connection === "connected" ? "status-running" : "status-waiting"}`}
-          ></span>{connection === "connected"
-            ? hostname
-              ? `${hostname} 在线`
-              : "在线"
-            : "正在连接"}</span
+          ></span><span class="truncate"
+            >{connection === "connected"
+              ? hostname
+                ? `${hostname} 在线`
+                : "在线"
+              : "正在连接"}</span
+          ></span
         >
         <Button size="sm" disabled={!presets.length} onclick={() => start()}
           >＋ 新建会话</Button
