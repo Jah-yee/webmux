@@ -24,19 +24,31 @@ async function textPoint(
       );
       if (!row) throw new Error(`Missing rendered line: ${target.line}`);
       const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      const nodes: Node[] = [];
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const offset = node.textContent?.indexOf(target.text) ?? -1;
-        if (offset < 0) continue;
-        const range = document.createRange();
-        range.setStart(node, offset);
-        range.setEnd(node, offset + target.text.length);
-        const bounds = range.getBoundingClientRect();
-        return {
-          x: bounds.x + bounds.width * 0.75,
-          y: bounds.y + bounds.height / 2,
-        };
+        nodes.push(node);
       }
-      throw new Error(`Missing rendered text: ${target.text}`);
+      const text = nodes.map((node) => node.textContent).join("");
+      const start = text.indexOf(target.text);
+      if (start < 0) throw new Error(`Missing rendered text: ${target.text}`);
+      const end = start + target.text.length;
+      const range = document.createRange();
+      let offset = 0;
+      for (const node of nodes) {
+        const length = node.textContent?.length ?? 0;
+        if (start >= offset && start < offset + length)
+          range.setStart(node, start - offset);
+        if (end > offset && end <= offset + length) {
+          range.setEnd(node, end - offset);
+          break;
+        }
+        offset += length;
+      }
+      const bounds = range.getBoundingClientRect();
+      return {
+        x: bounds.x + bounds.width * 0.75,
+        y: bounds.y + bounds.height / 2,
+      };
     },
     { line, text },
   );
@@ -76,21 +88,24 @@ test("dark theme corrects explicit black ANSI input and survives reload", async 
   );
   await expectTerminalLine(page, "dark-input 中文");
   const contrast = () =>
-    page.locator(".xterm-rows span").evaluateAll((spans) => {
-      const span = spans.find((element) =>
-        element.textContent?.startsWith("dark-input"),
+    page.locator(".xterm-rows > div").evaluateAll((rows) => {
+      const row = rows.find(
+        (element) =>
+          element.textContent?.replaceAll("\u00a0", " ").trimEnd() ===
+          "dark-input 中文",
       );
-      if (!span) return 0;
+      // Font fallback can make xterm use a span per cell instead of one run.
+      const spans = [...(row?.querySelectorAll("span") ?? [])].filter(
+        (element) => element.textContent?.trim(),
+      );
+      if (!spans.length) return 0;
       // Right after a reload the styles may not apply yet; keep polling.
-      const foregroundRGB = getComputedStyle(span)
-        .color.match(/\d+/g)
-        ?.slice(0, 3);
       const backgroundRGB = getComputedStyle(
         document.querySelector(".terminal-area")!,
       )
         .backgroundColor.match(/\d+/g)
         ?.slice(0, 3);
-      if (!foregroundRGB || !backgroundRGB) return 0;
+      if (!backgroundRGB) return 0;
       const luminance = (rgb: string[]) => {
         const [red, green, blue] = rgb.map((value) => {
           const channel = Number(value) / 255;
@@ -100,11 +115,19 @@ test("dark theme corrects explicit black ANSI input and survives reload", async 
         });
         return red * 0.2126 + green * 0.7152 + blue * 0.0722;
       };
-      const foreground = luminance(foregroundRGB);
       const background = luminance(backgroundRGB);
-      return (
-        (Math.max(foreground, background) + 0.05) /
-        (Math.min(foreground, background) + 0.05)
+      return Math.min(
+        ...spans.map((span) => {
+          const foregroundRGB = getComputedStyle(span)
+            .color.match(/\d+/g)
+            ?.slice(0, 3);
+          if (!foregroundRGB) return 0;
+          const foreground = luminance(foregroundRGB);
+          return (
+            (Math.max(foreground, background) + 0.05) /
+            (Math.min(foreground, background) + 0.05)
+          );
+        }),
       );
     });
   await expect.poll(contrast).toBeGreaterThanOrEqual(4.49);

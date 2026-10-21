@@ -29,7 +29,7 @@ test:
 	$(GO) test -race -parallel=4 ./...
 	$(PNPM) --dir web test
 
-baseline:
+baseline: web
 	$(GO) run ./cmd/baseline -samples $(BASELINE_SAMPLES) -output $(BASELINE_OUTPUT)
 
 test-unit:

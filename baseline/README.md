@@ -4,7 +4,7 @@ WebMux 的核心价值是从手机或浏览器持续操控服务器上的 CLI ag
 
 ## 运行
 
-在仓库根目录运行，要求 Go 1.24+、Git、Linux/macOS、`/bin/bash` 及 `stty`、`cat`、`dd`、`sleep`。无需下载或调用真实收费 agent，无需启动开发服务，也无需前端构建（嵌入目录的 `.gitkeep` 已足够编译此命令）。
+在仓库根目录运行，要求 Go 1.26+、Node.js 24 LTS、pnpm 12.11.2、Git、Linux/macOS、`/bin/bash` 及 `stty`、`cat`、`dd`、`sleep`。`make baseline` 会先安装锁定的前端依赖并构建嵌入资源，再启动采样；直接执行 `go run ./cmd/baseline` 前需先运行 `make web`。无需下载或调用真实收费 agent，也无需启动开发服务。前端构建耗时不计入 baseline 的采样结果。
 
 ```sh
 make baseline

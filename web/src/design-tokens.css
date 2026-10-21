@@ -152,7 +152,7 @@
 }
 
 @theme inline {
-  --font-sans: "Inter", "Noto Sans SC", sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);

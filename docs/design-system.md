@@ -24,7 +24,7 @@ WebMux 是持续运行的终端工作台。视觉方向为克制的开发工具�
 - 间距使用 Tailwind 的 4px 基准：4 / 8 / 12 / 16 / 24 / 32。
 - 控件圆角 6px，内容容器 8px，浮层 12px；标签圆角 4px。
 - 默认控件高 36px，紧凑 32px，工具 28px，大控件 44px。
-- 字体沿用 Inter / Noto Sans SC，路径和代码使用 Maple Mono NF CN 与系统等宽回退。
+- 拉丁界面字体使用内置 Inter，路径和代码使用内置 Maple Mono 的拉丁字形、制表符和 Nerd Font 图标；中日韩文字使用系统无衬线字体。
 - ANSI 终端和语法高亮令牌保持独立；业务状态不再借用 ANSI 色板。
 - 焦点使用 primary 对应的 ring；不依赖 hover 提供唯一反馈。
 

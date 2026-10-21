@@ -1188,6 +1188,23 @@ test("terminal measures the bundled monospace face before painting", async () =>
   expect(rows).toBeTruthy();
   expect(getComputedStyle(rows!).fontFamily).toContain("Maple Mono NF CN");
   expect(document.fonts.check('14px "Maple Mono NF CN"')).toBe(true);
+  const context = document.createElement("canvas").getContext("2d")!;
+  for (const weight of [400, 700]) {
+    // Loading the shared icon face must not shadow the Latin unicode slice.
+    await document.fonts.load(`${weight} 14px "Maple Mono NF CN"`, "\uf07b");
+    for (const size of [14, 16]) {
+      context.font = `${weight} ${size}px "Maple Mono NF CN", sans-serif`;
+      expect(
+        context.measureText("WWWW").width,
+        `weight ${weight}: Latin glyphs must use the bundled monospace face`,
+      ).toBeCloseTo(context.measureText("iiii").width, 2);
+      // Maple's advance is 0.6em. Linux font hinting can round each glyph
+      // to a whole pixel; macOS retains the fractional advance.
+      const advance = context.measureText("WWWW").width / 4;
+      expect(advance).toBeGreaterThanOrEqual(Math.floor(size * 0.6));
+      expect(advance).toBeLessThanOrEqual(Math.ceil(size * 0.6));
+    }
+  }
 });
 
 test("explicit black ANSI input remains readable in dark theme and updates on theme changes", async () => {
@@ -1197,9 +1214,15 @@ test("explicit black ANSI input remains readable in dark theme and updates on th
   socket.receive(1, "\x1b[38;2;0;0;0m中文 input\x1b[0m");
   await expectDomText("中文 input");
   const ratio = () => {
-    const span = [
-      ...host().querySelectorAll<HTMLElement>(".xterm-rows span"),
-    ].find((element) => element.textContent?.includes("input"))!;
+    const row = [...host().querySelectorAll(".xterm-rows > div")].find(
+      (element) =>
+        element.textContent?.replaceAll("\u00a0", " ").trimEnd() ===
+        "中文 input",
+    );
+    const spans = [
+      ...(row?.querySelectorAll<HTMLElement>("span") ?? []),
+    ].filter((element) => element.textContent?.trim());
+    expect(spans.length).toBeGreaterThan(0);
     const luminance = (color: string) => {
       const rgb = color
         .match(/\d+/g)!
@@ -1212,13 +1235,17 @@ test("explicit black ANSI input remains readable in dark theme and updates on th
         });
       return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
     };
-    const foreground = luminance(getComputedStyle(span).color);
     const background = luminance(
       getComputedStyle(host().querySelector(".xterm")!).backgroundColor,
     );
-    return (
-      (Math.max(foreground, background) + 0.05) /
-      (Math.min(foreground, background) + 0.05)
+    return Math.min(
+      ...spans.map((span) => {
+        const foreground = luminance(getComputedStyle(span).color);
+        return (
+          (Math.max(foreground, background) + 0.05) /
+          (Math.min(foreground, background) + 0.05)
+        );
+      }),
     );
   };
   await expect.poll(ratio).toBeGreaterThanOrEqual(4.49);
