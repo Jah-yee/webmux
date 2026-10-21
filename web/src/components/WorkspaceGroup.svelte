@@ -74,7 +74,7 @@
       <div class="flex shrink-0 items-center gap-1">
         {#if onstart}<Button
             size="sm"
-            variant="ghost"
+            variant="outline"
             class="min-h-11 sm:min-h-8"
             disabled={worktree &&
               (!worktree.available || worktree.kind === "bare")}
