@@ -4,7 +4,7 @@
   font-family: "Inter";
   font-style: normal;
   font-weight: 100 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/inter-latin-3100e775.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
@@ -16,7 +16,7 @@
   font-family: "Inter";
   font-style: normal;
   font-weight: 100 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/inter-latin-ext-34b9c504.woff2") format("woff2");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
@@ -28,7 +28,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-ed2fe4da.woff2") format("woff2");
   unicode-range:
     U+1f1e9-1f1f5, U+1f1f7-1f1ff, U+1f21a, U+1f232, U+1f234-1f237,
@@ -41,7 +41,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-c875a169.woff2") format("woff2");
   unicode-range:
     U+fee3, U+fef3, U+ff03-ff04, U+ff07, U+ff0a, U+ff17-ff19, U+ff1c-ff1d,
@@ -55,7 +55,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-eb89d445.woff2") format("woff2");
   unicode-range:
     U+f0a7, U+f0b2, U+f0b7, U+f0c9, U+f0d8, U+f0da, U+f0dc-f0dd, U+f0e0, U+f0e6,
@@ -74,7 +74,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-7af32afb.woff2") format("woff2");
   unicode-range:
     U+9f83, U+9f85-9f8d, U+9f90-9f91, U+9f94-9f96, U+9f98, U+9f9b-9f9c, U+9f9e,
@@ -95,7 +95,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-ffecbf6e.woff2") format("woff2");
   unicode-range:
     U+9e30-9e33, U+9e35-9e3b, U+9e3e, U+9e40-9e44, U+9e46-9e4e, U+9e51, U+9e53,
@@ -114,7 +114,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-635735a1.woff2") format("woff2");
   unicode-range:
     U+9c82-9c83, U+9c85-9c8c, U+9c8e-9c92, U+9c94-9c9b, U+9c9e-9ca3,
@@ -133,7 +133,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-cd55851f.woff2") format("woff2");
   unicode-range:
     U+9a80, U+9a83, U+9a85, U+9a88-9a8a, U+9a8d-9a8e, U+9a90, U+9a92-9a93,
@@ -155,7 +155,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-81fa8ca5.woff2") format("woff2");
   unicode-range:
     U+98dd, U+98e1-98e2, U+98e7-98ea, U+98ec, U+98ee-98ef, U+98f2, U+98f4,
@@ -177,7 +177,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-1ff769bd.woff2") format("woff2");
   unicode-range:
     U+975b-975c, U+9763, U+9765-9766, U+976c-976d, U+9773, U+9776, U+977a,
@@ -198,7 +198,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-d3b6a5f1.woff2") format("woff2");
   unicode-range:
     U+95c4-95ca, U+95cc-95cd, U+95d4-95d6, U+95d8, U+95e1-95e2, U+95e9,
@@ -219,7 +219,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-013a27d2.woff2") format("woff2");
   unicode-range:
     U+94f5, U+94f7, U+94f9, U+94fb-94fd, U+94ff, U+9503-9504, U+9506-9507,
@@ -234,7 +234,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-9a15d9ca.woff2") format("woff2");
   unicode-range:
     U+941c-942b, U+942d-942e, U+9432-9433, U+9435, U+9438, U+943a, U+943e,
@@ -248,7 +248,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-564a1aae.woff2") format("woff2");
   unicode-range:
     U+92ec-92ed, U+92f0, U+92f3, U+92f8, U+92fc, U+9304, U+9306, U+9310, U+9312,
@@ -264,7 +264,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-18a82abc.woff2") format("woff2");
   unicode-range:
     U+9163-9164, U+9169, U+9170, U+9172, U+9174, U+9179-917a, U+917d-917e,
@@ -285,7 +285,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-5ce8d305.woff2") format("woff2");
   unicode-range:
     U+9004, U+900b, U+9011, U+9015-9016, U+901e, U+9021, U+9026, U+902d, U+902f,
@@ -306,7 +306,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-bb8182f8.woff2") format("woff2");
   unicode-range:
     U+8e41-8e42, U+8e47, U+8e49-8e4b, U+8e50-8e53, U+8e59-8e5a, U+8e5f-8e60,
@@ -327,7 +327,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-0b08cfec.woff2") format("woff2");
   unicode-range:
     U+8cbd, U+8cbf-8cc4, U+8cc7-8cc8, U+8cca, U+8ccd, U+8cd1, U+8cd3,
@@ -349,7 +349,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-65e8c613.woff2") format("woff2");
   unicode-range:
     U+8b80, U+8b83, U+8b8a, U+8b8c, U+8b90, U+8b93, U+8b99-8b9a, U+8ba0, U+8ba3,
@@ -368,7 +368,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b0b1daf1.woff2") format("woff2");
   unicode-range:
     U+8a15-8a18, U+8a1a-8a1b, U+8a1d, U+8a1f, U+8a22-8a23, U+8a25, U+8a2b,
@@ -390,7 +390,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-9c4e7b14.woff2") format("woff2");
   unicode-range:
     U+8882, U+8884-8886, U+8888, U+888f, U+8892-8893, U+889b, U+88a2, U+88a4,
@@ -411,7 +411,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-f588ebfd.woff2") format("woff2");
   unicode-range:
     U+86f4, U+86f8-86f9, U+86fb, U+86fe, U+8703, U+8706-870a, U+870d,
@@ -433,7 +433,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-a678dc9f.woff2") format("woff2");
   unicode-range:
     U+8548, U+854e, U+8553, U+8556-8557, U+8559, U+855e, U+8561, U+8564-8565,
@@ -454,7 +454,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-d1f0c930.woff2") format("woff2");
   unicode-range:
     U+83c5, U+83c8-83c9, U+83cb, U+83d1, U+83d3-83d6, U+83d8, U+83db, U+83dd,
@@ -476,7 +476,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-22b84cdf.woff2") format("woff2");
   unicode-range:
     U+82bc, U+82be, U+82c0-82c2, U+82c4-82c8, U+82ca-82cc, U+82ce, U+82d0,
@@ -496,7 +496,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-525eef80.woff2") format("woff2");
   unicode-range:
     U+8166-8169, U+816b, U+816d, U+8171, U+8173-8174, U+8178, U+817c-817d,
@@ -516,7 +516,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-4326187b.woff2") format("woff2");
   unicode-range:
     U+8016, U+8018-8019, U+801c, U+801e, U+8026-802a, U+8031, U+8034-8035,
@@ -535,7 +535,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-e0812601.woff2") format("woff2");
   unicode-range:
     U+7ef0-7ef2, U+7ef6, U+7efa-7efb, U+7efe, U+7f01-7f04, U+7f08, U+7f0a-7f12,
@@ -554,7 +554,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b7f880a0.woff2") format("woff2");
   unicode-range:
     U+7dd2, U+7dd4, U+7dd6-7dd8, U+7dda-7de0, U+7de2-7de6, U+7de8-7ded, U+7def,
@@ -573,7 +573,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-332fc0db.woff2") format("woff2");
   unicode-range:
     U+7ce8, U+7cec, U+7cf0, U+7cf5-7cf9, U+7cfc, U+7cfe, U+7d00, U+7d04-7d0b,
@@ -591,7 +591,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-31087e9a.woff2") format("woff2");
   unicode-range:
     U+7bd3-7bd4, U+7bd9-7bda, U+7bdd, U+7be0-7be1, U+7be4-7be6, U+7be9-7bea,
@@ -610,7 +610,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-567c513b.woff2") format("woff2");
   unicode-range:
     U+7ae6, U+7af4-7af7, U+7afa-7afb, U+7afd-7b0a, U+7b0c, U+7b0e-7b0f, U+7b13,
@@ -627,7 +627,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-5d33063a.woff2") format("woff2");
   unicode-range:
     U+798b-798e, U+7992, U+7994-7995, U+7997-7998, U+799a-799c, U+799f,
@@ -648,7 +648,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-28208e12.woff2") format("woff2");
   unicode-range:
     U+784c, U+784e-7854, U+7856-7857, U+7859-785a, U+7865, U+7869-786a, U+786d,
@@ -669,7 +669,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-566e608c.woff2") format("woff2");
   unicode-range:
     U+7722, U+7726, U+7728, U+772b-7730, U+7732-7736, U+7739-773a, U+773d-773f,
@@ -688,7 +688,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-576dd5ab.woff2") format("woff2");
   unicode-range:
     U+7613-7619, U+761b-761d, U+761f-7622, U+7625, U+7627-762a, U+762e-7630,
@@ -707,7 +707,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-8e8000bc.woff2") format("woff2");
   unicode-range:
     U+750d, U+750f, U+7511, U+7513, U+7515, U+7517, U+7519, U+7521-7527, U+752a,
@@ -726,7 +726,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-153bd830.woff2") format("woff2");
   unicode-range:
     U+73f0, U+73f2, U+73f4-73f5, U+73f7, U+73f9-73fa, U+73fc-73fd, U+73ff-7402,
@@ -746,7 +746,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-382d83fc.woff2") format("woff2");
   unicode-range:
     U+72e6, U+72e8, U+72ef-72f0, U+72f2-72f4, U+72f6-72f7, U+72f9-72fb, U+72fd,
@@ -765,7 +765,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-81709277.woff2") format("woff2");
   unicode-range:
     U+71a8, U+71af, U+71b1-71bc, U+71be, U+71c1-71c2, U+71c4, U+71c8-71cb,
@@ -785,7 +785,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-ad1b3a57.woff2") format("woff2");
   unicode-range:
     U+700b, U+700d, U+7015, U+7018, U+701b, U+701d-701f, U+7023, U+7026-7028,
@@ -807,7 +807,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-0d53976e.woff2") format("woff2");
   unicode-range:
     U+6ed9, U+6edb, U+6edd, U+6edf-6ee0, U+6ee2, U+6ee6, U+6eea, U+6eec,
@@ -826,7 +826,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-f1201d94.woff2") format("woff2");
   unicode-range:
     U+6dc3, U+6dc5-6dc6, U+6dc9, U+6dcc, U+6dcf, U+6dd2-6dd3, U+6dd6,
@@ -846,7 +846,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-267b7c3a.woff2") format("woff2");
   unicode-range:
     U+6cb1-6cb2, U+6cb4-6cb5, U+6cb7, U+6cba, U+6cbc-6cbd, U+6cc1-6cc3,
@@ -865,7 +865,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-221fde0e.woff2") format("woff2");
   unicode-range:
     U+6b83-6b86, U+6b89, U+6b8d, U+6b91-6b93, U+6b95, U+6b97-6b98, U+6b9a-6b9b,
@@ -884,7 +884,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-eb1ed88c.woff2") format("woff2");
   unicode-range:
     U+69fe-6a01, U+6a06, U+6a09, U+6a0b, U+6a11, U+6a13, U+6a17-6a19, U+6a1b,
@@ -904,7 +904,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-fdf4cb48.woff2") format("woff2");
   unicode-range:
     U+68d3, U+68d7, U+68dd, U+68df, U+68e1, U+68e3-68e4, U+68e6-68ed,
@@ -923,7 +923,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-6d7dab9e.woff2") format("woff2");
   unicode-range:
     U+678b-678d, U+678f, U+6792-6793, U+6796, U+6798, U+679e-67a1, U+67a5,
@@ -943,7 +943,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b44bb988.woff2") format("woff2");
   unicode-range:
     U+6631, U+6633-6634, U+6636, U+663a-663b, U+663d, U+6641, U+6644-6645,
@@ -964,7 +964,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-63cce03a.woff2") format("woff2");
   unicode-range:
     U+64f1-64f2, U+64f4, U+64f7-64f8, U+64fa, U+64fc, U+64fe-64ff, U+6503,
@@ -985,7 +985,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-cb121541.woff2") format("woff2");
   unicode-range:
     U+63b8-63bc, U+63be, U+63c0, U+63c3-63c4, U+63c6, U+63c8, U+63cd-63ce,
@@ -1004,7 +1004,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-e0044aa1.woff2") format("woff2");
   unicode-range:
     U+622c, U+622e-6230, U+6232, U+6238, U+623b, U+623d-623e, U+6243, U+6246,
@@ -1025,7 +1025,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-fdd9aae5.woff2") format("woff2");
   unicode-range:
     U+60ed-60ee, U+60f0-60f1, U+60f4, U+60f6, U+60fa, U+6100, U+6106,
@@ -1046,7 +1046,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-57884ef8.woff2") format("woff2");
   unicode-range:
     U+5fc4, U+5fc9, U+5fcb, U+5fce-5fd6, U+5fda-5fde, U+5fe1-5fe2, U+5fe4-5fe5,
@@ -1066,7 +1066,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b01eb9c4.woff2") format("woff2");
   unicode-range:
     U+5e98, U+5e9b, U+5e9d, U+5ea0-5ea5, U+5ea8, U+5eab, U+5eaf, U+5eb3,
@@ -1086,7 +1086,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b7eaf718.woff2") format("woff2");
   unicode-range:
     U+5d26-5d27, U+5d2e-5d34, U+5d3c-5d3e, U+5d41-5d44, U+5d46-5d48,
@@ -1107,7 +1107,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-c0e3c0dc.woff2") format("woff2");
   unicode-range:
     U+5bec, U+5bee-5bf0, U+5bf2-5bf3, U+5bf5-5bf6, U+5bfe, U+5c02-5c03, U+5c05,
@@ -1127,7 +1127,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-9bd05189.woff2") format("woff2");
   unicode-range:
     U+5aa0, U+5aa3-5aa4, U+5aaa, U+5aae-5aaf, U+5ab1-5ab2, U+5ab4-5ab5,
@@ -1147,7 +1147,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-d4bfa9e6.woff2") format("woff2");
   unicode-range:
     U+596a, U+596c-596e, U+5977, U+597b-597c, U+5981, U+598f, U+5997-5998,
@@ -1167,7 +1167,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-a8d0560f.woff2") format("woff2");
   unicode-range:
     U+5820, U+5822-5823, U+5825-5826, U+582c, U+582f, U+5831, U+583a, U+583d,
@@ -1188,7 +1188,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-e7827744.woff2") format("woff2");
   unicode-range:
     U+56f9, U+56fc, U+56ff-5700, U+5703-5704, U+5709-570a, U+570c-570d, U+570f,
@@ -1208,7 +1208,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-58885332.woff2") format("woff2");
   unicode-range:
     U+55f5-55f7, U+55fb, U+55fe, U+5600-5601, U+5605-5606, U+5608, U+560c-560d,
@@ -1226,7 +1226,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-a956682a.woff2") format("woff2");
   unicode-range:
     U+550f, U+5511-5514, U+5516-5517, U+5519, U+551b, U+551d-551e, U+5520,
@@ -1244,7 +1244,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-5eab3572.woff2") format("woff2");
   unicode-range:
     U+53e7-53e9, U+53f1, U+53f4-53f5, U+53fa-5400, U+5402, U+5405-5407, U+540b,
@@ -1263,7 +1263,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-e9fd7c67.woff2") format("woff2");
   unicode-range:
     U+5289, U+528b, U+528d, U+528f, U+5291-5293, U+529a, U+52a2, U+52a6-52a7,
@@ -1284,7 +1284,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-70a3d111.woff2") format("woff2");
   unicode-range:
     U+5104, U+5106-5107, U+5109-510b, U+510d, U+510f-5110, U+5113, U+5115,
@@ -1305,7 +1305,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b412b8dc.woff2") format("woff2");
   unicode-range:
     U+4fd1, U+4fd3, U+4fda-4fdc, U+4fdf-4fe0, U+4fe2-4fe4, U+4fe6, U+4fe8,
@@ -1325,7 +1325,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-d1b5af0c.woff2") format("woff2");
   unicode-range:
     U+4ea3, U+4ea5, U+4eb0-4eb1, U+4eb3-4eb6, U+4eb8-4eb9, U+4ebb-4ebe,
@@ -1344,7 +1344,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-f6bcaef8.woff2") format("woff2");
   unicode-range:
     U+3129, U+3131, U+3134, U+3137, U+3139, U+3141-3142, U+3145, U+3147-3148,
@@ -1365,7 +1365,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-ae918e4d.woff2") format("woff2");
   unicode-range:
     U+279f-27a2, U+27a4-27a5, U+27a8, U+27b0, U+27b2-27b3, U+27b9, U+27e8-27e9,
@@ -1384,7 +1384,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-bfedc5f1.woff2") format("woff2");
   unicode-range:
     U+2651-2655, U+2658, U+265a-265b, U+265d-265e, U+2660-266d, U+266f, U+267b,
@@ -1401,7 +1401,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-bcfdf8cf.woff2") format("woff2");
   unicode-range:
     U+2550-2551, U+2554, U+2557, U+255a-255b, U+255d, U+255f-2560, U+2562-2563,
@@ -1416,7 +1416,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-6fe0b048.woff2") format("woff2");
   unicode-range:
     U+23f0, U+23f3, U+2445, U+2449, U+2465-2471, U+2474-249b, U+24b8, U+24c2,
@@ -1429,7 +1429,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-29e5f26e.woff2") format("woff2");
   unicode-range:
     U+207c-2083, U+208c-208e, U+2092, U+20a6, U+20a8-20ad, U+20af, U+20b1,
@@ -1449,7 +1449,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-2b58832a.woff2") format("woff2");
   unicode-range:
     U+1d34-1d35, U+1d38-1d3a, U+1d3c, U+1d3f-1d40, U+1d49, U+1d4e-1d4f, U+1d52,
@@ -1468,7 +1468,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-080d7bb6.woff2") format("woff2");
   unicode-range:
     U+2ae-2b3, U+2b5-2bf, U+2c2-2c3, U+2c6-2d1, U+2d8-2da, U+2dc, U+2e1-2e3,
@@ -1482,7 +1482,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-0695f65b.woff2") format("woff2");
   unicode-range:
     U+176-17f, U+192, U+194, U+19a-19b, U+19d, U+1a0-1a1, U+1a3-1a4, U+1aa,
@@ -1498,7 +1498,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-1ded3d06.woff2") format("woff2");
   unicode-range:
     U+a1-a4, U+a6-a8, U+aa, U+ac, U+af, U+b1, U+b3-b6, U+b8-ba, U+bc-d6,
@@ -1512,7 +1512,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-597b821e.woff2") format("woff2");
   unicode-range:
     U+221a, U+2264, U+2464, U+25a0, U+3008, U+4e10, U+512a, U+5152, U+5201,
@@ -1542,7 +1542,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-8eef1fa6.woff2") format("woff2");
   unicode-range:
     U+161, U+926, U+928, U+939, U+93f-940, U+94d, U+e17, U+e22, U+e44, U+25c7,
@@ -1572,7 +1572,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-357be17c.woff2") format("woff2");
   unicode-range:
     U+10c, U+627-629, U+639, U+644, U+64a, U+203b, U+2265, U+2463, U+2573,
@@ -1602,7 +1602,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-de0d9bc6.woff2") format("woff2");
   unicode-range:
     U+60, U+631, U+2606, U+3014-3015, U+309c, U+33a1, U+4e52, U+4ec6, U+4f86,
@@ -1632,7 +1632,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-ef41ce86.woff2") format("woff2");
   unicode-range:
     U+2003, U+2193, U+2462, U+4e19, U+4e2b, U+4e36, U+4ea8, U+4ed1, U+4ed7,
@@ -1662,7 +1662,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-0404d022.woff2") format("woff2");
   unicode-range:
     U+5e, U+2190, U+250a, U+25bc, U+25cf, U+4e56, U+4ea9, U+4f3d, U+4f6c,
@@ -1692,7 +1692,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-6f1efc3f.woff2") format("woff2");
   unicode-range:
     U+b0, U+2191, U+2460-2461, U+25c6, U+300e-300f, U+4e1b, U+4e7e, U+4ed5,
@@ -1722,7 +1722,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-6d4a79af.woff2") format("woff2");
   unicode-range:
     U+200b, U+2103, U+4e18, U+4e27-4e28, U+4e38, U+4e59, U+4e8f, U+4ead, U+4ec7,
@@ -1752,7 +1752,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b1a0d456.woff2") format("woff2");
   unicode-range:
     U+24, U+4e08, U+4e43, U+4e4f, U+4ef0, U+4f2a, U+507f, U+50ac, U+50bb,
@@ -1782,7 +1782,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-7a7980f8.woff2") format("woff2");
   unicode-range:
     U+a5, U+2192, U+2605, U+4e11, U+4e22, U+4e32, U+4f0d, U+4f0f, U+4f69,
@@ -1812,7 +1812,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-e4d24ba9.woff2") format("woff2");
   unicode-range:
     U+300c-300d, U+4e54, U+4e58, U+4e95, U+4ec1, U+4f2f, U+4f38, U+4fa3, U+4fca,
@@ -1842,7 +1842,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-f20ccaea.woff2") format("woff2");
   unicode-range:
     U+4e4c, U+4e88, U+4ea1, U+4ea6, U+4ed3-4ed4, U+4eff, U+4f30, U+4fa7, U+4fc4,
@@ -1872,7 +1872,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-6624c024.woff2") format("woff2");
   unicode-range:
     U+23, U+3d, U+4e01, U+4e39, U+4e73, U+4ecd, U+4ed9, U+4eea, U+4f0a, U+4f1f,
@@ -1902,7 +1902,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-f2fd9442.woff2") format("woff2");
   unicode-range:
     U+26, U+3c, U+d7, U+4e4e, U+4e61, U+4e71, U+4ebf, U+4f26, U+5012, U+51ac,
@@ -1932,7 +1932,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-d58ca608.woff2") format("woff2");
   unicode-range:
     U+7e, U+2026, U+4e03, U+4e25, U+4e30, U+4e34, U+4e45, U+4e5d, U+4e89,
@@ -1962,7 +1962,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-d83b8291.woff2") format("woff2");
   unicode-range:
     U+25, U+4e14, U+4e1d, U+4e3d, U+4e49, U+4e60, U+4e9a, U+4eb2, U+4ec5,
@@ -1992,7 +1992,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-5744f800.woff2") format("woff2");
   unicode-range:
     U+2b, U+40, U+3000, U+300a-300b, U+4e16, U+4e66, U+4e70, U+4e91-4e92,
@@ -2022,7 +2022,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-bf7c1b4b.woff2") format("woff2");
   unicode-range:
     U+4e, U+201c-201d, U+3010-3011, U+4e07, U+4e1c, U+4e24, U+4e3e, U+4e48,
@@ -2052,7 +2052,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-b6be3786.woff2") format("woff2");
   unicode-range:
     U+d, U+3e, U+5f, U+7c, U+a0, U+a9, U+4e09-4e0b, U+4e0d-4e0e, U+4e13, U+4e1a,
@@ -2081,7 +2081,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-190237c8.woff2") format("woff2");
   unicode-range:
     U+20-22, U+27-2a, U+2c-3b, U+3f, U+41-4d, U+4f-5d, U+61-7b, U+7d, U+ab,
@@ -2101,7 +2101,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-8cb87d06.woff2") format("woff2");
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
@@ -2110,7 +2110,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-f07ef64b.woff2") format("woff2");
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
@@ -2122,7 +2122,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-e4210347.woff2") format("woff2");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
@@ -2134,7 +2134,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 100 500;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-400-2a75408e.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
@@ -2146,7 +2146,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-804f19d9.woff2") format("woff2");
   unicode-range:
     U+1f1e9-1f1f5, U+1f1f7-1f1ff, U+1f21a, U+1f232, U+1f234-1f237,
@@ -2159,7 +2159,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-0aa1f26f.woff2") format("woff2");
   unicode-range:
     U+fee3, U+fef3, U+ff03-ff04, U+ff07, U+ff0a, U+ff17-ff19, U+ff1c-ff1d,
@@ -2173,7 +2173,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-ac2eb6be.woff2") format("woff2");
   unicode-range:
     U+f0a7, U+f0b2, U+f0b7, U+f0c9, U+f0d8, U+f0da, U+f0dc-f0dd, U+f0e0, U+f0e6,
@@ -2192,7 +2192,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-1b2cb2c7.woff2") format("woff2");
   unicode-range:
     U+9f83, U+9f85-9f8d, U+9f90-9f91, U+9f94-9f96, U+9f98, U+9f9b-9f9c, U+9f9e,
@@ -2213,7 +2213,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-760aaaef.woff2") format("woff2");
   unicode-range:
     U+9e30-9e33, U+9e35-9e3b, U+9e3e, U+9e40-9e44, U+9e46-9e4e, U+9e51, U+9e53,
@@ -2232,7 +2232,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-6ccf5af7.woff2") format("woff2");
   unicode-range:
     U+9c82-9c83, U+9c85-9c8c, U+9c8e-9c92, U+9c94-9c9b, U+9c9e-9ca3,
@@ -2251,7 +2251,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-0a7a6624.woff2") format("woff2");
   unicode-range:
     U+9a80, U+9a83, U+9a85, U+9a88-9a8a, U+9a8d-9a8e, U+9a90, U+9a92-9a93,
@@ -2273,7 +2273,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-98603312.woff2") format("woff2");
   unicode-range:
     U+98dd, U+98e1-98e2, U+98e7-98ea, U+98ec, U+98ee-98ef, U+98f2, U+98f4,
@@ -2295,7 +2295,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-04d54c24.woff2") format("woff2");
   unicode-range:
     U+975b-975c, U+9763, U+9765-9766, U+976c-976d, U+9773, U+9776, U+977a,
@@ -2316,7 +2316,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-98437be5.woff2") format("woff2");
   unicode-range:
     U+95c4-95ca, U+95cc-95cd, U+95d4-95d6, U+95d8, U+95e1-95e2, U+95e9,
@@ -2337,7 +2337,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-f9f3470a.woff2") format("woff2");
   unicode-range:
     U+94f5, U+94f7, U+94f9, U+94fb-94fd, U+94ff, U+9503-9504, U+9506-9507,
@@ -2352,7 +2352,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-1c53cff5.woff2") format("woff2");
   unicode-range:
     U+941c-942b, U+942d-942e, U+9432-9433, U+9435, U+9438, U+943a, U+943e,
@@ -2366,7 +2366,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-066b2c7a.woff2") format("woff2");
   unicode-range:
     U+92ec-92ed, U+92f0, U+92f3, U+92f8, U+92fc, U+9304, U+9306, U+9310, U+9312,
@@ -2382,7 +2382,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-7c2ce2fc.woff2") format("woff2");
   unicode-range:
     U+9163-9164, U+9169, U+9170, U+9172, U+9174, U+9179-917a, U+917d-917e,
@@ -2403,7 +2403,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-accb6dff.woff2") format("woff2");
   unicode-range:
     U+9004, U+900b, U+9011, U+9015-9016, U+901e, U+9021, U+9026, U+902d, U+902f,
@@ -2424,7 +2424,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-462ad3c7.woff2") format("woff2");
   unicode-range:
     U+8e41-8e42, U+8e47, U+8e49-8e4b, U+8e50-8e53, U+8e59-8e5a, U+8e5f-8e60,
@@ -2445,7 +2445,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-eecd1d0e.woff2") format("woff2");
   unicode-range:
     U+8cbd, U+8cbf-8cc4, U+8cc7-8cc8, U+8cca, U+8ccd, U+8cd1, U+8cd3,
@@ -2467,7 +2467,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-38408dcf.woff2") format("woff2");
   unicode-range:
     U+8b80, U+8b83, U+8b8a, U+8b8c, U+8b90, U+8b93, U+8b99-8b9a, U+8ba0, U+8ba3,
@@ -2486,7 +2486,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-a820e6c6.woff2") format("woff2");
   unicode-range:
     U+8a15-8a18, U+8a1a-8a1b, U+8a1d, U+8a1f, U+8a22-8a23, U+8a25, U+8a2b,
@@ -2508,7 +2508,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-ae5eae50.woff2") format("woff2");
   unicode-range:
     U+8882, U+8884-8886, U+8888, U+888f, U+8892-8893, U+889b, U+88a2, U+88a4,
@@ -2529,7 +2529,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-c70de57d.woff2") format("woff2");
   unicode-range:
     U+86f4, U+86f8-86f9, U+86fb, U+86fe, U+8703, U+8706-870a, U+870d,
@@ -2551,7 +2551,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-d352a8cb.woff2") format("woff2");
   unicode-range:
     U+8548, U+854e, U+8553, U+8556-8557, U+8559, U+855e, U+8561, U+8564-8565,
@@ -2572,7 +2572,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-24294752.woff2") format("woff2");
   unicode-range:
     U+83c5, U+83c8-83c9, U+83cb, U+83d1, U+83d3-83d6, U+83d8, U+83db, U+83dd,
@@ -2594,7 +2594,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-2b6b7c66.woff2") format("woff2");
   unicode-range:
     U+82bc, U+82be, U+82c0-82c2, U+82c4-82c8, U+82ca-82cc, U+82ce, U+82d0,
@@ -2614,7 +2614,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-0ceef532.woff2") format("woff2");
   unicode-range:
     U+8166-8169, U+816b, U+816d, U+8171, U+8173-8174, U+8178, U+817c-817d,
@@ -2634,7 +2634,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-605839dd.woff2") format("woff2");
   unicode-range:
     U+8016, U+8018-8019, U+801c, U+801e, U+8026-802a, U+8031, U+8034-8035,
@@ -2653,7 +2653,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-9135ad27.woff2") format("woff2");
   unicode-range:
     U+7ef0-7ef2, U+7ef6, U+7efa-7efb, U+7efe, U+7f01-7f04, U+7f08, U+7f0a-7f12,
@@ -2672,7 +2672,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-6aa29a76.woff2") format("woff2");
   unicode-range:
     U+7dd2, U+7dd4, U+7dd6-7dd8, U+7dda-7de0, U+7de2-7de6, U+7de8-7ded, U+7def,
@@ -2691,7 +2691,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-dff94aa2.woff2") format("woff2");
   unicode-range:
     U+7ce8, U+7cec, U+7cf0, U+7cf5-7cf9, U+7cfc, U+7cfe, U+7d00, U+7d04-7d0b,
@@ -2709,7 +2709,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-b535239a.woff2") format("woff2");
   unicode-range:
     U+7bd3-7bd4, U+7bd9-7bda, U+7bdd, U+7be0-7be1, U+7be4-7be6, U+7be9-7bea,
@@ -2728,7 +2728,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-39c931ad.woff2") format("woff2");
   unicode-range:
     U+7ae6, U+7af4-7af7, U+7afa-7afb, U+7afd-7b0a, U+7b0c, U+7b0e-7b0f, U+7b13,
@@ -2745,7 +2745,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-83e3e70d.woff2") format("woff2");
   unicode-range:
     U+798b-798e, U+7992, U+7994-7995, U+7997-7998, U+799a-799c, U+799f,
@@ -2766,7 +2766,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-cd983172.woff2") format("woff2");
   unicode-range:
     U+784c, U+784e-7854, U+7856-7857, U+7859-785a, U+7865, U+7869-786a, U+786d,
@@ -2787,7 +2787,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-96870c64.woff2") format("woff2");
   unicode-range:
     U+7722, U+7726, U+7728, U+772b-7730, U+7732-7736, U+7739-773a, U+773d-773f,
@@ -2806,7 +2806,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-f188354a.woff2") format("woff2");
   unicode-range:
     U+7613-7619, U+761b-761d, U+761f-7622, U+7625, U+7627-762a, U+762e-7630,
@@ -2825,7 +2825,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-64abd5a1.woff2") format("woff2");
   unicode-range:
     U+750d, U+750f, U+7511, U+7513, U+7515, U+7517, U+7519, U+7521-7527, U+752a,
@@ -2844,7 +2844,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-1a993d1d.woff2") format("woff2");
   unicode-range:
     U+73f0, U+73f2, U+73f4-73f5, U+73f7, U+73f9-73fa, U+73fc-73fd, U+73ff-7402,
@@ -2864,7 +2864,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-1c91f7b7.woff2") format("woff2");
   unicode-range:
     U+72e6, U+72e8, U+72ef-72f0, U+72f2-72f4, U+72f6-72f7, U+72f9-72fb, U+72fd,
@@ -2883,7 +2883,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-d37bfa96.woff2") format("woff2");
   unicode-range:
     U+71a8, U+71af, U+71b1-71bc, U+71be, U+71c1-71c2, U+71c4, U+71c8-71cb,
@@ -2903,7 +2903,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-f8ac72e6.woff2") format("woff2");
   unicode-range:
     U+700b, U+700d, U+7015, U+7018, U+701b, U+701d-701f, U+7023, U+7026-7028,
@@ -2925,7 +2925,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-da379f17.woff2") format("woff2");
   unicode-range:
     U+6ed9, U+6edb, U+6edd, U+6edf-6ee0, U+6ee2, U+6ee6, U+6eea, U+6eec,
@@ -2944,7 +2944,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-ac299864.woff2") format("woff2");
   unicode-range:
     U+6dc3, U+6dc5-6dc6, U+6dc9, U+6dcc, U+6dcf, U+6dd2-6dd3, U+6dd6,
@@ -2964,7 +2964,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-62b7b953.woff2") format("woff2");
   unicode-range:
     U+6cb1-6cb2, U+6cb4-6cb5, U+6cb7, U+6cba, U+6cbc-6cbd, U+6cc1-6cc3,
@@ -2983,7 +2983,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-cf7a0475.woff2") format("woff2");
   unicode-range:
     U+6b83-6b86, U+6b89, U+6b8d, U+6b91-6b93, U+6b95, U+6b97-6b98, U+6b9a-6b9b,
@@ -3002,7 +3002,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-311ce6bd.woff2") format("woff2");
   unicode-range:
     U+69fe-6a01, U+6a06, U+6a09, U+6a0b, U+6a11, U+6a13, U+6a17-6a19, U+6a1b,
@@ -3022,7 +3022,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-56b271f6.woff2") format("woff2");
   unicode-range:
     U+68d3, U+68d7, U+68dd, U+68df, U+68e1, U+68e3-68e4, U+68e6-68ed,
@@ -3041,7 +3041,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-a9df11cb.woff2") format("woff2");
   unicode-range:
     U+678b-678d, U+678f, U+6792-6793, U+6796, U+6798, U+679e-67a1, U+67a5,
@@ -3061,7 +3061,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-68a93ffa.woff2") format("woff2");
   unicode-range:
     U+6631, U+6633-6634, U+6636, U+663a-663b, U+663d, U+6641, U+6644-6645,
@@ -3082,7 +3082,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-fe246cb6.woff2") format("woff2");
   unicode-range:
     U+64f1-64f2, U+64f4, U+64f7-64f8, U+64fa, U+64fc, U+64fe-64ff, U+6503,
@@ -3103,7 +3103,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-251a23e6.woff2") format("woff2");
   unicode-range:
     U+63b8-63bc, U+63be, U+63c0, U+63c3-63c4, U+63c6, U+63c8, U+63cd-63ce,
@@ -3122,7 +3122,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-fa227473.woff2") format("woff2");
   unicode-range:
     U+622c, U+622e-6230, U+6232, U+6238, U+623b, U+623d-623e, U+6243, U+6246,
@@ -3143,7 +3143,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-9fcdaffb.woff2") format("woff2");
   unicode-range:
     U+60ed-60ee, U+60f0-60f1, U+60f4, U+60f6, U+60fa, U+6100, U+6106,
@@ -3164,7 +3164,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-415b9eb2.woff2") format("woff2");
   unicode-range:
     U+5fc4, U+5fc9, U+5fcb, U+5fce-5fd6, U+5fda-5fde, U+5fe1-5fe2, U+5fe4-5fe5,
@@ -3184,7 +3184,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-10886939.woff2") format("woff2");
   unicode-range:
     U+5e98, U+5e9b, U+5e9d, U+5ea0-5ea5, U+5ea8, U+5eab, U+5eaf, U+5eb3,
@@ -3204,7 +3204,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-b6ab65b7.woff2") format("woff2");
   unicode-range:
     U+5d26-5d27, U+5d2e-5d34, U+5d3c-5d3e, U+5d41-5d44, U+5d46-5d48,
@@ -3225,7 +3225,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-ae585d06.woff2") format("woff2");
   unicode-range:
     U+5bec, U+5bee-5bf0, U+5bf2-5bf3, U+5bf5-5bf6, U+5bfe, U+5c02-5c03, U+5c05,
@@ -3245,7 +3245,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-bc605388.woff2") format("woff2");
   unicode-range:
     U+5aa0, U+5aa3-5aa4, U+5aaa, U+5aae-5aaf, U+5ab1-5ab2, U+5ab4-5ab5,
@@ -3265,7 +3265,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-6983bb72.woff2") format("woff2");
   unicode-range:
     U+596a, U+596c-596e, U+5977, U+597b-597c, U+5981, U+598f, U+5997-5998,
@@ -3285,7 +3285,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-71ffae38.woff2") format("woff2");
   unicode-range:
     U+5820, U+5822-5823, U+5825-5826, U+582c, U+582f, U+5831, U+583a, U+583d,
@@ -3306,7 +3306,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-eea1d4ed.woff2") format("woff2");
   unicode-range:
     U+56f9, U+56fc, U+56ff-5700, U+5703-5704, U+5709-570a, U+570c-570d, U+570f,
@@ -3326,7 +3326,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-ca74ad4e.woff2") format("woff2");
   unicode-range:
     U+55f5-55f7, U+55fb, U+55fe, U+5600-5601, U+5605-5606, U+5608, U+560c-560d,
@@ -3344,7 +3344,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-4556d4dc.woff2") format("woff2");
   unicode-range:
     U+550f, U+5511-5514, U+5516-5517, U+5519, U+551b, U+551d-551e, U+5520,
@@ -3362,7 +3362,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-c44af33e.woff2") format("woff2");
   unicode-range:
     U+53e7-53e9, U+53f1, U+53f4-53f5, U+53fa-5400, U+5402, U+5405-5407, U+540b,
@@ -3381,7 +3381,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-876b6867.woff2") format("woff2");
   unicode-range:
     U+5289, U+528b, U+528d, U+528f, U+5291-5293, U+529a, U+52a2, U+52a6-52a7,
@@ -3402,7 +3402,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-744bbff5.woff2") format("woff2");
   unicode-range:
     U+5104, U+5106-5107, U+5109-510b, U+510d, U+510f-5110, U+5113, U+5115,
@@ -3423,7 +3423,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-a3369e5c.woff2") format("woff2");
   unicode-range:
     U+4fd1, U+4fd3, U+4fda-4fdc, U+4fdf-4fe0, U+4fe2-4fe4, U+4fe6, U+4fe8,
@@ -3443,7 +3443,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-573f80ac.woff2") format("woff2");
   unicode-range:
     U+4ea3, U+4ea5, U+4eb0-4eb1, U+4eb3-4eb6, U+4eb8-4eb9, U+4ebb-4ebe,
@@ -3462,7 +3462,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-407e32dd.woff2") format("woff2");
   unicode-range:
     U+3129, U+3131, U+3134, U+3137, U+3139, U+3141-3142, U+3145, U+3147-3148,
@@ -3483,7 +3483,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-79046048.woff2") format("woff2");
   unicode-range:
     U+279f-27a2, U+27a4-27a5, U+27a8, U+27b0, U+27b2-27b3, U+27b9, U+27e8-27e9,
@@ -3502,7 +3502,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-fb24e4e5.woff2") format("woff2");
   unicode-range:
     U+2651-2655, U+2658, U+265a-265b, U+265d-265e, U+2660-266d, U+266f, U+267b,
@@ -3519,7 +3519,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-1beabf14.woff2") format("woff2");
   unicode-range:
     U+2550-2551, U+2554, U+2557, U+255a-255b, U+255d, U+255f-2560, U+2562-2563,
@@ -3534,7 +3534,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-bd082d1a.woff2") format("woff2");
   unicode-range:
     U+23f0, U+23f3, U+2445, U+2449, U+2465-2471, U+2474-249b, U+24b8, U+24c2,
@@ -3547,7 +3547,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-456e2cfb.woff2") format("woff2");
   unicode-range:
     U+207c-2083, U+208c-208e, U+2092, U+20a6, U+20a8-20ad, U+20af, U+20b1,
@@ -3567,7 +3567,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-e7b101cd.woff2") format("woff2");
   unicode-range:
     U+1d34-1d35, U+1d38-1d3a, U+1d3c, U+1d3f-1d40, U+1d49, U+1d4e-1d4f, U+1d52,
@@ -3586,7 +3586,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-0f78ba01.woff2") format("woff2");
   unicode-range:
     U+2ae-2b3, U+2b5-2bf, U+2c2-2c3, U+2c6-2d1, U+2d8-2da, U+2dc, U+2e1-2e3,
@@ -3600,7 +3600,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-df9b5779.woff2") format("woff2");
   unicode-range:
     U+176-17f, U+192, U+194, U+19a-19b, U+19d, U+1a0-1a1, U+1a3-1a4, U+1aa,
@@ -3616,7 +3616,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-473c63c9.woff2") format("woff2");
   unicode-range:
     U+a1-a4, U+a6-a8, U+aa, U+ac, U+af, U+b1, U+b3-b6, U+b8-ba, U+bc-d6,
@@ -3630,7 +3630,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-4f4c436f.woff2") format("woff2");
   unicode-range:
     U+221a, U+2264, U+2464, U+25a0, U+3008, U+4e10, U+512a, U+5152, U+5201,
@@ -3660,7 +3660,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-e13eeff2.woff2") format("woff2");
   unicode-range:
     U+161, U+926, U+928, U+939, U+93f-940, U+94d, U+e17, U+e22, U+e44, U+25c7,
@@ -3690,7 +3690,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-6d698f7e.woff2") format("woff2");
   unicode-range:
     U+10c, U+627-629, U+639, U+644, U+64a, U+203b, U+2265, U+2463, U+2573,
@@ -3720,7 +3720,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-44a03b97.woff2") format("woff2");
   unicode-range:
     U+60, U+631, U+2606, U+3014-3015, U+309c, U+33a1, U+4e52, U+4ec6, U+4f86,
@@ -3750,7 +3750,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-acd9e8e0.woff2") format("woff2");
   unicode-range:
     U+2003, U+2193, U+2462, U+4e19, U+4e2b, U+4e36, U+4ea8, U+4ed1, U+4ed7,
@@ -3780,7 +3780,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-82bbe8ac.woff2") format("woff2");
   unicode-range:
     U+5e, U+2190, U+250a, U+25bc, U+25cf, U+4e56, U+4ea9, U+4f3d, U+4f6c,
@@ -3810,7 +3810,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-785c0d52.woff2") format("woff2");
   unicode-range:
     U+b0, U+2191, U+2460-2461, U+25c6, U+300e-300f, U+4e1b, U+4e7e, U+4ed5,
@@ -3840,7 +3840,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-dcc19177.woff2") format("woff2");
   unicode-range:
     U+200b, U+2103, U+4e18, U+4e27-4e28, U+4e38, U+4e59, U+4e8f, U+4ead, U+4ec7,
@@ -3870,7 +3870,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-090aa1a1.woff2") format("woff2");
   unicode-range:
     U+24, U+4e08, U+4e43, U+4e4f, U+4ef0, U+4f2a, U+507f, U+50ac, U+50bb,
@@ -3900,7 +3900,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-8e755f45.woff2") format("woff2");
   unicode-range:
     U+a5, U+2192, U+2605, U+4e11, U+4e22, U+4e32, U+4f0d, U+4f0f, U+4f69,
@@ -3930,7 +3930,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-2cf32776.woff2") format("woff2");
   unicode-range:
     U+300c-300d, U+4e54, U+4e58, U+4e95, U+4ec1, U+4f2f, U+4f38, U+4fa3, U+4fca,
@@ -3960,7 +3960,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-74654cb4.woff2") format("woff2");
   unicode-range:
     U+4e4c, U+4e88, U+4ea1, U+4ea6, U+4ed3-4ed4, U+4eff, U+4f30, U+4fa7, U+4fc4,
@@ -3990,7 +3990,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-0f091ded.woff2") format("woff2");
   unicode-range:
     U+23, U+3d, U+4e01, U+4e39, U+4e73, U+4ecd, U+4ed9, U+4eea, U+4f0a, U+4f1f,
@@ -4020,7 +4020,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-d05c4529.woff2") format("woff2");
   unicode-range:
     U+26, U+3c, U+d7, U+4e4e, U+4e61, U+4e71, U+4ebf, U+4f26, U+5012, U+51ac,
@@ -4050,7 +4050,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-2c458dcf.woff2") format("woff2");
   unicode-range:
     U+7e, U+2026, U+4e03, U+4e25, U+4e30, U+4e34, U+4e45, U+4e5d, U+4e89,
@@ -4080,7 +4080,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-2e498e21.woff2") format("woff2");
   unicode-range:
     U+25, U+4e14, U+4e1d, U+4e3d, U+4e49, U+4e60, U+4e9a, U+4eb2, U+4ec5,
@@ -4110,7 +4110,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-53693ca2.woff2") format("woff2");
   unicode-range:
     U+2b, U+40, U+3000, U+300a-300b, U+4e16, U+4e66, U+4e70, U+4e91-4e92,
@@ -4140,7 +4140,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-ad542c31.woff2") format("woff2");
   unicode-range:
     U+4e, U+201c-201d, U+3010-3011, U+4e07, U+4e1c, U+4e24, U+4e3e, U+4e48,
@@ -4170,7 +4170,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-41ac3ace.woff2") format("woff2");
   unicode-range:
     U+d, U+3e, U+5f, U+7c, U+a0, U+a9, U+4e09-4e0b, U+4e0d-4e0e, U+4e13, U+4e1a,
@@ -4199,7 +4199,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-805c2b45.woff2") format("woff2");
   unicode-range:
     U+20-22, U+27-2a, U+2c-3b, U+3f, U+41-4d, U+4f-5d, U+61-7b, U+7d, U+ab,
@@ -4219,7 +4219,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-6c4e5a55.woff2") format("woff2");
   unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
 }
@@ -4228,7 +4228,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-12454fed.woff2") format("woff2");
   unicode-range:
     U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1,
@@ -4240,7 +4240,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-c97ec9b9.woff2") format("woff2");
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
@@ -4252,7 +4252,7 @@
   font-family: "Noto Sans SC";
   font-style: normal;
   font-weight: 600 900;
-  font-display: block;
+  font-display: optional;
   src: url("/fonts/noto-700-79a7c3f1.woff2") format("woff2");
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,

@@ -29,6 +29,25 @@
     @apply font-sans;
     font-synthesis-weight: none;
   }
+  html:has(.workspace-page) {
+    /* Keep the root track even where custom/overlay scrollbars do not reserve
+       a stable gutter. Keep this policy scoped to the workspace document. */
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+  }
+  @media (pointer: fine) {
+    /* macOS can switch native scrollbar modes after the first paint. A
+       consistently sized custom track keeps the workspace width unchanged. */
+    html:has(.workspace-page)::-webkit-scrollbar {
+      width: 16px;
+    }
+    html:has(.workspace-page)::-webkit-scrollbar-thumb {
+      border: 4px solid transparent;
+      border-radius: 999px;
+      background: var(--muted-foreground);
+      background-clip: padding-box;
+    }
+  }
 }
 
 .font-mono,

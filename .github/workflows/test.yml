@@ -175,11 +175,34 @@ jobs:
           path: ${{ steps.setup.outputs.go-paths }}
           key: ${{ steps.setup.outputs.go-key }}
 
+  performance:
+    name: CLS and 4x CPU (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          go: "true"
+          browsers: "true"
+      - name: Verify production layout stability and throttled interactions
+        run: pnpm --dir web test:performance
+      - name: Preserve performance measurements and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results
+          path: |
+            web/playwright-report/performance/
+            web/test-results/performance/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Single stable check name for branch protection, independent of job layout.
   test-result:
     name: Test result
     if: always()
-    needs: [lint, go, vitest, storybook, e2e, macos]
+    needs: [lint, go, vitest, storybook, e2e, macos, performance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

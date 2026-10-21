@@ -20,10 +20,19 @@
   );
 </script>
 
-<Badge {variant} data-slot="session-status" data-tone={variant}>
-  <span class="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true"
+<Badge
+  {variant}
+  class="h-auto min-h-5 max-w-full items-start justify-self-start whitespace-normal"
+  data-slot="session-status"
+  data-tone={variant}
+>
+  <span
+    class="mt-[0.3125rem] size-1.5 shrink-0 rounded-full bg-current"
+    aria-hidden="true"
   ></span>
-  {sessionStatusText(session)}{session.exitCode !== null
-    ? ` · code ${session.exitCode}`
-    : ""}
+  <span class="min-w-0 break-words"
+    >{sessionStatusText(session)}{session.exitCode !== null
+      ? ` · code ${session.exitCode}`
+      : ""}</span
+  >
 </Badge>

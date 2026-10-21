@@ -55,6 +55,8 @@
   let cwd = $state("~");
   let hostname = $state("");
   let loading = $state(true);
+  let initializing = $state(true);
+  let footerReady = $state(false);
   let refreshing = $state(false);
   let repositoryError = $state("");
   let capabilityError = $state("");
@@ -84,11 +86,24 @@
   let setupBusy = $state(false);
   let statusFilter = $state<"all" | "active" | "waiting" | "exited">("all");
   let filterExpanded = $state<Record<string, boolean>>({});
+  let startupRefresh: Promise<void> | undefined;
   let refreshGeneration = 0;
   let disposed = false;
+  $effect(() => {
+    if (loading || initializing) return;
+    // Disclosure content measures itself after mount. Reveal the footer once
+    // that first layout has settled instead of painting it at a temporary Y.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => (footerReady = true));
+    });
+    return () => cancelAnimationFrame(frame);
+  });
   const list = $derived(
     [...sessions].sort(
-      (a, b) => Date.parse(b.lastActiveAt) - Date.parse(a.lastActiveAt),
+      // Background output must not move the card under the user's pointer.
+      (a, b) =>
+        Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+        a.id.localeCompare(b.id),
     ),
   );
   const search = $derived(query.trim().toLocaleLowerCase());
@@ -182,19 +197,30 @@
     if (repo)
       homeWorktrees.save(setPinned(homeWorktrees.value, repo, ids, pinned));
   }
-  async function refresh() {
+  async function refresh(signal?: AbortSignal) {
+    // Coalesce lifecycle refreshes with the bounded startup request instead
+    // of superseding it with another, potentially slower Git discovery.
+    if (initializing && startupRefresh) return startupRefresh;
     const generation = ++refreshGeneration;
     refreshing = true;
     repositoryError = "";
     try {
-      const result = await api("/repositories", RepositoriesSchema);
+      const result = await api(
+        "/repositories",
+        RepositoriesSchema,
+        "GET",
+        undefined,
+        signal,
+      );
       if (!disposed && generation === refreshGeneration) {
         repositories = result;
         homeWorktrees.save(pruneHomeWorktrees(homeWorktrees.value, result));
       }
     } catch (err) {
       if (!disposed && generation === refreshGeneration)
-        repositoryError = (err as Error).message;
+        repositoryError = signal?.aborted
+          ? "初次读取超时，请重试刷新"
+          : (err as Error).message;
     } finally {
       if (!disposed && generation === refreshGeneration) refreshing = false;
     }
@@ -213,14 +239,14 @@
       unregisterBusy = false;
     }
   }
-  async function loadSetup() {
+  async function loadSetup(signal?: AbortSignal) {
     if (setupBusy) return;
     setupBusy = true;
     const results = await Promise.allSettled([
-      api("/presets", PresetsSchema).then((p) => {
+      api("/presets", PresetsSchema, "GET", undefined, signal).then((p) => {
         if (!disposed) presets = p;
       }),
-      api("/config", ConfigSchema).then((c) => {
+      api("/config", ConfigSchema, "GET", undefined, signal).then((c) => {
         if (disposed) return;
         cwd = c.defaultCwd;
         hostname = c.hostname;
@@ -273,8 +299,18 @@
       attributes: true,
       attributeFilter: ["class"],
     });
-    void loadSetup();
-    void refresh();
+    // Optional Git discovery must not hold existing terminals behind the
+    // startup skeleton. Abort late reads so they cannot regroup visible cards.
+    const startup = new AbortController();
+    const startupTimeout = setTimeout(() => startup.abort(), 1000);
+    startupRefresh = refresh(startup.signal);
+    void Promise.allSettled([loadSetup(startup.signal), startupRefresh]).then(
+      () => {
+        clearTimeout(startupTimeout);
+        startupRefresh = undefined;
+        if (!disposed) initializing = false;
+      },
+    );
     const ws = connect(
       "/ws/sessions",
       (data) => {
@@ -317,6 +353,8 @@
     return () => {
       disposed = true;
       ++refreshGeneration;
+      clearTimeout(startupTimeout);
+      startup.abort();
       theme.disconnect();
       ws.close();
       clearInterval(clock);
@@ -340,7 +378,7 @@
         class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-2"
       >
         <span
-          class="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"
+          class="hidden w-52 min-w-0 items-center gap-2 overflow-hidden text-xs whitespace-nowrap text-muted-foreground sm:flex"
           ><span
             class={`status-dot ${connection === "connected" ? "status-running" : "status-waiting"}`}
           ></span>{connection === "connected"
@@ -373,7 +411,10 @@
       </div>
     </div>
   </header>
-  {#if connection === "reconnecting"}<div role="status" class="notice-warning">
+  {#if connection === "reconnecting"}<div
+      role="status"
+      class="notice-warning fixed inset-x-0 top-12 z-40"
+    >
       连接已断开，重连中…
     </div>{/if}
   <main class="mx-auto max-w-6xl px-4 py-5 sm:px-8 sm:py-6">
@@ -387,7 +428,9 @@
             {:else}{repositories.length} 个仓库 · {list.length} 个会话{/if}
           </p>
         </div>
-        <div class="ml-auto flex items-center gap-1">
+        <div
+          class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1"
+        >
           <Button
             variant="ghost"
             size="sm"
@@ -404,8 +447,8 @@
             aria-label="刷新 Git 状态"
             title={refreshing ? "正在刷新 Git 状态…" : "刷新 Git 状态"}
             aria-busy={refreshing}
-            disabled={refreshing}
-            onclick={refresh}
+            disabled={refreshing || initializing}
+            onclick={() => void refresh()}
             ><IconRefresh
               class={refreshing
                 ? "animate-spin motion-reduce:animate-none"
@@ -456,7 +499,8 @@
               onclick={() => (statusFilter = filter.id)}
             >
               {filter.label}
-              <span class="font-mono text-xs tabular-nums opacity-60"
+              <span
+                class="inline-block w-[3ch] font-mono text-xs text-right tabular-nums opacity-60"
                 >{filter.count}</span
               >
             </Button>
@@ -483,7 +527,7 @@
             size="sm"
             class="min-h-11 sm:min-h-8"
             disabled={setupBusy}
-            onclick={loadSetup}
+            onclick={() => void loadSetup()}
           >
             {setupBusy ? "正在重试…" : "重试"}
           </Button>
@@ -498,7 +542,7 @@
     {#if repositoryError}<InlineNotice tone="danger" class="mb-4">
         Git 状态刷新失败：{repositoryError}。保留上次快照与全部会话。
       </InlineNotice>{/if}
-    {#if loading}
+    {#if loading || initializing}
       <div class="space-y-4" aria-label="正在加载会话">
         {#each [0, 1, 2] as item (item)}<Skeleton class="h-40 w-full" />{/each}
       </div>
@@ -694,6 +738,7 @@
       </div>
     {/if}
     <footer
+      class:invisible={!footerReady}
       class="mt-10 flex flex-wrap justify-between gap-2 border-t pt-5 text-xs text-muted-foreground"
     >
       <span>WebMux · 仓库清单持久保存</span><span

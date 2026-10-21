@@ -118,9 +118,21 @@
       {/if}
       {#if sessions.length}
         <p class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          {#if counts.running}<span>运行 {counts.running}</span>{/if}
-          {#if counts.waiting}<span>等待 {counts.waiting}</span>{/if}
-          {#if counts.exited}<span>退出 {counts.exited}</span>{/if}
+          <span
+            >运行 <span class="inline-block w-[3ch] text-right tabular-nums"
+              >{counts.running}</span
+            ></span
+          >
+          <span
+            >等待 <span class="inline-block w-[3ch] text-right tabular-nums"
+              >{counts.waiting}</span
+            ></span
+          >
+          <span
+            >退出 <span class="inline-block w-[3ch] text-right tabular-nums"
+              >{counts.exited}</span
+            ></span
+          >
         </p>
       {/if}
     </div>

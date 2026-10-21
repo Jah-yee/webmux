@@ -98,6 +98,11 @@
     busy = true;
     error = "";
     try {
+      // Paint the pending state before a fast local response can immediately
+      // start loading and mounting the terminal in the same interaction.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
       const cmd = custom && !treeOnly ? parseArgs(command) : undefined;
       if (custom && !treeOnly && (!cmd?.length || !cmd[0]))
         throw new Error("请输入可执行程序及参数");

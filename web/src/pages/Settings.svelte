@@ -259,7 +259,7 @@
               aria-describedby="preview-lines-help"
             />
             <p id="preview-lines-help" class="text-xs text-muted-foreground">
-              1–50 行；有输出时保留设定高度，无可见输出时收起预览。
+              1–50 行；始终保留设定高度，避免后台输出更新时会话卡片跳动。
             </p>
           </div>
           <div class="space-y-2">

@@ -70,12 +70,14 @@ def digest(data: bytes) -> str:
 
 
 def emit_face(family: str, weight: str, filename: str, unicode_range: str) -> str:
+    # UI fonts must not reflow controls after a slow download. xterm explicitly
+    # loads its Latin faces before measuring the terminal grid.
     return (
         "@font-face {\n"
         f'  font-family: "{family}";\n'
         "  font-style: normal;\n"
         f"  font-weight: {weight};\n"
-        "  font-display: block;\n"
+        f"  font-display: {'block' if family == 'Maple Mono NF CN' else 'optional'};\n"
         f'  src: url("/fonts/{filename}") format("woff2");\n'
         f"  unicode-range: {unicode_range};\n"
         "}\n"

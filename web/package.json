@@ -12,7 +12,7 @@
     "lint": "oxlint --deny-warnings .",
     "lint:fix": "oxlint --fix --deny-warnings .",
     "dev": "vite --host 127.0.0.1",
-    "test": "pnpm run test:unit && pnpm run test:browser && pnpm run test:storybook && pnpm run test:e2e",
+    "test": "pnpm run test:unit && pnpm run test:browser && pnpm run test:storybook && pnpm run test:e2e && pnpm run test:performance",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:e2e": "playwright test --config playwright.config.ts",
@@ -21,7 +21,8 @@
     "storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open",
     "check:storybook": "svelte-check --tsconfig .storybook/tsconfig.json",
     "build-storybook": "pnpm run check:storybook && storybook build",
-    "test:storybook": "pnpm run build-storybook && playwright test --config playwright.storybook.config.ts"
+    "test:storybook": "pnpm run build-storybook && playwright test --config playwright.storybook.config.ts",
+    "test:performance": "playwright test --config playwright.performance.config.ts"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
