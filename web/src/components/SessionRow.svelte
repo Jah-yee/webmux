@@ -66,9 +66,11 @@
         />
       </Item.Title>
       <!-- Fixed tracks keep each item in place as its text changes; the text
-           spans share the status badge's border and padding to align lines. -->
+           spans share the status badge's border and padding to align lines.
+           Wide rows hold all three on one line, so their tracks can fit a
+           whole exit status without changing the row height. -->
       <div
-        class="mt-2 grid auto-rows-[minmax(2.5rem,auto)] grid-cols-[repeat(auto-fill,minmax(min(100%,8rem),8rem))] items-start gap-x-4 gap-y-1 text-xs text-muted-foreground"
+        class="mt-2 grid auto-rows-[minmax(2.5rem,auto)] grid-cols-[repeat(auto-fill,minmax(min(100%,8rem),8rem))] items-start gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-[repeat(auto-fill,minmax(min(100%,9rem),9rem))]"
       >
         <SessionStatus {session} />
         <span class="border border-transparent py-0.5"

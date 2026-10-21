@@ -1032,34 +1032,58 @@ test("automatic replies to device queries are sent apart from user input, even w
 
 test("color scheme reports follow the page theme once the program enables them", async () => {
   const root = document.documentElement;
-  const initiallyDark = root.classList.contains("dark");
   root.classList.remove("dark");
-  try {
-    const { socket } = await openTerminal();
-    const reports = () =>
-      socket.sent
-        .filter((frame) => frame[0] === 6)
-        .map((frame) => new TextDecoder().decode(frame.subarray(1)))
-        .filter((reply) => reply.startsWith("\x1b[?997;"));
-    // Without DEC mode 2031 a shell would read the report as typed text.
-    root.classList.add("dark");
-    // Enabling it announces the current scheme, so a program that queried
-    // before this browser attached learns it now.
-    socket.grantControl(80, 24, true);
-    await expect.poll(reports).toEqual(["\x1b[?997;1n"]);
-    root.classList.remove("dark");
-    await expect.poll(reports).toEqual(["\x1b[?997;1n", "\x1b[?997;2n"]);
-    // A query in replayed history was answered when it was live.
-    socket.receive(1, "\x1b[?996n");
-    socket.receive(0, "\x1b[?996n");
-    await expect
-      .poll(reports)
-      .toEqual(["\x1b[?997;1n", "\x1b[?997;2n", "\x1b[?997;2n"]);
-    expect(socket.sent.filter((frame) => frame[0] === 0)).toEqual([]);
-  } finally {
-    root.classList.toggle("dark", initiallyDark);
-  }
+  const { socket } = await openTerminal();
+  const reports = () =>
+    socket.sent
+      .filter((frame) => frame[0] === 6)
+      .map((frame) => new TextDecoder().decode(frame.subarray(1)))
+      .filter((reply) => reply.startsWith("\x1b[?997;"));
+  // Without DEC mode 2031 a shell would read the report as typed text.
+  root.classList.add("dark");
+  // Enabling it announces the current scheme, so a program that queried
+  // before this browser attached learns it now.
+  socket.grantControl(80, 24, true);
+  await expect.poll(reports).toEqual(["\x1b[?997;1n"]);
+  root.classList.remove("dark");
+  await expect.poll(reports).toEqual(["\x1b[?997;1n", "\x1b[?997;2n"]);
+  // A query in replayed history was answered when it was live.
+  socket.receive(1, "\x1b[?996n");
+  socket.receive(0, "\x1b[?996n");
+  await expect
+    .poll(reports)
+    .toEqual(["\x1b[?997;1n", "\x1b[?997;2n", "\x1b[?997;2n"]);
+  expect(socket.sent.filter((frame) => frame[0] === 0)).toEqual([]);
 });
+
+for (const theme of ["light", "dark"]) {
+  test(`the space below the last whole row shows the ${theme} terminal background`, async () => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    await openTerminal();
+    const rows = host()
+      .querySelector(".xterm-scrollable-element")!
+      .getBoundingClientRect();
+    const bottom = host().getBoundingClientRect().bottom;
+    // The host is not a whole number of rows tall, leaving a strip.
+    expect(bottom - rows.bottom).toBeGreaterThanOrEqual(2);
+    let painted: Element | null = document.elementFromPoint(
+      rows.left + rows.width / 2,
+      (rows.bottom + bottom) / 2,
+    );
+    while (
+      painted &&
+      getComputedStyle(painted).backgroundColor === "rgba(0, 0, 0, 0)"
+    )
+      painted = painted.parentElement;
+    const expected = document.createElement("div");
+    expected.style.background = "var(--terminal-background)";
+    document.body.append(expected);
+    expect(painted && getComputedStyle(painted).backgroundColor).toBe(
+      getComputedStyle(expected).backgroundColor,
+    );
+    expected.remove();
+  });
+}
 
 test("native fullscreen gestures report row-scaled SGR wheel input at stable starting cells", async () => {
   observeGlyphPixels(true);

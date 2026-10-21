@@ -89,3 +89,62 @@ test("workspace UI audit: touch targets, overflow and session discovery", async 
   console.log(`UI_AUDIT_VIOLATIONS=${violations}`);
   expect(violations, JSON.stringify(measurements, null, 2)).toBe(0);
 });
+
+test("the header connection status sits beside the header actions", async ({
+  page,
+}, testInfo) => {
+  // Below the sm breakpoint the status is hidden.
+  test.skip(testInfo.project.name !== "chromium-desktop");
+  const hostname = "build-server-with-a-very-long-hostname.internal.example";
+  // Measures what is painted: the status text's visible end against the
+  // first action, whatever elements the status is built from.
+  const geometry = () =>
+    page.evaluate(() => {
+      const status =
+        document.querySelector<HTMLElement>(
+          "header .status-dot",
+        )!.parentElement!;
+      const range = document.createRange();
+      range.selectNodeContents(status);
+      const words = range.getBoundingClientRect();
+      const visibleEnd = Math.min(
+        words.right,
+        status.getBoundingClientRect().right,
+      );
+      const action = [...document.querySelectorAll("header button")]
+        .find((button) => button.textContent?.includes("新建会话"))!
+        .getBoundingClientRect();
+      return {
+        gap: action.left - visibleEnd,
+        offset: Math.abs(
+          words.top + words.height / 2 - (action.top + action.height / 2),
+        ),
+        clipped: [status, ...status.querySelectorAll("*")].some(
+          (element) => element.scrollWidth > element.clientWidth,
+        ),
+      };
+    });
+  for (const width of [700, 1280]) {
+    await page.setViewportSize({ width, height: 600 });
+    await page.goto("/");
+    await expect(page.locator("header")).toContainText("在线");
+    const short = await geometry();
+    expect(short.gap, `${width}px`).toBeGreaterThanOrEqual(0);
+    expect(short.gap, `${width}px`).toBeLessThanOrEqual(12);
+    expect(short.offset, `${width}px`).toBeLessThanOrEqual(1);
+  }
+  // A long hostname is shortened in place, never pushed under the actions.
+  await page.route("**/api/config", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: { ...(await response.json()), hostname },
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator("header")).toContainText("build-server");
+  const long = await geometry();
+  expect(long.clipped).toBe(true);
+  expect(long.gap).toBeGreaterThanOrEqual(0);
+  expect(long.gap).toBeLessThanOrEqual(12);
+});
