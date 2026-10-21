@@ -80,6 +80,8 @@ export const ControlStateSchema = z.object({
     .nullable(),
   cols: SessionInfoSchema.shape.cols,
   rows: SessionInfoSchema.shape.rows,
+  // The program enabled DEC mode 2031 (color scheme change reports).
+  colorSchemeReports: z.boolean(),
 });
 export type ControlState = z.infer<typeof ControlStateSchema>;
 // Client-side progress of one submission. "saved" exists only in this

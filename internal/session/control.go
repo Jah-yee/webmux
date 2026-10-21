@@ -18,12 +18,14 @@ type Controller struct {
 	Since    time.Time `json:"since"`
 }
 
-// ControlState is the 0x06 frame: who controls the PTY and the grid that
-// observers render without resizing it.
+// ControlState is the 0x06 frame: who controls the PTY, the grid that
+// observers render without resizing it, and whether the program asked for
+// color scheme change reports (DEC mode 2031).
 type ControlState struct {
-	Controller *Controller `json:"controller"`
-	Cols       uint16      `json:"cols"`
-	Rows       uint16      `json:"rows"`
+	Controller         *Controller `json:"controller"`
+	Cols               uint16      `json:"cols"`
+	Rows               uint16      `json:"rows"`
+	ColorSchemeReports bool        `json:"colorSchemeReports"`
 }
 
 func randomClientID() string {
@@ -33,7 +35,7 @@ func randomClientID() string {
 }
 
 func (s *Session) controlFrameLocked() []byte {
-	state := ControlState{Cols: s.info.Cols, Rows: s.info.Rows}
+	state := ControlState{Cols: s.info.Cols, Rows: s.info.Rows, ColorSchemeReports: s.preview.colorSchemeReports}
 	if s.control != nil {
 		controller := *s.control
 		state.Controller = &controller

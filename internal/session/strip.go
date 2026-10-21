@@ -20,6 +20,8 @@ type Preview struct {
 	screen *vt.Terminal
 	last   string // Bottom nonempty screen row, used for status classification.
 	text   string
+	// colorSchemeReports is DEC mode 2031 (color scheme change reports).
+	colorSchemeReports bool
 }
 
 // Resize follows successful PTY resizes, including before the first output.
@@ -34,6 +36,7 @@ func (s *Preview) Resize(cols, rows uint16) string {
 		s.boundRepeats()
 		s.boundCombining()
 		s.ignoreLinks()
+		s.trackColorScheme()
 	} else if s.screen.Cols() != int(cols) || s.screen.Rows() != int(rows) {
 		s.screen.Resize(int(cols), int(rows))
 	} else {

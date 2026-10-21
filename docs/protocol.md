@@ -138,15 +138,15 @@ interface SessionInfo {
 
 服务端 → 客户端：
 
-| 首字节 | 含义     | 载荷                                                                                    |
-| ------ | -------- | --------------------------------------------------------------------------------------- |
-| `0x00` | 输出     | PTY 原始字节                                                                            |
-| `0x01` | 快照     | 完整缓冲；客户端应先 `reset()` 再写入                                                   |
-| `0x02` | 状态     | JSON `SessionInfo`                                                                      |
-| `0x03` | 退出     | JSON `{"exitCode": n}`，随后关闭连接                                                    |
-| `0x04` | 位置     | JSON `{"generation", "mode": "reset"\|"append", "start", "end", "truncated"}`，先于回放 |
-| `0x05` | 提交状态 | JSON `{"id", "state", "error"?}`                                                        |
-| `0x06` | 控制     | JSON `{"controller": {"clientId", "label", "since"} \| null, "cols", "rows"}`           |
+| 首字节 | 含义     | 载荷                                                                                                |
+| ------ | -------- | --------------------------------------------------------------------------------------------------- |
+| `0x00` | 输出     | PTY 原始字节                                                                                        |
+| `0x01` | 快照     | 完整缓冲；客户端应先 `reset()` 再写入                                                               |
+| `0x02` | 状态     | JSON `SessionInfo`                                                                                  |
+| `0x03` | 退出     | JSON `{"exitCode": n}`，随后关闭连接                                                                |
+| `0x04` | 位置     | JSON `{"generation", "mode": "reset"\|"append", "start", "end", "truncated"}`，先于回放             |
+| `0x05` | 提交状态 | JSON `{"id", "state", "error"?}`                                                                    |
+| `0x06` | 控制     | JSON `{"controller": {"clientId", "label", "since"} \| null, "cols", "rows", "colorSchemeReports"}` |
 
 客户端 → 服务端：
 
@@ -159,6 +159,8 @@ interface SessionInfo {
 | `0x04` | 查询提交 | JSON `{"ids": [...]}`，最多 64 个                                   |
 | `0x05` | 接管控制 | 空                                                                  |
 | `0x06` | 自动回复 | xterm 对设备查询的应答字节；仅负责回复的连接写入，不取得控制        |
+
+`colorSchemeReports` 表示程序已开启 DEC 私有模式 2031（`CSI ? 2031 h`）。服务端持续跟踪该模式，不受回放缓冲淘汰影响，变化时在对应输出之后广播 `0x06`。开启期间，浏览器在主题切换、附着或取得控制时以自动回复发送 `CSI ? 997 ; 1 n`（暗色）或 `CSI ? 997 ; 2 n`（亮色），并应答 `CSI ? 996 n` 查询；程序据此重新查询 OSC 10/11 颜色。
 
 使用二进制帧而非 JSON，是为了避免 base64 开销以及在多字节字符中间截断时的 UTF-8 问题；提交帧同样只把元数据放进 JSON 头。
 

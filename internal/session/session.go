@@ -398,6 +398,7 @@ func (s *Session) read() {
 			s.mu.Lock()
 			s.ring.Write(p)
 			s.osc.Feed(p, s.signals)
+			reports := s.preview.colorSchemeReports
 			s.info.Preview = s.preview.Feed(p)
 			s.info.LastActiveAt = time.Now()
 			// Latched attention outlives redraws such as spinners and timers.
@@ -408,6 +409,10 @@ func (s *Session) read() {
 			}
 			if len(s.subs) > 0 {
 				s.broadcastLocked(Frame(0, p))
+				// After the output that toggled it, so the mode applies from there.
+				if s.preview.colorSchemeReports != reports {
+					s.broadcastLocked(s.controlFrameLocked())
+				}
 			}
 			s.mu.Unlock()
 		}

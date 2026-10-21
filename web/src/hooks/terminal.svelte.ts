@@ -190,9 +190,26 @@ export function useTerminal(
         useDomRenderer();
         // xterm's built-in DOM renderer remains available without WebGL.
       }
+      // DEC mode 2031 reports: CSI ? 997 ; 1 n is dark, 2 is light. Programs
+      // answer them by re-querying colors (OSC 10/11), which xterm answers
+      // from the theme. Sent as device replies, so only the responsible
+      // connection's report reaches the PTY.
+      const root = document.documentElement;
+      // Read the class directly: the theme observer below runs later, and a
+      // control frame may arrive in between.
+      let reportedDark: boolean | undefined;
+      const reportScheme = () => {
+        reportedDark = root.classList.contains("dark");
+        term.input(`\x1b[?997;${reportedDark ? 1 : 2}n`, false);
+      };
       const theme = () => {
         if (disposed) return;
         term.options.theme = terminalTheme();
+        if (
+          control?.colorSchemeReports &&
+          reportedDark !== root.classList.contains("dark")
+        )
+          reportScheme();
       };
       const colors = new MutationObserver(theme);
       colors.observe(document.documentElement, {
@@ -342,6 +359,8 @@ export function useTerminal(
       };
       let resetPosition: StreamPosition | undefined;
       let appending = false;
+      // Whether this connection has seen the program enable scheme reports.
+      let schemeReports = false;
       const ws = connect(
         () => {
           const query = new URLSearchParams({
@@ -420,9 +439,19 @@ export function useTerminal(
             submissions.get(status.id)?.(status.state);
             if (status.state !== "received") submissions.delete(status.id);
           } else if (frame[0] === 6) {
+            const wasControlling = controlling();
             control = ControlStateSchema.parse(
               JSON.parse(decoder.decode(payload)),
             );
+            // Announce the scheme whenever this terminal starts answering
+            // for the program: it may have asked before any browser was
+            // attached, or been answered with another device's theme.
+            if (
+              control.colorSchemeReports &&
+              (!schemeReports || (controlling() && !wasControlling))
+            )
+              reportScheme();
+            schemeReports = control.colorSchemeReports;
             safeFit();
             sendSize();
           } else if (frame[0] === 2) {
@@ -452,6 +481,7 @@ export function useTerminal(
           if (state === "connecting" || state === "reconnecting") {
             // A synced terminal stays visible and is extended in place.
             if (!synced) restoring = true;
+            schemeReports = false;
             for (const report of submissions.values()) report("unknown");
           }
           if (state === "missing") restoring = false;
@@ -498,6 +528,16 @@ export function useTerminal(
         if (!replaying) clipboard.copySelection(text);
         return true;
       });
+      // CSI ? 996 n asks for the current scheme. Replayed history must not
+      // answer a query the program made long ago.
+      const schemeQuery = term.parser.registerCsiHandler(
+        { prefix: "?", final: "n" },
+        (params) => {
+          if (params.length !== 1 || params[0] !== 996) return false;
+          if (!replaying) reportScheme();
+          return true;
+        },
+      );
       const resize = term.onResize(sendSize);
       let timer: number | undefined;
       const observer = new ResizeObserver(([entry]) => {
@@ -699,6 +739,7 @@ export function useTerminal(
         resize.dispose();
         selected.dispose();
         oscClipboard.dispose();
+        schemeQuery.dispose();
         colors.disconnect();
         output.dispose();
         ws.close();

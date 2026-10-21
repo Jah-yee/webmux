@@ -59,7 +59,7 @@ class FixtureSocket extends EventTarget {
   }
 
   // The real server gives control to the first client of a session.
-  grantControl(cols = 80, rows = 24) {
+  grantControl(cols = 80, rows = 24, colorSchemeReports = false) {
     const clientId = new URL(this.url).searchParams.get("client");
     this.receive(
       6,
@@ -71,6 +71,7 @@ class FixtureSocket extends EventTarget {
         },
         cols,
         rows,
+        colorSchemeReports,
       }),
     );
   }
@@ -985,6 +986,7 @@ test("an observer sizes to the controller's grid before parsing cursor-addressed
       },
       cols: 120,
       rows: 30,
+      colorSchemeReports: false,
     }),
   );
   socket.receive(1, "\x1b[1;100Hfar-right");
@@ -1026,6 +1028,37 @@ test("automatic replies to device queries are sent apart from user input, even w
     }),
   );
   await expect.poll(() => frames(0)).toEqual(["\x1b[1;2R"]);
+});
+
+test("color scheme reports follow the page theme once the program enables them", async () => {
+  const root = document.documentElement;
+  const initiallyDark = root.classList.contains("dark");
+  root.classList.remove("dark");
+  try {
+    const { socket } = await openTerminal();
+    const reports = () =>
+      socket.sent
+        .filter((frame) => frame[0] === 6)
+        .map((frame) => new TextDecoder().decode(frame.subarray(1)))
+        .filter((reply) => reply.startsWith("\x1b[?997;"));
+    // Without DEC mode 2031 a shell would read the report as typed text.
+    root.classList.add("dark");
+    // Enabling it announces the current scheme, so a program that queried
+    // before this browser attached learns it now.
+    socket.grantControl(80, 24, true);
+    await expect.poll(reports).toEqual(["\x1b[?997;1n"]);
+    root.classList.remove("dark");
+    await expect.poll(reports).toEqual(["\x1b[?997;1n", "\x1b[?997;2n"]);
+    // A query in replayed history was answered when it was live.
+    socket.receive(1, "\x1b[?996n");
+    socket.receive(0, "\x1b[?996n");
+    await expect
+      .poll(reports)
+      .toEqual(["\x1b[?997;1n", "\x1b[?997;2n", "\x1b[?997;2n"]);
+    expect(socket.sent.filter((frame) => frame[0] === 0)).toEqual([]);
+  } finally {
+    root.classList.toggle("dark", initiallyDark);
+  }
 });
 
 test("native fullscreen gestures report row-scaled SGR wheel input at stable starting cells", async () => {
