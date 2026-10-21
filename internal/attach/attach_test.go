@@ -5,6 +5,7 @@ package attach
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
@@ -129,6 +131,10 @@ func TestAttachInputOutputResizeAndDetach(t *testing.T) {
 	if info := s.Info(); info.Status == "exited" {
 		t.Fatal("detaching ended the session")
 	}
+	// The shell behind the native terminal must get its keys back unencoded.
+	if !strings.HasSuffix(term.output(), inputModeReset) {
+		t.Fatalf("input modes left enabled: %q", term.output())
+	}
 }
 
 func TestAttachReportsExitCodeAndMissingSession(t *testing.T) {
@@ -169,5 +175,132 @@ func TestObserveSendsNothing(t *testing.T) {
 	info := s.Info()
 	if info.Cols == 200 || strings.Contains(term.output(), "typed-while-observing") {
 		t.Fatalf("observer changed the session: %dx%d output %q", info.Cols, info.Rows, term.output())
+	}
+}
+
+// Once another client takes control, the native terminal's automatic replies
+// must not claim it back: input is dropped under a banner until Enter.
+func TestOtherControllerKeepsControlUntilEnter(t *testing.T) {
+	m, client := server(t)
+	s, err := m.Create("", "custom", []string{"sh", "-c", "stty -echo; while read line; do echo \"got:$line\"; done"}, nil, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := s.Info().ID
+	term := newTerminal(120, 40)
+	errs := make(chan error, 1)
+	go func() {
+		_, err := Run(context.Background(), client, id, term, Options{Client: "native-test"})
+		errs <- err
+	}()
+	_, _ = term.feed.Write([]byte("first\r"))
+	eventually(t, "native input", func() bool { return strings.Contains(term.output(), "got:first") })
+
+	browser, err := client.DialWebSocket(context.Background(), "/ws/s/"+id+"?client=browser-test&label=Chrome")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = browser.CloseNow() }()
+	var mu sync.Mutex
+	current := ""
+	controller := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return current
+	}
+	go func() {
+		for {
+			_, frame, err := browser.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var state struct {
+				Controller *struct {
+					ClientID string `json:"clientId"`
+				} `json:"controller"`
+			}
+			if len(frame) > 0 && frame[0] == frameControl && json.Unmarshal(frame[1:], &state) == nil {
+				mu.Lock()
+				current = ""
+				if state.Controller != nil {
+					current = state.Controller.ClientID
+				}
+				mu.Unlock()
+			}
+		}
+	}()
+	eventually(t, "native control", func() bool { return controller() == "native-test" })
+	if err := browser.Write(context.Background(), websocket.MessageBinary, []byte("\x00browser\r")); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "banner", func() bool { return strings.Contains(term.output(), "Controlled by Chrome") })
+
+	// A focus report and a device attributes reply, as terminals send them.
+	_, _ = term.feed.Write([]byte("\x1b[I\x1b[?62;22c"))
+	time.Sleep(3 * ResizeInterval)
+	if got := controller(); got != "browser-test" {
+		t.Fatalf("automatic replies moved control to %q", got)
+	}
+
+	_, _ = term.feed.Write([]byte("\r"))
+	eventually(t, "reclaimed control", func() bool { return controller() == "native-test" })
+	_, _ = term.feed.Write([]byte("native\r"))
+	eventually(t, "native input", func() bool { return strings.Contains(term.output(), "got:native") })
+	if strings.Contains(term.output(), "62;22") {
+		t.Fatalf("dropped input reached the session: %q", term.output())
+	}
+	_, _ = term.feed.Write([]byte{DetachKey})
+	if err := <-errs; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Programs such as omp enable modifyOtherKeys or kitty keyboard mode, after
+// which the native terminal encodes Ctrl+] as an escape sequence.
+func TestDetachIndexRecognisesEncodedCtrlBracket(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want int
+	}{
+		{"ab\x1d", 2},
+		{"ab\x1b[27;5;93~cd", 2},
+		{"\x1b[93;5u", 0},
+		{"x\x1b[93;5:1u", 1},
+		{"\x1b[93;5u\x1d", 0},
+		{"\x1b[27;5;91~\x1b[93u", -1},
+		{"\x1b[93;5;29u", 0},
+		{"\x1b[93:125;5u", 0},
+		{"\x1b[93;69u", 0},
+		{"\x1b[93;5:3u", -1},
+		{"\x1b[93;6u\x1b[93;3u", -1},
+		{"\x1b[A\x1b[93;5:2u", 3},
+		// win32-input-mode: Ctrl down, then ] with Left Ctrl held.
+		{"\x1b[17;29;0;1;8;1_\x1b[221;27;29;1;8;1_", 16},
+		{"\x1b[221;27;29;0;8;1_", -1},
+		{"\x1b[221;27;93;1;10;1_", -1},
+	} {
+		if got := detachIndex([]byte(tc.in)); got != tc.want {
+			t.Errorf("detachIndex(%q) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestTakeControlIndexRecognisesPlainEnterOnly(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want int
+	}{
+		{"x\r", 1},
+		{"\x1b[I\x1b[13u", 3},
+		{"\x1b[13;1:1u", 0},
+		{"\x1b[13;5u\x1b[13;1:3u", -1},
+		{"\x1b[?62;22c\x1b[O", -1},
+		{"\x1b[13;28;13;1;0;1_", 0},
+		{"\x1b[13;28;13;1;32;1_", 0},
+		{"\x1b[13;28;13;0;0;1_\x1b[13;28;10;1;8;1_", -1},
+	} {
+		if got := takeControlIndex([]byte(tc.in)); got != tc.want {
+			t.Errorf("takeControlIndex(%q) = %d, want %d", tc.in, got, tc.want)
+		}
 	}
 }
