@@ -31,6 +31,25 @@ export function store(key: string, value: string) {
     /* private-mode storage is optional */
   }
 }
+const tokenFragment = "#token=";
+
+// Adopts a `#token=` link: fragments never reach the server, and the token is
+// removed from the address bar and current history entry before any request.
+// Returns true when a token was stored.
+export function consumeTokenFragment(): boolean {
+  const hash = location.hash;
+  if (!hash.startsWith(tokenFragment)) return false;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  let token: string;
+  try {
+    token = decodeURIComponent(hash.slice(tokenFragment.length));
+  } catch {
+    return false;
+  }
+  if (!token) return false;
+  store("token", token);
+  return true;
+}
 function responseError(status: number, body: unknown, fallback: string) {
   const detail = ErrorSchema.safeParse(body);
   if (status === 401) window.dispatchEvent(new Event("webmux:auth"));

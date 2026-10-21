@@ -17,6 +17,18 @@ agent_protocol = true
 # Treat a terminal bell (not within 1 s of your own input) as needing attention.
 bell_attention = true
 
+# Cloudflare Tunnel: `webmux --tunnel` or enabled = true. Without a token a
+# random 256-bit one is generated per start; tunnel mode prints it in links.
+# A configured webmux token must be at least 43 characters in tunnel mode.
+# [tunnel]
+# enabled = false
+# Empty = Quick Tunnel (random *.trycloudflare.com); set for a Named Tunnel.
+# token = ""
+# hostname = ""        # Named Tunnel public hostname; ASCII/punycode, no wildcard
+# cloudflared = ""     # explicit binary; default PATH, then a verified download
+# Mirror prefixes tried after GitHub; [] = GitHub only.
+# download_mirrors = ["https://ghfast.top", "https://gh-proxy.com"]
+
 [[presets]]
 name = "shell"
 label = "Shell"

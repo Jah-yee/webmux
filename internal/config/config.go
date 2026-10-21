@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -26,7 +28,23 @@ type Config struct {
 	BellAttention    bool             `toml:"bell_attention"`
 	AllowedOrigins   []string         `toml:"allowed_origins"`
 	Presets          []session.Preset `toml:"presets"`
+	Tunnel           TunnelConfig     `toml:"tunnel"`
 }
+
+// TunnelConfig selects a Cloudflare Tunnel. An empty Token means a Quick
+// Tunnel; a nonempty Token runs the Named Tunnel published at Hostname.
+type TunnelConfig struct {
+	Enabled     bool   `toml:"enabled"`
+	Token       string `toml:"token"`
+	Hostname    string `toml:"hostname"`
+	Cloudflared string `toml:"cloudflared"`
+	// DownloadMirrors replaces the built-in mirror prefixes when non-nil; an
+	// empty list downloads from GitHub only.
+	DownloadMirrors []string `toml:"download_mirrors"`
+}
+
+// Named reports whether the tunnel runs with Cloudflare credentials.
+func (t TunnelConfig) Named() bool { return t.Token != "" }
 
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
@@ -111,6 +129,43 @@ func (c *Config) Validate() error {
 		if _, err := regexp.Compile(pattern); err != nil {
 			return fmt.Errorf("prompt pattern: %w", err)
 		}
+	}
+	return c.Tunnel.validate()
+}
+func (t *TunnelConfig) validate() error {
+	if t.Hostname != "" {
+		host := strings.TrimRight(strings.ToLower(t.Hostname), ".")
+		if strings.Contains(host, "*") {
+			return fmt.Errorf("tunnel.hostname %q must be the concrete hostname Cloudflare forwards, not a wildcard", t.Hostname)
+		}
+		for _, r := range host {
+			if r > 127 {
+				return fmt.Errorf("tunnel.hostname %q must use the ASCII/punycode form", t.Hostname)
+			}
+		}
+		u, err := url.Parse("https://" + host)
+		if err != nil || host == "" || strings.ContainsAny(host, ":/@?#[] ") || u.Hostname() != host {
+			return fmt.Errorf("tunnel.hostname %q must be a bare hostname such as term.example.com", t.Hostname)
+		}
+		t.Hostname = host
+	}
+	if t.Enabled && t.Named() && t.Hostname == "" {
+		return errors.New("tunnel.hostname is required when tunnel.token is set")
+	}
+	if t.Cloudflared != "" {
+		path, err := session.ExpandPath(t.Cloudflared)
+		if err != nil {
+			return fmt.Errorf("tunnel.cloudflared: %w", err)
+		}
+		t.Cloudflared = path
+	}
+	for i, mirror := range t.DownloadMirrors {
+		mirror = strings.TrimRight(mirror, "/")
+		u, err := url.Parse(mirror)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || strings.ContainsAny(mirror, "?#") {
+			return fmt.Errorf("tunnel.download_mirrors: %q must be an https:// prefix without credentials, query, or fragment", t.DownloadMirrors[i])
+		}
+		t.DownloadMirrors[i] = mirror
 	}
 	return nil
 }

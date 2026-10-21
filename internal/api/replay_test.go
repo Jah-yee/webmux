@@ -28,7 +28,7 @@ func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("output process did not exit")
 	}
-	server := httptest.NewServer(New(config.Config{}, m, testWorkspace(t, m, t.TempDir())))
+	server := httptest.NewServer(New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil))
 	defer server.Close()
 	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/s/"+s.Info().ID, nil)
 	if err != nil {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connect, type SocketConnection } from "../src/ws";
+import { connect, protocols, type SocketConnection } from "../src/ws";
 
 const sendBudget = 1024 * 1024;
 
@@ -15,7 +15,10 @@ class MockWebSocket {
   onerror: (() => void) | null = null;
   sent: Uint8Array[] = [];
 
-  constructor(readonly url: string) {
+  constructor(
+    readonly url: string,
+    readonly protocols: string[],
+  ) {
     MockWebSocket.instances.push(this);
   }
   send(frame: Uint8Array) {
@@ -36,7 +39,7 @@ describe("WebSocket upstream send budget", () => {
     MockWebSocket.instances = [];
     vi.stubGlobal("WebSocket", MockWebSocket);
     vi.stubGlobal("location", { protocol: "http:", host: "localhost" });
-    vi.stubGlobal("localStorage", { getItem: () => null });
+    vi.stubGlobal("localStorage", { getItem: () => "tok en" });
     vi.stubGlobal("document", new EventTarget());
     vi.stubGlobal(
       "window",
@@ -50,6 +53,18 @@ describe("WebSocket upstream send budget", () => {
     connection.close();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it("authenticates through a subprotocol without putting the token in the URL", () => {
+    expect(socket.url).toBe("ws://localhost/ws/s/test");
+    expect(socket.protocols).toEqual(["webmux", "webmux.token.dG9rIGVu"]);
+  });
+
+  it("encodes any token as a valid base64url subprotocol", () => {
+    expect(protocols("")).toEqual(["webmux"]);
+    // UTF-8 bytes; "+" "/" become "-" "_" and "==" padding is dropped.
+    expect(protocols("终")).toEqual(["webmux", "webmux.token.57uI"]);
+    expect(protocols("~~~???a")).toEqual(["webmux", "webmux.token.fn5-Pz8_YQ"]);
   });
 
   it("rejects input when the socket queue is saturated", () => {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, store, stored } from "./api";
+  import { api, consumeTokenFragment, store, stored } from "./api";
   import { HealthSchema } from "./schemas";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -47,6 +47,7 @@
     };
     window.addEventListener("popstate", change);
     window.addEventListener("webmux:auth", auth);
+    if (consumeTokenFragment()) token = stored("token");
     void check();
     return () => {
       drafts.clearAll();

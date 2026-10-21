@@ -4,7 +4,7 @@
 
 ## 认证与 Origin
 
-- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>` 或 Cookie `webmux_token`；WebSocket 还可使用 query `?token=`（HTTP API 不接受 query token）。
+- 启用 token 时，HTTP 请求使用 `Authorization: Bearer <token>` 或 Cookie `webmux_token`。浏览器无法为 WebSocket 握手设置请求头，前端改为同时提供子协议 `webmux` 与 `webmux.token.<base64url(UTF-8 token)>`（无填充），服务端只选择 `webmux`、不回显 token。WebSocket 不接受 query `?token=`，token 不进入请求 URL；前端也不把 token 写入 Cookie，因为 Cookie 不按端口隔离。
 - token 以定长摘要做常量时间比较。
 - 带 `Origin` 的请求必须与 `Host` 同源，或在 `allowed_origins` 中。Origin 必须是完整的 HTTP(S) origin，不能含路径、query 或 fragment。
 - 静态页面公开；所有 API 与 WebSocket 都受认证和 Origin 检查保护。认证失败返回 401，Origin 拒绝返回 403。

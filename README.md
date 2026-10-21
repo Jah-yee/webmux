@@ -53,7 +53,7 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 > 截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟）。
 
 > [!WARNING]
-> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。**不要开放到公网。** 默认只监听 `127.0.0.1:7681`；远程访问请绑定 Tailscale / WireGuard 等可信 VPN 地址，并设置共享 token。详见 [安全策略](SECURITY.md)。
+> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认只监听 `127.0.0.1:7681`；远程访问请绑定 Tailscale / WireGuard 等可信 VPN 地址，并设置共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)。
 
 ## 特性
 

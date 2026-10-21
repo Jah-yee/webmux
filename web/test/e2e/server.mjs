@@ -39,8 +39,8 @@ async function stopChild(child) {
 
 // Every Playwright worker owns a real server and a fresh HOME, config and cwd.
 // Port zero asks the OS to allocate ports; no local developer server is reused.
-/** @param {{noGit?: boolean}} options @returns {Promise<E2EServer>} */
-export async function startE2EServer({ noGit = false } = {}) {
+/** @param {{noGit?: boolean, token?: string}} options @returns {Promise<E2EServer>} */
+export async function startE2EServer({ noGit = false, token = "" } = {}) {
   const binary = process.env.WEBMUX_E2E_BINARY;
   if (!binary)
     throw new Error(
@@ -75,7 +75,7 @@ export async function startE2EServer({ noGit = false } = {}) {
       mkdir(home),
       writeFile(
         config,
-        `listen = "127.0.0.1:0"\ndefault_cwd = ${JSON.stringify(workDir)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\nshell = "/bin/bash"\nidle_after_seconds = 30\n\n[[presets]]\nname = "shell"\nlabel = "Shell"\ncmd = ["/bin/bash", "--noprofile", "--norc", "-i"]\n`,
+        `listen = "127.0.0.1:0"\ntoken = ${JSON.stringify(token)}\ndefault_cwd = ${JSON.stringify(workDir)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\nshell = "/bin/bash"\nidle_after_seconds = 30\n\n[[presets]]\nname = "shell"\nlabel = "Shell"\ncmd = ["/bin/bash", "--noprofile", "--norc", "-i"]\n`,
       ),
     ]);
     async function launchBackend(listen) {
@@ -122,6 +122,7 @@ export async function startE2EServer({ noGit = false } = {}) {
         await delay(50);
       }
       const health = await fetch(`http://${address}/api/health`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         signal: AbortSignal.timeout(10_000),
       });
       if (!health.ok)

@@ -52,7 +52,7 @@ func workspaceAPI(t *testing.T) (http.Handler, *workspace.Service, *session.Mana
 		m.Shutdown(ctx)
 	})
 	service := testWorkspace(t, m, root)
-	return New(c, m, service), service, m, root
+	return New(c, m, service, nil), service, m, root
 }
 func workspaceRequest(t *testing.T, handler http.Handler, method, path string, body any, want int) *httptest.ResponseRecorder {
 	t.Helper()
@@ -172,7 +172,7 @@ func TestWorkspaceAPIConfigDegradationAndTimeout(t *testing.T) {
 	}
 	service := workspace.New(state, m, cwd)
 	defer service.Close()
-	handler := New(config.Config{DefaultCwd: cwd, Token: "secret"}, m, service)
+	handler := New(config.Config{DefaultCwd: cwd, Token: "secret"}, m, service, nil)
 	response := workspaceRequest(t, handler, "GET", "/api/config", nil, 200)
 	var settings struct {
 		DefaultCwd string               `json:"defaultCwd"`
@@ -240,7 +240,7 @@ func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/sessions?token=secret", nil)
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/sessions", &websocket.DialOptions{Subprotocols: tokenProtocols("secret")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 	if event.Type != "snapshot" || len(event.Sessions) != 1 || event.Sessions[0].Workspace == nil || event.Sessions[0].Workspace.RepositoryID != repository.ID {
 		t.Fatalf("list WS workspace: %s", data)
 	}
-	terminal, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/s/"+item.Info().ID+"?token=secret", nil)
+	terminal, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/s/"+item.Info().ID, &websocket.DialOptions{Subprotocols: tokenProtocols("secret")})
 	if err != nil {
 		t.Fatal(err)
 	}

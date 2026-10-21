@@ -3,6 +3,7 @@ package api
 import (
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"io"
 	"io/fs"
 	"net/http"
@@ -21,7 +22,7 @@ func TestAuthenticationAndOriginBoundaries(t *testing.T) {
 	c := config.Config{Token: "secret", AllowedOrigins: []string{"https://trusted.example"}}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(c, m, testWorkspace(t, m, t.TempDir()))
+	handler := New(c, m, testWorkspace(t, m, t.TempDir()), nil)
 	for _, row := range []struct {
 		name, authorization, cookie, query, origin string
 		want                                       int
@@ -60,27 +61,35 @@ func TestAuthenticationAndOriginBoundaries(t *testing.T) {
 	}
 }
 
+// tokenProtocols is the subprotocol list the frontend offers for token.
+func tokenProtocols(token string) []string {
+	return []string{"webmux", "webmux.token." + base64.RawURLEncoding.EncodeToString([]byte(token))}
+}
+
 func TestWebSocketHandshakeBoundaries(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	server := httptest.NewServer(New(config.Config{Token: "secret"}, m, testWorkspace(t, m, t.TempDir())))
+	server := httptest.NewServer(New(config.Config{Token: "secret"}, m, testWorkspace(t, m, t.TempDir()), nil))
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	secret := tokenProtocols("secret")
 	for _, row := range []struct {
 		query, cookie, origin string
+		protocols             []string
 		want                  int
 	}{
-		{"", "", "", 401},
-		{"?token=wrong", "", "", 401},
-		{"?token=secret", "", "https://evil.example", 403},
-		{"?token=secret", "", server.URL, 101},
-		{"", "webmux_token=secret", server.URL, 101},
+		{"", "", "", nil, 401},
+		{"", "", "", tokenProtocols("wrong"), 401},
+		{"?token=secret", "", server.URL, nil, 401},
+		{"", "", "https://evil.example", secret, 403},
+		{"", "", server.URL, secret, 101},
+		{"", "webmux_token=secret", server.URL, nil, 101},
 	} {
 		header := make(http.Header)
 		header.Set("Cookie", row.cookie)
 		header.Set("Origin", row.origin)
-		conn, response, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/s/missing"+row.query, &websocket.DialOptions{HTTPHeader: header})
+		conn, response, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/s/missing"+row.query, &websocket.DialOptions{HTTPHeader: header, Subprotocols: row.protocols})
 		if response == nil || response.StatusCode != row.want {
 			t.Fatalf("handshake status: response=%v err=%v want=%d", response, err, row.want)
 		}
@@ -94,11 +103,103 @@ func TestWebSocketHandshakeBoundaries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Only the fixed protocol is selected; the token protocol is never echoed.
+		want := ""
+		if row.protocols != nil {
+			want = "webmux"
+		}
+		if conn.Subprotocol() != want {
+			t.Fatalf("selected subprotocol %q, want %q", conn.Subprotocol(), want)
+		}
 		_, _, err = conn.Read(ctx)
 		_ = conn.CloseNow()
 		if websocket.CloseStatus(err) != 4404 {
 			t.Fatalf("missing session close: %v", err)
 		}
+	}
+}
+
+func TestPublicOriginBoundaries(t *testing.T) {
+	c := config.Config{Listen: "127.0.0.1:7681", Token: "secret"}
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	public := &PublicOrigin{}
+	handler := New(c, m, testWorkspace(t, m, t.TempDir()), public)
+	request := func(host, origin string) int {
+		r := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/fs/mkdir", strings.NewReader(`{}`))
+		r.Header.Set("Authorization", "Bearer secret")
+		r.Header.Set("Origin", origin)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w.Code
+	}
+	const host = "abc.trycloudflare.com"
+	if got := request(host, "https://"+host); got != http.StatusForbidden {
+		t.Fatalf("public host before Set: %d", got)
+	}
+	if err := public.Set("https://ABC.trycloudflare.com"); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct {
+		name, host, origin string
+		want               int
+	}{
+		// 400 means the request passed Host, auth, and Origin and reached the handler.
+		{"public https origin", host, "https://" + host, http.StatusBadRequest},
+		{"public host without origin", host, "", http.StatusBadRequest},
+		{"public http origin", host, "http://" + host, http.StatusForbidden},
+		{"public origin on direct host", "127.0.0.1:7681", "https://" + host, http.StatusForbidden},
+		{"other public origin", host, "https://evil.trycloudflare.com", http.StatusForbidden},
+		{"unrelated host", "evil.example", "https://evil.example", http.StatusForbidden},
+		{"direct same origin", "127.0.0.1:7681", "http://127.0.0.1:7681", http.StatusBadRequest},
+	} {
+		if got := request(row.host, row.origin); got != row.want {
+			t.Errorf("%s: status %d, want %d", row.name, got, row.want)
+		}
+	}
+	public.Clear()
+	if got := request(host, "https://"+host); got != http.StatusForbidden {
+		t.Fatalf("public host after Clear: %d", got)
+	}
+	for _, invalid := range []string{"http://abc.example", "https://abc.example/x", "https://abc.example:8443", "https://u@abc.example", "https://abc.example?x"} {
+		if public.Set(invalid) == nil {
+			t.Errorf("accepted public origin %q", invalid)
+		}
+	}
+}
+
+func TestPublicOriginWebSocketHandshake(t *testing.T) {
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	public := &PublicOrigin{}
+	server := httptest.NewServer(New(config.Config{Listen: "127.0.0.1:7681", Token: "secret"}, m, testWorkspace(t, m, t.TempDir()), public))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	const host = "abc.trycloudflare.com"
+	dial := func() (*websocket.Conn, *http.Response, error) {
+		header := http.Header{"Origin": {"https://" + host}}
+		return websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/sessions", &websocket.DialOptions{HTTPHeader: header, Host: host, Subprotocols: tokenProtocols("secret")})
+	}
+	if err := public.Set("https://" + host); err != nil {
+		t.Fatal(err)
+	}
+	conn, _, err := dial()
+	if err != nil {
+		t.Fatalf("public handshake: %v", err)
+	}
+	if _, data, err := conn.Read(ctx); err != nil || !strings.Contains(string(data), `"snapshot"`) {
+		t.Fatalf("snapshot: %q %v", data, err)
+	}
+	_ = conn.CloseNow()
+	public.Clear()
+	conn, response, err := dial()
+	if err == nil {
+		_ = conn.CloseNow()
+		t.Fatal("handshake accepted after Clear")
+	}
+	if response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatalf("handshake after Clear: %v %v", response, err)
 	}
 }
 
@@ -123,7 +224,7 @@ func TestStaticFontFilesAreTypedAndImmutable(t *testing.T) {
 	}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()))
+	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil)
 	r := httptest.NewRequest(http.MethodGet, "/"+name, nil)
 	r.Header.Set("Accept-Encoding", "gzip")
 	w := httptest.NewRecorder()
@@ -174,7 +275,7 @@ func TestStaticStylesheetGzip(t *testing.T) {
 	}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()))
+	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil)
 	r := httptest.NewRequest(http.MethodGet, "/"+name, nil)
 	r.Header.Set("Accept-Encoding", "gzip")
 	w := httptest.NewRecorder()
@@ -201,7 +302,7 @@ func TestStaticStylesheetGzip(t *testing.T) {
 func TestStaticFallbackDoesNotMaskMissingResources(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(config.Config{Token: "secret"}, m, testWorkspace(t, m, t.TempDir()))
+	handler := New(config.Config{Token: "secret"}, m, testWorkspace(t, m, t.TempDir()), nil)
 	for _, row := range []struct {
 		path string
 		want int

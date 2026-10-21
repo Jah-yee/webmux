@@ -2,6 +2,22 @@ import { stored } from "./api";
 
 const maxBufferedAmount = 1024 * 1024;
 
+// Browsers cannot set Authorization on a WebSocket handshake. The token rides
+// in an offered subprotocol instead of the URL (proxy and edge request logs)
+// or a cookie (shared by every port of the host). The server selects only
+// "webmux" and never echoes the token protocol.
+export function protocols(token: string): string[] {
+  if (!token) return ["webmux"];
+  let binary = "";
+  for (const byte of new TextEncoder().encode(token))
+    binary += String.fromCharCode(byte);
+  const encoded = btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+  return ["webmux", "webmux.token." + encoded];
+}
+
 export type Connection =
   | "connecting"
   | "connected"
@@ -66,7 +82,8 @@ export function connect(
     onState(attempt ? "reconnecting" : "connecting");
     const target = typeof path === "string" ? path : path();
     const next = new WebSocket(
-      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${target}${target.includes("?") ? "&" : "?"}token=${encodeURIComponent(stored("token"))}`,
+      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${target}`,
+      protocols(stored("token")),
     );
     socket = next;
     next.binaryType = "arraybuffer";
