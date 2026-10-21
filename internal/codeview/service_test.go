@@ -22,7 +22,7 @@ func setup(t *testing.T) (*Service, string, string) {
 	root := t.TempDir()
 	root, _ = filepath.EvalSymlinks(root)
 	m := session.NewManager(session.Options{DefaultCwd: root})
-	item, e := m.Create(root, "custom", []string{"/bin/sh"}, nil, "")
+	item, e := m.Create(root, "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -243,7 +243,7 @@ func TestPaginationSearchAndExpiry(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	other, e := s.manager.Create(root, "custom", []string{"/bin/sh"}, nil, "")
+	other, e := s.manager.Create(root, "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -305,7 +305,7 @@ func TestLinkedSubdirectoryAndNoGitBinding(t *testing.T) {
 	linked := filepath.Join(t.TempDir(), "linked tree")
 	gitTest(t, root, "worktree", "add", "-qb", "linked-test", linked)
 	os.Mkdir(filepath.Join(linked, "src"), 0700)
-	item, e := s.manager.Create(filepath.Join(linked, "src"), "custom", []string{"/bin/sh"}, nil, "")
+	item, e := s.manager.Create(filepath.Join(linked, "src"), "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -319,7 +319,7 @@ func TestLinkedSubdirectoryAndNoGitBinding(t *testing.T) {
 	}
 	sub := filepath.Join(root, "plain")
 	os.Mkdir(sub, 0700)
-	plain, e := s.manager.Create(sub, "custom", []string{"/bin/sh"}, nil, "")
+	plain, e := s.manager.Create(sub, "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -557,7 +557,7 @@ func TestGitAdministrationCannotBeBrowseRoot(t *testing.T) {
 	t.Parallel()
 	s, _, root := setup(t)
 	gitTest(t, root, "init", "-q")
-	item, e := s.manager.Create(filepath.Join(root, ".git"), "custom", []string{"/bin/sh"}, nil, "")
+	item, e := s.manager.Create(filepath.Join(root, ".git"), "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}

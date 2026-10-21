@@ -22,7 +22,7 @@ func TestAdoptedZombieReapedWhileLeaderLives(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "daemon", nil, nil, "")
+	s, err := m.Create("", "daemon", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

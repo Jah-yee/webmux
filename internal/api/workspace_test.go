@@ -232,7 +232,7 @@ func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := service.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf READY; read value"}, nil, "", nil)
+	item, err := service.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf READY; read value"}, nil, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

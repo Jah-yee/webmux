@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/rainchan/webmux/internal/tray"
+	"github.com/rainchan/webmux/internal/wslclient"
 )
 
 const stillActive = 259
@@ -84,7 +85,7 @@ func WSLPath(distro, path string) (string, error) {
 
 // Distros lists installed distributions: names from --list --quiet (exact,
 // including spaces) and the default from --list --verbose.
-func Distros(ctx context.Context, r tray.Runner) ([]tray.Distro, error) {
+func Distros(ctx context.Context, r tray.Runner) ([]wslclient.Distro, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	verboseInv := tray.ListVerbose()
@@ -93,9 +94,9 @@ func Distros(ctx context.Context, r tray.Runner) ([]tray.Distro, error) {
 		return nil, err
 	}
 	if res.Code != 0 {
-		return nil, fmt.Errorf("wsl.exe --list --verbose: exit %d: %s", res.Code, strings.TrimSpace(tray.DecodeWSLOutput(res.Stdout)))
+		return nil, fmt.Errorf("wsl.exe --list --verbose: exit %d: %s", res.Code, strings.TrimSpace(wslclient.DecodeOutput(res.Stdout)))
 	}
-	verbose := tray.ParseListVerbose(res.Stdout)
+	verbose := wslclient.ParseListVerbose(res.Stdout)
 	quietInv := tray.ListQuiet()
 	quiet, err := r.Run(ctx, quietInv.Argv, quietInv.Env)
 	if err != nil || quiet.Code != 0 {
@@ -107,16 +108,16 @@ func Distros(ctx context.Context, r tray.Runner) ([]tray.Distro, error) {
 		defaults[d.Name] = d.Default
 		versions[d.Name] = d.Version
 	}
-	var out []tray.Distro
-	for _, name := range tray.ParseListQuiet(quiet.Stdout) {
-		out = append(out, tray.Distro{Name: name, Default: defaults[name], Version: versions[name]})
+	var out []wslclient.Distro
+	for _, name := range wslclient.ParseListQuiet(quiet.Stdout) {
+		out = append(out, wslclient.Distro{Name: name, Default: defaults[name], Version: versions[name]})
 	}
 	return out, nil
 }
 
 // CheckWSL runs `wsl.exe --version`, which only the Microsoft Store WSL
 // supports, then lists the distributions.
-func CheckWSL(ctx context.Context, r tray.Runner) ([]tray.Distro, error) {
+func CheckWSL(ctx context.Context, r tray.Runner) ([]wslclient.Distro, error) {
 	versionCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	inv := tray.WSLVersion()
 	res, err := r.Run(versionCtx, inv.Argv, inv.Env)
@@ -146,7 +147,7 @@ func NetworkingMode(ctx context.Context, r tray.Runner, t tray.Target) string {
 	if err != nil || res.Code != 0 {
 		return "nat"
 	}
-	mode := strings.ToLower(strings.TrimSpace(tray.DecodeWSLOutput(res.Stdout)))
+	mode := strings.ToLower(strings.TrimSpace(wslclient.DecodeOutput(res.Stdout)))
 	if mode == "" {
 		return "nat"
 	}

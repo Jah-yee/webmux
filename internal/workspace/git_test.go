@@ -84,7 +84,7 @@ func TestBareUnbornAndBranchBaselines(t *testing.T) {
 	if _, err := s.CreateWorktree(context.Background(), r.ID, CreateRequest{Path: filepath.Join(t.TempDir(), "unborn"), Mode: "new", Branch: "topic", Base: "HEAD"}); Status(err) != 400 {
 		t.Fatalf("unborn creation: %v", err)
 	}
-	item, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh", "-c", "printf UNBORN"}, nil, "", &Reference{r.ID, r.Worktrees[0].ID})
+	item, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh", "-c", "printf UNBORN"}, nil, "", &Reference{r.ID, r.Worktrees[0].ID}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestBareUnbornAndBranchBaselines(t *testing.T) {
 	if err != nil || branches.DefaultBase != nil || len(branches.Bases) == 0 || branches.DefaultParent != bare+".worktrees" {
 		t.Fatalf("bare branches: %+v %v", branches, err)
 	}
-	if _, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh"}, nil, "", &Reference{br.ID, br.Worktrees[0].ID}); Status(err) != 409 {
+	if _, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh"}, nil, "", &Reference{br.ID, br.Worktrees[0].ID}, nil); Status(err) != 409 {
 		t.Fatalf("bare launch: %v", err)
 	}
 	tree, err := s.CreateWorktree(context.Background(), br.ID, CreateRequest{Path: filepath.Join(t.TempDir(), "bare linked"), Mode: "new", Branch: "topic", Base: "refs/heads/main"})
@@ -166,10 +166,10 @@ func TestCreationContractsAndNoEnvironmentCopy(t *testing.T) {
 	if string(data) != "retain" {
 		t.Fatal("existing directory overwritten")
 	}
-	if _, err := s.CreateSession(context.Background(), "", "custom", []string{"/missing/agent"}, nil, "", &Reference{r.ID, created.ID}); Status(err) != 400 {
+	if _, err := s.CreateSession(context.Background(), "", "custom", []string{"/missing/agent"}, nil, "", &Reference{r.ID, created.ID}, nil); Status(err) != 400 {
 		t.Fatalf("agent failure: %v", err)
 	}
-	item, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh", "-c", "printf RETRY"}, nil, "", &Reference{r.ID, created.ID})
+	item, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh", "-c", "printf RETRY"}, nil, "", &Reference{r.ID, created.ID}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestFailedGitCreationExposesResidueAndCancellationReapsCommand(t *testing.T
 		t.Fatal("partial worktree hidden", err)
 	}
 	gitTest(t, root, "show-ref", "--verify", "refs/heads/partial")
-	item, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh", "-c", "printf RESIDUE"}, nil, "", &Reference{r.ID, tree.ID})
+	item, err := s.CreateSession(context.Background(), "", "custom", []string{"/bin/sh", "-c", "printf RESIDUE"}, nil, "", &Reference{r.ID, tree.ID}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestGitTrustAndPermissionErrorsNeverBecomeClean(t *testing.T) {
 	if strings.Contains(gitLocalConfig(t, root), "safe.directory") {
 		t.Fatal("service modified repository trust")
 	}
-	item, err := s.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf TRUST_DIRECT"}, nil, "", nil)
+	item, err := s.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf TRUST_DIRECT"}, nil, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

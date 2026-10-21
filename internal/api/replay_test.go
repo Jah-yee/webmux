@@ -19,7 +19,7 @@ func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	defer m.Shutdown(ctx)
-	s, err := m.Create("", "output", nil, nil, "")
+	s, err := m.Create("", "output", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

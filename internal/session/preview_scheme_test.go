@@ -49,7 +49,7 @@ func TestColorSchemeReportsOutliveReplayAndFollowOutput(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", "agent", nil, nil, "")
+	s, err := m.Create("", "agent", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

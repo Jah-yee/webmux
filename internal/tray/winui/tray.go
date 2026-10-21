@@ -21,6 +21,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/tray"
+	"github.com/rainchan/webmux/internal/wslclient"
 )
 
 var (
@@ -78,7 +79,7 @@ type App struct {
 	settingsWarn string
 	stamp        fileStamp
 	noWSL        string
-	distros      []tray.Distro
+	distros      []wslclient.Distro
 	netMode      string
 	detection    tray.Detection
 	detected     bool
@@ -604,7 +605,7 @@ func (a *App) openJournal() {
 	inv := a.svc.Current().Target.Journal()
 	res, err := a.o.Runner.Run(ctx, inv.Argv, inv.Env)
 	if err == nil && res.Code != 0 {
-		err = fmt.Errorf("journalctl: exit %d: %s", res.Code, tray.DecodeWSLOutput(res.Stderr))
+		err = fmt.Errorf("journalctl: exit %d: %s", res.Code, wslclient.DecodeOutput(res.Stderr))
 	}
 	if err != nil {
 		a.fail("无法读取 systemd 日志", err)
@@ -615,7 +616,7 @@ func (a *App) openJournal() {
 		a.fail("无法读取 systemd 日志", err)
 		return
 	}
-	_, err = f.WriteString(tray.DecodeWSLOutput(res.Stdout))
+	_, err = f.WriteString(wslclient.DecodeOutput(res.Stdout))
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}

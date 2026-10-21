@@ -113,6 +113,32 @@ jq -nc --arg seq "$seq" '{terminalSequence: $seq}'
 
 预设不会自动安装 agent，对应程序必须在服务进程的 `PATH` 中。
 
+## 从终端启动与附着
+
+在服务所在机器（含 WSL 内）的 shell 中，`webmux` 经本机套接字访问服务，无需 Token：
+
+```sh
+webmux run -- claude --resume          # 在当前目录创建会话并立即附着
+webmux run --detach --name review -- codex   # 只创建，输出 "<ID>\t<本机链接>"
+webmux run --env VIRTUAL_ENV=/w/.venv --env PATH=/w/.venv/bin:/usr/bin -- python app.py
+webmux ls [--json]                     # 列出会话；--json 为服务端原始数组
+webmux attach <ID> [--observe]         # 附着；Ctrl+] 分离，会话继续运行
+webmux open <ID> [--browser]           # 输出（并打开）不含 Token 的会话链接
+```
+
+- `--` 之后的参数原样作为 argv，不经 shell 展开；`--cwd` 指定启动目录（默认当前目录，`~` 由服务端展开）。
+- 会话环境来自**服务进程**，不是调用方 shell：`--env NAME=VALUE` 只追加显式列出的变量，不复制当前环境。
+- 附着时终端切换为原始模式，默认取得控制权并同步窗口尺寸；`--observe` 只观察。会话退出时以其退出码结束；分离以 0 结束；服务未运行以 3 结束，不会自动启动服务。附着开始时以终端复位后的完整回放呈现会话内容。
+
+## 在 Windows 终端中使用
+
+`webmux-windows-<arch>.exe`（建议放入 `PATH` 并重命名为 `webmux.exe`）在 PowerShell / Windows Terminal 中提供 `run`、`attach`、`ls`、`open`、`status` 与 `version`，会话运行在 WSL 中的 WebMux 里。每条连接都会启动 `wsl.exe --exec webmux bridge` 访问本机 API，因此不需要 Token，也不依赖 WSL 的 localhost 转发或网络模式；服务需已在 WSL 中运行（托盘或 `webmux serve`）。
+
+- **发行版**：`--distro`、环境变量 `WEBMUX_DISTRO`、托盘设置 `%APPDATA%\WebMux\tray.json`、WSL 默认发行版，依次生效。WSL 内 `webmux` 路径同理：`--webmux`、`WEBMUX_WSL_PATH`、托盘设置、`~/.local/bin/webmux`。
+- **目录换算**：未指定 `--cwd` 时把当前目录换算为 WSL 路径：盘符路径按发行版的自动挂载规则（`wslpath`，默认 `C:\work` → `/mnt/c/work`）；`\\wsl.localhost\<发行版>\…` 或 `\\wsl$\<发行版>\…` 换算为对应 Linux 路径；网络共享、其他发行版与设备路径无法换算，以退出码 2 结束，请用 `--cwd /linux/path` 指定。
+- **控制台**：附着时控制台进入 VT 原始模式并使用 UTF-8 代码页，`Ctrl+C` 发送给会话，`Ctrl+]` 分离；窗口尺寸每 250 毫秒同步一次；退出时恢复原模式与代码页。需要 Windows 10 22H2 及以上，推荐 Windows Terminal。
+- **引号**：PowerShell 在把参数交给原生程序前会再处理一次引号。需要字面传递 `$`、`;` 等字符时用单引号（`webmux run -- printf '%s;$(id)' 'a b'`），或在 `--` 前使用 `--%` 停止解析。
+
 ## 终端
 
 - 进入终端时先回放服务端缓冲，再续接实时输出；断线后以指数退避（0.5–8 秒）自动重连，回到前台时立即重新附着。若本页终端仍在且服务端还保留断线后的输出，只补发缺失部分，不清屏；否则清屏全量回放。缓冲已覆盖最早输出时，菜单“复制全部缓冲”会注明。

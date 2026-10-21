@@ -19,7 +19,7 @@ func TestLeaderExitWithInheritedPTY(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "child", nil, nil, "")
+	s, err := m.Create("", "child", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestCloseReapsSeparateJobGroups(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
 	defer m.Shutdown(ctx)
-	s, err := m.Create("", "job", nil, nil, "")
+	s, err := m.Create("", "job", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCancelledPTYWriteDoesNotHoldInputGate(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "blocked", nil, nil, "")
+	s, err := m.Create("", "blocked", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,11 +129,11 @@ func TestUnattendedSleepIsNotUserWait(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	sleeper, err := m.Create("", "sleeper", nil, nil, "")
+	sleeper, err := m.Create("", "sleeper", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := m.Create("", "reader", nil, nil, "")
+	reader, err := m.Create("", "reader", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,11 +188,11 @@ func TestRealProcessTreeWaiting(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	reader, err := m.Create("", "reader", nil, nil, "")
+	reader, err := m.Create("", "reader", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	busy, err := m.Create("", "busy", nil, nil, "")
+	busy, err := m.Create("", "busy", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

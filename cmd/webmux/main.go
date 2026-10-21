@@ -30,7 +30,7 @@ func main() {
 	os.Exit(dispatch(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const subcommands = "serve, version, status, stop, bridge, config"
+const subcommands = "serve, version, status, stop, bridge, config, run, attach, ls, open"
 
 // dispatch routes by the first argument. No argument or a flag first keeps
 // the original server invocation used by existing service templates.
@@ -50,6 +50,8 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 		return stopCommand(args[1:], stdout, stderr)
 	case "bridge":
 		return bridgeCommand(args[1:], os.Stdin, stdout, stderr)
+	case "run", "attach", "ls", "open":
+		return sessionCommand(args[0], args[1:], stdout, stderr)
 	case "config":
 		return configCommand(args[1:], stdout, stderr)
 	}

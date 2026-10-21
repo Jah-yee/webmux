@@ -11,6 +11,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/tray"
+	"github.com/rainchan/webmux/internal/wslclient"
 )
 
 // Pool sizes of the dynamic submenus. fyne.io/systray cannot rebuild a menu
@@ -273,7 +274,7 @@ type view struct {
 	settings     tray.Settings
 	settingsWarn string
 	noWSL        bool
-	distros      []tray.Distro
+	distros      []wslclient.Distro
 	detection    tray.Detection
 	detected     bool
 	plan         tray.ForwardPlan
@@ -282,7 +283,7 @@ type view struct {
 	autostart    bool
 }
 
-func defaultDistro(distros []tray.Distro) string {
+func defaultDistro(distros []wslclient.Distro) string {
 	for _, d := range distros {
 		if d.Default {
 			return d.Name

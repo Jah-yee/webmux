@@ -91,9 +91,15 @@ func ExpandPath(path string) (string, error) {
 	}
 	return filepath.Abs(path)
 }
-func (m *Manager) Create(cwd, preset string, cmd, args []string, name string) (*Session, error) {
+
+// Create starts a session. env holds explicit variables added to the
+// server's environment for this session only (see ValidateEnv).
+func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, env map[string]string) (*Session, error) {
 	if m.initErr != nil {
 		return nil, fmt.Errorf("process reaper: %w", m.initErr)
+	}
+	if err := ValidateEnv(env); err != nil {
+		return nil, err
 	}
 	if cwd == "" {
 		cwd = m.options.DefaultCwd
@@ -150,6 +156,7 @@ func (m *Manager) Create(cwd, preset string, cmd, args []string, name string) (*
 	s, err := start(id, cwd, preset, name, argv, m.options.ScrollbackBytes, startOptions{
 		agentProtocol: !m.options.DisableAgentProtocol,
 		bellAttention: !m.options.DisableBellAttention,
+		env:           env,
 	})
 	if err != nil {
 		return nil, err

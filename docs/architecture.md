@@ -40,24 +40,26 @@ flowchart LR
 
 ## 模块划分
 
-| 包                                       | 职责                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------ |
-| `cmd/webmux`                             | 子命令分发、配置加载、显式依赖注入、信号处理与优雅退出                   |
-| `internal/runtime`                       | 运行时记录、实例锁、进程身份、本机套接字与对端凭据                       |
-| `internal/contract`                      | 无依赖的 JSON 契约（状态、停止、配置）与 `/local/v1` 路径                |
-| `internal/localclient`                   | 经任意拨号器访问 HTTP/WS API 的客户端，可交叉编译到 Windows              |
-| `internal/client`                        | CLI 侧的实例定位、链接推导、`status`/`stop` 退回逻辑                     |
-| `internal/config`                        | TOML 解析、默认值与校验                                                  |
-| `internal/session`                       | PTY、环形缓冲、OSC 标题、屏幕预览、状态探测、进程树清理                  |
-| `internal/hub`                           | 终端 WebSocket：快照与订阅、输出合并、输入写入与取消                     |
-| `internal/api`                           | REST 路由、认证、Origin 检查、上传、静态资源与 SPA 回退                  |
-| `internal/workspace`                     | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调            |
-| `internal/codeview`                      | 只读文件浏览、Git 修改列表、内容快照与变化检测                           |
-| `internal/wslclient`                     | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器与 WSL 输出解析 |
-| `internal/tray`                          | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与日志 |
-| `internal/tray/forward`                  | 托盘转发：同源校验后把请求中转到 WebMux 的 TCP 监听                      |
-| `internal/tray/winui`, `cmd/webmux-tray` | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`） |
-| `web/`                                   | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                          |
+| 包                                          | 职责                                                                                            |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `cmd/webmux`                                | 子命令分发、配置加载、显式依赖注入、信号处理与优雅退出                                          |
+| `internal/runtime`                          | 运行时记录、实例锁、进程身份、本机套接字与对端凭据                                              |
+| `internal/contract`                         | 无依赖的 JSON 契约（状态、停止、配置）与 `/local/v1` 路径                                       |
+| `internal/localclient`                      | 经任意拨号器访问 HTTP/WS API 的客户端，可交叉编译到 Windows                                     |
+| `internal/client`                           | CLI 侧的实例定位、链接推导、`status`/`stop` 退回逻辑                                            |
+| `internal/config`                           | TOML 解析、默认值与校验                                                                         |
+| `internal/session`                          | PTY、环形缓冲、OSC 标题、屏幕预览、状态探测、进程树清理                                         |
+| `internal/hub`                              | 终端 WebSocket：快照与订阅、输出合并、输入写入与取消                                            |
+| `internal/api`                              | REST 路由、认证、Origin 检查、上传、静态资源与 SPA 回退                                         |
+| `internal/workspace`                        | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
+| `internal/codeview`                         | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
+| `internal/wslclient`                        | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算 |
+| `internal/attach`                           | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                |
+| `internal/sessioncmd`, `cmd/webmux-windows` | `run`/`attach`/`ls`/`open` 共用实现；Windows 控制台客户端入口                                   |
+| `internal/tray`                             | 托盘平台无关核心：设置、`wsl.exe` argv、启动方式、状态机、转发判定与日志                        |
+| `internal/tray/forward`                     | 托盘转发：同源校验后把请求中转到 WebMux 的 TCP 监听                                             |
+| `internal/tray/winui`, `cmd/webmux-tray`    | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
+| `web/`                                      | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
 
 `cmd/webmux` 先加载配置，再构造 `session.Manager`、workspace 与 codeview 服务，最后注入 `api.New`。各模块通过构造函数显式依赖，不使用全局状态。
 

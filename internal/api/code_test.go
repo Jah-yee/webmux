@@ -34,7 +34,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	item, e := m.Create(c.DefaultCwd, "custom", []string{"/bin/sh"}, nil, "")
+	item, e := m.Create(c.DefaultCwd, "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -91,7 +91,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 	if e != nil || string(data) != "unchanged code\n" {
 		t.Fatal("read changed file")
 	}
-	other, e := m.Create(c.DefaultCwd, "custom", []string{"/bin/sh"}, nil, "")
+	other, e := m.Create(c.DefaultCwd, "custom", []string{"/bin/sh"}, nil, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}

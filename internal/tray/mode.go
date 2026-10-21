@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/wslclient"
 )
 
 // Detection is what the target distribution offers for systemd mode.
@@ -31,7 +32,7 @@ func (d Detection) Reason() string {
 func DetectSystemd(ctx context.Context, r Runner, t Target) Detection {
 	var d Detection
 	inv := t.InitComm()
-	if res, err := r.Run(ctx, inv.Argv, inv.Env); err == nil && res.Code == 0 && strings.TrimSpace(DecodeWSLOutput(res.Stdout)) == "systemd" {
+	if res, err := r.Run(ctx, inv.Argv, inv.Env); err == nil && res.Code == 0 && strings.TrimSpace(wslclient.DecodeOutput(res.Stdout)) == "systemd" {
 		d.Systemd = true
 	}
 	if !d.Systemd {

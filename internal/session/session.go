@@ -103,12 +103,14 @@ type Session struct {
 type startOptions struct {
 	agentProtocol bool
 	bellAttention bool
+	// env is the caller's explicit launch environment.
+	env map[string]string
 }
 
 func start(id, cwd, preset, name string, argv []string, capacity int, options startOptions) (*Session, error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
-	cmd.Env = sessionEnv(os.Environ(), id, options.agentProtocol)
+	cmd.Env = sessionEnv(os.Environ(), id, options.agentProtocol, options.env)
 	f, err := startPTY(cmd, &pty.Winsize{Rows: 24, Cols: 80})
 	if err != nil {
 		return nil, err

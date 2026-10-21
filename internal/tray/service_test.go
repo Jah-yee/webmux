@@ -83,11 +83,11 @@ func TestWSLServiceStatusAndWatch(t *testing.T) {
 		}
 	}
 	expect(0)
-	first, err := m.Create(dir, "custom", []string{"cat"}, nil, "")
+	first, err := m.Create(dir, "custom", []string{"cat"}, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Create(dir, "custom", []string{"cat"}, nil, ""); err != nil {
+	if _, err := m.Create(dir, "custom", []string{"cat"}, nil, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	expect(2)

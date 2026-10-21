@@ -58,7 +58,7 @@ func TestPublishedRegistryFailureDisablesFurtherWrites(t *testing.T) {
 	if err != nil || string(after) != string(data) {
 		t.Fatalf("failure state overwrote published data: %v", err)
 	}
-	item, err := s.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf DIRECT_AFTER_STORAGE_FAILURE"}, nil, "", nil)
+	item, err := s.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf DIRECT_AFTER_STORAGE_FAILURE"}, nil, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -237,16 +237,27 @@ func TestSessionEnv(t *testing.T) {
 	}
 	want := []string{"HOME=/home/u", "PATH=/bin", "LANG=C.UTF-8", "TERMINFO=/usr/share/terminfo",
 		"TERM=xterm-256color", "COLORTERM=truecolor", "WEBMUX_SESSION_ID=abcdefgh"}
-	if got := sessionEnv(base, "abcdefgh", false); !slices.Equal(got, want) {
+	if got := sessionEnv(base, "abcdefgh", false, nil); !slices.Equal(got, want) {
 		t.Fatalf("without protocol:\n%q\nwant\n%q", got, want)
 	}
-	got := sessionEnv(base, "abcdefgh", true)
+	got := sessionEnv(base, "abcdefgh", true, nil)
 	if !slices.Equal(got, append(want, "WARP_CLI_AGENT_PROTOCOL_VERSION=1")) {
 		t.Fatalf("with protocol: %q", got)
 	}
 	for _, entry := range got {
 		if strings.HasPrefix(entry, "TERM_PROGRAM") || strings.HasPrefix(entry, "WARP_CLIENT_VERSION") {
 			t.Fatalf("leaked Warp identity: %s", entry)
+		}
+	}
+	explicit := sessionEnv(base, "abcdefgh", false, map[string]string{"PATH": "/venv/bin:/bin", "TERM": "dumb", "Z_VAR": "a b"})
+	wantExplicit := []string{"HOME=/home/u", "LANG=C.UTF-8", "TERMINFO=/usr/share/terminfo",
+		"COLORTERM=truecolor", "WEBMUX_SESSION_ID=abcdefgh", "PATH=/venv/bin:/bin", "TERM=dumb", "Z_VAR=a b"}
+	if !slices.Equal(explicit, wantExplicit) {
+		t.Fatalf("explicit env:\n%q\nwant\n%q", explicit, wantExplicit)
+	}
+	for _, bad := range []map[string]string{{"WEBMUX_SESSION_ID": "x"}, {"1BAD": "x"}, {"A=B": "x"}, {"OK": "nul\x00"}} {
+		if ValidateEnv(bad) == nil {
+			t.Errorf("accepted %q", bad)
 		}
 	}
 }
@@ -263,7 +274,7 @@ func TestRealSessionAttentionSurvivesSpinner(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "agent", nil, nil, "")
+	s, err := m.Create("", "agent", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

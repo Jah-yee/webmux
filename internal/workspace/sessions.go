@@ -138,7 +138,7 @@ func (s *Service) reassociate(ctx context.Context) {
 		s.commitAssociation(info, association, true)
 	}
 }
-func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, args []string, name string, reference *Reference) (*session.Session, error) {
+func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, args []string, name string, reference *Reference, env map[string]string) (*session.Session, error) {
 	requestCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
@@ -197,7 +197,7 @@ func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, ar
 	if err := requestCtx.Err(); err != nil {
 		return nil, err
 	}
-	item, err := s.manager.Create(path, preset, cmd, args, name)
+	item, err := s.manager.Create(path, preset, cmd, args, name, env)
 	if err != nil {
 		return nil, problem(400, "启动会话失败: %v", err)
 	}

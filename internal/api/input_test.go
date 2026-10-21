@@ -22,7 +22,7 @@ func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "blocked", nil, nil, "")
+	s, err := m.Create("", "blocked", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

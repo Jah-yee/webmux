@@ -223,11 +223,17 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 		Args      []string             `json:"args"`
 		Name      string               `json:"name"`
 		Workspace *workspace.Reference `json:"workspace"`
+		Env       map[string]string    `json:"env"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	item, err := s.Workspace.CreateSession(r.Context(), req.Cwd, req.Preset, req.Cmd, req.Args, req.Name, req.Workspace)
+	// Rejected before any filesystem or Git work.
+	if err := session.ValidateEnv(req.Env); err != nil {
+		failure(w, http.StatusBadRequest, err)
+		return
+	}
+	item, err := s.Workspace.CreateSession(r.Context(), req.Cwd, req.Preset, req.Cmd, req.Args, req.Name, req.Workspace, req.Env)
 	if err != nil {
 		failure(w, workspace.Status(err), err)
 		return

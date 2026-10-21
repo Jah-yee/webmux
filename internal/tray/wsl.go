@@ -1,12 +1,10 @@
 package tray
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"strings"
-	"unicode/utf16"
-	"unicode/utf8"
+
+	"github.com/rainchan/webmux/internal/wslclient"
 )
 
 // Result is a finished short-lived command.
@@ -66,19 +64,10 @@ func (t Target) Exec(program string, args ...string) Invocation {
 	return Invocation{Argv: append(append(t.base(), "--exec", program), args...)}
 }
 
-// webmuxPath turns "~/x" into "./x" because --exec does not expand "~";
-// --cd ~ makes it relative to the WSL home directory.
-func webmuxPath(path string) string {
-	if rest, ok := strings.CutPrefix(path, "~/"); ok {
-		return "./" + rest
-	}
-	return path
-}
-
 // Command runs a webmux subcommand from the WSL home directory. Config and
 // log paths keep "~/"; webmux expands them itself.
 func (t Target) Command(args ...string) Invocation {
-	argv := append(t.base(), "--cd", "~", "--exec", webmuxPath(t.Webmux))
+	argv := append(t.base(), "--cd", "~", "--exec", wslclient.WebmuxPath(t.Webmux))
 	argv = append(argv, args...)
 	if t.Config != "" {
 		argv = append(argv, "--config", t.Config)
@@ -95,7 +84,7 @@ func (t Target) ConfigInit() Invocation { return t.Command("config", "init") }
 // -log-file. A flag-first invocation is safe with older versions, where any
 // other first argument would start a server.
 func (t Target) Probe() Invocation {
-	inv := Invocation{Argv: append(t.base(), "--cd", "~", "--exec", webmuxPath(t.Webmux), "-h")}
+	inv := Invocation{Argv: append(t.base(), "--cd", "~", "--exec", wslclient.WebmuxPath(t.Webmux), "-h")}
 	return inv
 }
 
@@ -147,90 +136,4 @@ func MergeWSLENV(existing, name string) string {
 		return name
 	}
 	return existing + ":" + name
-}
-
-// DecodeWSLOutput handles wsl.exe's UTF-16LE output (with or without BOM)
-// and the UTF-8 output selected by WSL_UTF8=1.
-func DecodeWSLOutput(data []byte) string {
-	if bytes.HasPrefix(data, []byte{0xff, 0xfe}) {
-		return decodeUTF16(data[2:])
-	}
-	if bytes.HasPrefix(data, []byte{0xef, 0xbb, 0xbf}) {
-		return string(data[3:])
-	}
-	if len(data) >= 2 && len(data)%2 == 0 && looksUTF16(data) {
-		return decodeUTF16(data)
-	}
-	if utf8.Valid(data) {
-		return string(data)
-	}
-	return decodeUTF16(data)
-}
-
-// looksUTF16 detects ASCII-heavy UTF-16LE: most odd bytes are zero.
-func looksUTF16(data []byte) bool {
-	zeros := 0
-	for i := 1; i < len(data); i += 2 {
-		if data[i] == 0 {
-			zeros++
-		}
-	}
-	return zeros*2 >= len(data)/2
-}
-
-func decodeUTF16(data []byte) string {
-	units := make([]uint16, len(data)/2)
-	for i := range units {
-		units[i] = binary.LittleEndian.Uint16(data[2*i:])
-	}
-	return string(utf16.Decode(units))
-}
-
-// Distro is one installed distribution.
-type Distro struct {
-	Name    string
-	Default bool
-	Version int
-}
-
-// ParseListQuiet parses `wsl.exe --list --quiet`.
-func ParseListQuiet(data []byte) []string {
-	var names []string
-	for line := range strings.SplitSeq(DecodeWSLOutput(data), "\n") {
-		if name := strings.Trim(line, " \t\r\x00"); name != "" {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
-// ParseListVerbose parses `wsl.exe --list --verbose`: a header, then rows
-// "[*] NAME STATE VERSION" with '*' marking the default distribution.
-func ParseListVerbose(data []byte) []Distro {
-	var distros []Distro
-	lines := strings.Split(DecodeWSLOutput(data), "\n")
-	for i, line := range lines {
-		line = strings.Trim(line, " \t\r\x00")
-		if i == 0 || line == "" {
-			continue
-		}
-		d := Distro{}
-		if rest, ok := strings.CutPrefix(line, "*"); ok {
-			d.Default = true
-			line = strings.TrimSpace(rest)
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		d.Name = strings.Join(fields[:len(fields)-2], " ")
-		switch fields[len(fields)-1] {
-		case "1":
-			d.Version = 1
-		case "2":
-			d.Version = 2
-		}
-		distros = append(distros, d)
-	}
-	return distros
 }

@@ -94,7 +94,8 @@ func TestShutdownDuringRepeatedPreviewControls(t *testing.T) {
 	})
 	s, err := m.Create("", "custom", []string{"/bin/sh", "-c",
 		`while :; do printf '\033[100000Smarker\n'; sleep 0.01; done`,
-	}, nil, "")
+	}, nil, "", nil)
+
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,6 +13,7 @@ require golang.org/x/sys v0.49.0
 
 require (
 	fyne.io/systray v1.12.2
+	golang.org/x/term v0.47.0
 	rsc.io/qr v0.2.0
 )
 

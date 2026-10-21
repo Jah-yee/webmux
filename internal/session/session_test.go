@@ -16,7 +16,7 @@ func TestPersistentPTY(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "shell", nil, nil, "")
+	s, err := m.Create("", "shell", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestResizeFromRequiresTheControllingConnection(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "idle", nil, nil, "")
+	s, err := m.Create("", "idle", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func newIdleSession(t *testing.T, cmd ...string) *Session {
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", "idle", nil, nil, "")
+	s, err := m.Create("", "idle", nil, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

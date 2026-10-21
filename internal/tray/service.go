@@ -13,6 +13,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
+	"github.com/rainchan/webmux/internal/wslclient"
 )
 
 var (
@@ -84,7 +85,7 @@ func (s *WSLService) run(ctx context.Context, inv Invocation, timeout time.Durat
 
 // execFailure recognizes wsl.exe failing to execute the program.
 func execFailure(res Result) bool {
-	text := strings.ToLower(DecodeWSLOutput(res.Stderr) + DecodeWSLOutput(res.Stdout))
+	text := strings.ToLower(wslclient.DecodeOutput(res.Stderr) + wslclient.DecodeOutput(res.Stdout))
 	return res.Code != 0 && (strings.Contains(text, "no such file") || strings.Contains(text, "execvpe") || strings.Contains(text, "permission denied"))
 }
 
@@ -96,7 +97,7 @@ func (s *WSLService) Check(ctx context.Context) error {
 	if execFailure(res) {
 		return fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
 	}
-	if !strings.Contains(DecodeWSLOutput(res.Stderr)+DecodeWSLOutput(res.Stdout), "-log-file") {
+	if !strings.Contains(wslclient.DecodeOutput(res.Stderr)+wslclient.DecodeOutput(res.Stdout), "-log-file") {
 		return ErrWebmuxTooOld
 	}
 	return nil
@@ -126,7 +127,7 @@ func (s *WSLService) Status(ctx context.Context) (contract.StatusV1, error) {
 		return contract.StatusV1{}, fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
 	}
 	if err := json.Unmarshal(res.Stdout, &status); err != nil || status.V == 0 {
-		return contract.StatusV1{}, fmt.Errorf("%w: status --json: %s", ErrWebmuxTooOld, strings.TrimSpace(DecodeWSLOutput(res.Stderr)))
+		return contract.StatusV1{}, fmt.Errorf("%w: status --json: %s", ErrWebmuxTooOld, strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
 	if status.V > contract.V {
 		return contract.StatusV1{}, fmt.Errorf("WSL 中的 webmux 使用状态契约 v%d，请升级托盘", status.V)
@@ -195,7 +196,7 @@ func (s *WSLService) ForceStop(ctx context.Context) (contract.StopV1, error) {
 	}
 	var stop contract.StopV1
 	if err := json.Unmarshal(res.Stdout, &stop); err != nil {
-		return contract.StopV1{}, fmt.Errorf("webmux stop: exit %d: %s", res.Code, strings.TrimSpace(DecodeWSLOutput(res.Stderr)))
+		return contract.StopV1{}, fmt.Errorf("webmux stop: exit %d: %s", res.Code, strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
 	if res.Code != 0 {
 		return stop, fmt.Errorf("webmux stop: %s", stop.Message)
@@ -209,7 +210,7 @@ func (s *WSLService) Systemctl(ctx context.Context, action string) error {
 		return err
 	}
 	if res.Code != 0 {
-		return fmt.Errorf("systemctl --user %s webmux.service: exit %d: %s", action, res.Code, strings.TrimSpace(DecodeWSLOutput(res.Stderr)))
+		return fmt.Errorf("systemctl --user %s webmux.service: exit %d: %s", action, res.Code, strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
 	return nil
 }
@@ -241,7 +242,7 @@ func (s *WSLService) ConfigInit(ctx context.Context) error {
 		return err
 	}
 	if res.Code != 0 {
-		return fmt.Errorf("webmux config init: %s", strings.TrimSpace(DecodeWSLOutput(res.Stderr)))
+		return fmt.Errorf("webmux config init: %s", strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
 	return nil
 }
