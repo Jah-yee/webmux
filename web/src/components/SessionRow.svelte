@@ -71,7 +71,9 @@
       <div
         class="mt-2 flex flex-wrap items-start gap-x-3 gap-y-1 text-xs text-muted-foreground"
       >
-        <div class="min-w-[8.5rem]"><SessionStatus {session} /></div>
+        <div class="max-w-full min-w-[min(8.5rem,100%)]">
+          <SessionStatus {session} />
+        </div>
         <span class="border border-transparent py-0.5"
           >{session.clients ? `${session.clients} 个设备已连接` : "后台会话"} · {relative}</span
         >

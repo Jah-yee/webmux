@@ -21,9 +21,7 @@ function documentPictureInPicture(): DocumentPictureInPicture | undefined {
 // Mobile browsers open popups as tabs, which would hide the terminal the
 // panel belongs to; without Picture-in-Picture, offer it only with a mouse.
 export function popoutAvailable() {
-  return (
-    !!documentPictureInPicture() || matchMedia("(pointer: fine)").matches
-  );
+  return !!documentPictureInPicture() || matchMedia("(pointer: fine)").matches;
 }
 async function openWindow(width: number, height: number) {
   const api = documentPictureInPicture();
