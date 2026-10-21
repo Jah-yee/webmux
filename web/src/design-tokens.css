@@ -21,6 +21,7 @@
   --control-default: 2.25rem;
   --control-lg: 2.75rem;
   --control-touch: 2.75rem;
+  --control-touch-compact: 2.25rem;
 }
 
 :root {

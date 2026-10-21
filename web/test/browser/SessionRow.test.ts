@@ -62,7 +62,7 @@ test("status, connection and time read as one aligned, grouped line on a wide ro
     now: Date.parse("2026-10-16T00:00:03Z"),
     onclose: () => {},
   });
-  const labels = ["已退出 · code 137", "后台会话", "刚刚"];
+  const labels = ["已退出 · code 137", "后台会话 · 刚刚"];
   await expect.element(page.getByText(labels[0])).toBeVisible();
   const text = labels.map((label) => {
     const element = page.getByText(label, { exact: true }).element();
@@ -71,11 +71,10 @@ test("status, connection and time read as one aligned, grouped line on a wide ro
     return range.getBoundingClientRect();
   });
   // The badge's border and padding must not drop its text below the others.
-  for (const box of text.slice(1))
-    expect(Math.abs(box.top - text[0].top)).toBeLessThanOrEqual(0.5);
-  // Each item stays on one line beside the previous one (one 9rem track and
-  // gap apart) instead of being spread across the row.
-  expect(new Set(text.map((box) => Math.round(box.height))).size).toBe(1);
-  for (let index = 1; index < text.length; index++)
-    expect(text[index].left - text[index - 1].left).toBeLessThanOrEqual(180);
+  expect(Math.abs(text[1].top - text[0].top)).toBeLessThanOrEqual(0.5);
+  // Both stay on one line; the trailing text sits right after the status
+  // slot (sized for exit labels) instead of being spread across the row.
+  expect(Math.round(text[1].height)).toBe(Math.round(text[0].height));
+  expect(text[1].left).toBeGreaterThan(text[0].right);
+  expect(text[1].left - text[0].left).toBeLessThanOrEqual(160);
 });

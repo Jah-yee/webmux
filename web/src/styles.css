@@ -372,6 +372,12 @@
   [data-slot="textarea"] {
     font-size: 1rem;
   }
+  /* Information-dense pages trade some target size for visible content. */
+  .workspace-page .wm-control,
+  .code-panel .wm-control {
+    min-height: var(--control-touch-compact);
+    min-width: var(--control-touch-compact);
+  }
   /* Dense terminal toolbars reserve space for the terminal and scrollable keys. */
   .terminal-header .wm-control {
     min-height: var(--control-sm);

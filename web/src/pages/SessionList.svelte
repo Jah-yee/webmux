@@ -54,6 +54,7 @@
   let presets = $state<Preset[]>([]);
   let cwd = $state("~");
   let hostname = $state("");
+  let setupSettled = $state(false);
   let loading = $state(true);
   let initializing = $state(true);
   let footerReady = $state(false);
@@ -63,6 +64,13 @@
   let gitReady = $state(false);
   let registryReady = $state(false);
   let connection = $state<Connection>("connecting");
+  const statusLabel = $derived(
+    connection === "connected"
+      ? hostname
+        ? `${hostname} 在线`
+        : "在线"
+      : "正在连接",
+  );
   let creating = $state<{
     mode: "direct" | "existing" | "new";
     repositoryId: string;
@@ -259,6 +267,7 @@
     ]);
     if (!disposed) {
       setupBusy = false;
+      setupSettled = true;
       setupError = results.some((result) => result.status === "rejected")
         ? "部分启动配置加载失败，相关创建操作暂不可用。"
         : "";
@@ -377,19 +386,18 @@
       <div
         class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-2"
       >
-        <!-- Reserved width keeps the actions still as the text changes; the
-             status sits next to them and truncates long hostnames. -->
+        <!-- Reserved width keeps the actions still. The dot is pinned at the
+             end beside the actions, and the text appears only in its final
+             form (connected, hostname known), so nothing already painted
+             moves; long hostnames truncate. -->
         <span
-          class="hidden w-52 min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap text-muted-foreground sm:flex"
-          ><span
+          class="hidden h-4 w-52 min-w-0 items-center justify-end gap-2 text-xs whitespace-nowrap text-muted-foreground sm:flex"
+          title={statusLabel}
+          >{#if connection === "connected" && setupSettled}<span
+              class="min-w-0 truncate">{statusLabel}</span
+            >{:else}<span class="sr-only">{statusLabel}</span>{/if}<span
             class={`status-dot ${connection === "connected" ? "status-running" : "status-waiting"}`}
-          ></span><span class="truncate"
-            >{connection === "connected"
-              ? hostname
-                ? `${hostname} 在线`
-                : "在线"
-              : "正在连接"}</span
-          ></span
+          ></span></span
         >
         <Button size="sm" disabled={!presets.length} onclick={() => start()}
           >＋ 新建会话</Button
@@ -438,7 +446,7 @@
           <Button
             variant="ghost"
             size="sm"
-            class="min-h-11 sm:min-h-8"
+            class="min-h-9 sm:min-h-8"
             disabled={!gitReady || !registryReady}
             onclick={() => {
               adding = true;
@@ -447,7 +455,7 @@
           <Button
             variant="ghost"
             size="icon-sm"
-            class="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"
+            class="min-h-9 min-w-9 sm:min-h-8 sm:min-w-8"
             aria-label="刷新 Git 状态"
             title={refreshing ? "正在刷新 Git 状态…" : "刷新 Git 状态"}
             aria-busy={refreshing}
@@ -482,7 +490,7 @@
                 clearFilters();
               }
             }}
-            class="h-11 bg-card pl-9 pr-9 text-base sm:h-9 md:text-sm"
+            class="h-9 bg-card pl-9 pr-9 text-base md:text-sm"
           />
           <kbd
             class="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 rounded border px-1 text-xs text-muted-foreground md:block"
@@ -498,7 +506,7 @@
             <Button
               variant="ghost"
               size="sm"
-              class="min-h-11 gap-1.5 px-2 sm:min-h-9"
+              class="min-h-9 gap-1.5 px-2"
               aria-pressed={statusFilter === filter.id}
               onclick={() => (statusFilter = filter.id)}
             >
@@ -517,7 +525,7 @@
           <Button
             variant="link"
             size="sm"
-            class="min-h-11 sm:min-h-8"
+            class="min-h-9 sm:min-h-8"
             onclick={clearFilters}>清除筛选</Button
           >
         </div>
@@ -529,7 +537,7 @@
           <Button
             variant="ghost"
             size="sm"
-            class="min-h-11 sm:min-h-8"
+            class="min-h-9 sm:min-h-8"
             disabled={setupBusy}
             onclick={() => void loadSetup()}
           >

@@ -395,7 +395,7 @@
           {#if reference}
             <Button
               size="icon"
-              class="size-11 border border-border shadow-sm"
+              class="size-9 border border-border shadow-sm"
               aria-label={`发送第 ${row} 行位置到${draftEnabled ? "草稿" : "终端"}`}
               disabled={status !== "unchanged"}
               onclick={() => send(reference.text)}
@@ -419,7 +419,7 @@
           {#if reference}
             <Button
               size="icon"
-              class="size-11 border border-border shadow-sm"
+              class="size-9 border border-border shadow-sm"
               aria-label={`发送第 ${reference.number} 行位置到${draftEnabled ? "草稿" : "终端"}`}
               title={`发送第 ${reference.number} 行位置到${draftEnabled ? "草稿" : "终端"}`}
               disabled={status !== "unchanged"}

@@ -75,7 +75,7 @@
         {#if onstart}<Button
             size="sm"
             variant="outline"
-            class="min-h-11 sm:min-h-8"
+            class="min-h-9 sm:min-h-8"
             disabled={worktree &&
               (!worktree.available || worktree.kind === "bare")}
             onclick={onstart}
@@ -89,7 +89,7 @@
                   {...props}
                   size="icon-sm"
                   variant="ghost"
-                  class="size-11 sm:size-8"
+                  class="size-9 sm:size-8"
                   aria-label={`工作树菜单 ${title}`}
                   ><IconDots class="size-4" aria-hidden="true" /></Button
                 >

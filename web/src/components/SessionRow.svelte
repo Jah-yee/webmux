@@ -65,20 +65,16 @@
           aria-hidden="true"
         />
       </Item.Title>
-      <!-- Fixed tracks keep each item in place as its text changes; the text
-           spans share the status badge's border and padding to align lines.
-           Wide rows hold all three on one line, so their tracks can fit a
-           whole exit status without changing the row height. -->
+      <!-- The status slot fits an exit label, so status changes never move the
+           trailing text; only the trailing text varies in width. Text shares
+           the badge's border and padding to align baselines. -->
       <div
-        class="mt-2 grid auto-rows-[minmax(2.5rem,auto)] grid-cols-[repeat(auto-fill,minmax(min(100%,8rem),8rem))] items-start gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-[repeat(auto-fill,minmax(min(100%,9rem),9rem))]"
+        class="mt-2 flex flex-wrap items-start gap-x-3 gap-y-1 text-xs text-muted-foreground"
       >
-        <SessionStatus {session} />
+        <div class="min-w-[8.5rem]"><SessionStatus {session} /></div>
         <span class="border border-transparent py-0.5"
-          >{session.clients
-            ? `${session.clients} 个设备已连接`
-            : "后台会话"}</span
+          >{session.clients ? `${session.clients} 个设备已连接` : "后台会话"} · {relative}</span
         >
-        <span class="border border-transparent py-0.5">{relative}</span>
       </div>
     </div>
     <pre
@@ -99,7 +95,7 @@
             {...props}
             variant="ghost"
             size="icon-sm"
-            class="size-11"
+            class="size-9 sm:size-11"
             aria-label={`会话菜单 ${session.title}`}
             ><IconDots class="size-4" aria-hidden="true" /></Button
           >
