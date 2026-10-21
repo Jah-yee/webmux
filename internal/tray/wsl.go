@@ -88,6 +88,27 @@ func (t Target) Probe() Invocation {
 	return inv
 }
 
+// Version prints "webmux <version>". Call it only after Probe succeeded:
+// older versions would treat the unknown argument as a server start.
+func (t Target) Version() Invocation {
+	return Invocation{Argv: append(t.base(), "--cd", "~", "--exec", wslclient.WebmuxPath(t.Webmux), "version")}
+}
+
+// Arch prints the distribution's machine name, e.g. x86_64.
+func (t Target) Arch() Invocation { return t.Exec("uname", "-m") }
+
+// Wslpath converts a Windows path to its WSL mount path.
+func (t Target) Wslpath(windows string) Invocation {
+	return t.Exec("wslpath", "-a", "-u", windows)
+}
+
+// Install copies src (a WSL path) to the webmux path as 0755, creating the
+// parent directories. install(1) replaces the file instead of rewriting it,
+// so a running server keeps its old executable.
+func (t Target) Install(src string) Invocation {
+	return Invocation{Argv: append(t.base(), "--cd", "~", "--exec", "install", "-D", "-m", "0755", src, wslclient.WebmuxPath(t.Webmux))}
+}
+
 // Serve starts the tray-managed server, recorded as launched by the tray.
 func (t Target) Serve(logFile string, environ []string) Invocation {
 	inv := t.Command("serve", "--log-file", logFile)

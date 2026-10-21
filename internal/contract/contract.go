@@ -12,6 +12,7 @@ const (
 	PathStatus   = "/local/v1/status"
 	PathShutdown = "/local/v1/shutdown"
 	PathToken    = "/local/v1/token"
+	PathTunnel   = "/local/v1/tunnel"
 )
 
 // State is the overall result of `webmux status`.
@@ -91,6 +92,31 @@ type StatusV1 struct {
 	Socket          string    `json:"socket"`
 	StartedAt       string    `json:"startedAt,omitempty"`
 	Token           string    `json:"token,omitempty"`
+	// Tunnel is present when the running server can start and stop its
+	// Cloudflare Tunnel at runtime; older servers omit it.
+	Tunnel *TunnelStatus `json:"tunnel,omitempty"`
+}
+
+// Tunnel states.
+const (
+	TunnelOff      = "off"
+	TunnelStarting = "starting"
+	TunnelReady    = "ready"
+	TunnelFailed   = "failed"
+)
+
+// TunnelStatus describes the Cloudflare Tunnel of a running server.
+// PublicURL (ready only) never carries a token.
+type TunnelStatus struct {
+	State     string `json:"state"`
+	PublicURL string `json:"publicUrl,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Named     bool   `json:"named"`
+}
+
+// TunnelRequest is the body of POST /local/v1/tunnel.
+type TunnelRequest struct {
+	Enabled *bool `json:"enabled"`
 }
 
 // Stop results.

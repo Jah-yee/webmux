@@ -92,11 +92,12 @@ type menu struct {
 	open, copyLocal, remoteWarn, copyRemote, remoteSub, remoteSubWarn *item
 	remoteLinks, forwardLinks                                         []*item
 	copyToken                                                         *item
+	tunnel, tunnelInfo, copyPublic                                    *item
 
 	remote, fwHeadline, fwBlocked, fwInit *item
 	fwLinks, fwCandidates                 []*item
 
-	start, stop, restart *item
+	start, stop, restart, install *item
 
 	logs, logService, logTray *item
 	openConfig, initConfig    *item
@@ -161,6 +162,14 @@ func buildMenu() *menu {
 	m.remoteSub.hide()
 	m.copyToken = add("复制 Token")
 	m.copyToken.hide()
+	m.tunnel = add("公网隧道（Cloudflare）")
+	m.tunnelInfo = add("")
+	m.tunnelInfo.mi.Disable()
+	m.tunnelInfo.enabled = false
+	m.copyPublic = add("复制公网链接")
+	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.copyPublic} {
+		it.hide()
+	}
 	m.remote = add("远程访问")
 	m.fwHeadline = addSub(m.remote, "")
 	m.fwBlocked = addSub(m.remote, "")
@@ -173,6 +182,8 @@ func buildMenu() *menu {
 	m.start = add("启动")
 	m.stop = add("停止")
 	m.restart = add("重启")
+	m.install = add("安装 WSL 中的 webmux")
+	m.install.hide()
 	systray.AddSeparator()
 
 	m.logs = add("打开日志")
@@ -281,6 +292,9 @@ type view struct {
 	forwarding   []string // active relay listen addresses
 	relayState   func(addr string) (bool, string)
 	autostart    bool
+	// installSupported: the tray carries release server digests.
+	installSupported bool
+	installing       bool
 }
 
 func defaultDistro(distros []wslclient.Distro) string {
@@ -424,8 +438,15 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	}
 	m.status1.set(line, false, false)
 	m.status2.set("发行版："+distroLabel(v)+" · 启动方式："+modeLabel(snap, v), false, false)
-	if snap.Reason != "" {
-		m.hint1.set(snap.Reason, false, false)
+	hint := snap.Reason
+	if upgrade := tray.UpgradeHint(snap); upgrade != "" {
+		if hint != "" {
+			hint += "；"
+		}
+		hint += upgrade
+	}
+	if hint != "" {
+		m.hint1.set(hint, false, false)
 	} else {
 		m.hint1.hide()
 	}
@@ -483,6 +504,24 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	} else {
 		m.copyToken.hide()
 	}
+	tunnel := tray.TunnelEntry(snap)
+	if tunnel.Show && !v.noWSL {
+		m.tunnel.set("公网隧道（Cloudflare）", !busy, tunnel.Checked)
+		if tunnel.Info != "" {
+			m.tunnelInfo.set(tunnel.Info, false, false)
+		} else {
+			m.tunnelInfo.hide()
+		}
+		if tunnel.PublicURL != "" {
+			m.copyPublic.set("复制公网链接", true, false)
+		} else {
+			m.copyPublic.hide()
+		}
+	} else {
+		m.tunnel.hide()
+		m.tunnelInfo.hide()
+		m.copyPublic.hide()
+	}
 
 	m.remote.set("远程访问", !v.noWSL, false)
 	headline := v.plan.Headline
@@ -529,6 +568,11 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	m.start.set("启动", acts.Start, false)
 	m.stop.set("停止", acts.Stop, false)
 	m.restart.set("重启", acts.Restart, false)
+	if install := tray.InstallEntry(snap, v.installSupported, v.installing); install.Show && !v.noWSL {
+		m.install.set(install.Title, install.Enabled, false)
+	} else {
+		m.install.hide()
+	}
 
 	serviceLog := !v.noWSL && (systemdMode(snap, v) || (snap.HasStatus && strings.HasPrefix(status.LogFile, "/")))
 	m.logService.set("打开 WebMux 日志", serviceLog, false)

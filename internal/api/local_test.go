@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,7 +21,7 @@ func TestLocalEndpointsAreNotOnTCP(t *testing.T) {
 	defer m.Shutdown(context.Background())
 	handler := New(c, m, testWorkspace(t, m, t.TempDir()), nil)
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
-		for _, path := range []string{contract.PathToken, contract.PathStatus, contract.PathShutdown, "/local/other"} {
+		for _, path := range []string{contract.PathToken, contract.PathStatus, contract.PathShutdown, contract.PathTunnel, "/local/other"} {
 			r := httptest.NewRequest(method, "http://webmux.example"+path, nil)
 			r.Header.Set("Authorization", "Bearer secret")
 			w := httptest.NewRecorder()
@@ -76,6 +79,84 @@ func TestLocalShutdownAndTokenPolicy(t *testing.T) {
 				t.Fatalf("missing manager hint: %s", w.Body.String())
 			}
 		})
+	}
+}
+
+func TestLocalTunnelPolicy(t *testing.T) {
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	inside := map[int]bool{20: true}
+	for _, row := range []struct {
+		name, body string
+		pid        int
+		refuse     bool
+		want       int
+		calls      []bool
+	}{
+		{"start", `{"enabled":true}`, 10, false, 202, []bool{true}},
+		{"stop", `{"enabled":false}`, 10, false, 202, []bool{false}},
+		{"weak token", `{"enabled":true}`, 10, true, 409, []bool{true}},
+		{"session cannot start", `{"enabled":true}`, 20, false, 403, nil},
+		{"session cannot stop", `{"enabled":false}`, 20, false, 403, nil},
+		{"unknown peer", `{"enabled":true}`, 0, false, 403, nil},
+		{"missing enabled", `{}`, 10, false, 400, nil},
+		{"empty body", ``, 10, false, 400, nil},
+		{"wrong type", `{"enabled":"yes"}`, 10, false, 400, nil},
+		{"unknown field", `{"enabled":true,"x":1}`, 10, false, 400, nil},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			var calls []bool
+			handler := NewLocal(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, Local{
+				Status:    func() contract.StatusV1 { return contract.StatusV1{V: 1} },
+				InSession: func(pid int) bool { return inside[pid] },
+				Tunnel: func(enabled bool) (contract.TunnelStatus, error) {
+					calls = append(calls, enabled)
+					if row.refuse {
+						return contract.TunnelStatus{State: contract.TunnelOff}, errors.New("token too weak")
+					}
+					if enabled {
+						return contract.TunnelStatus{State: contract.TunnelStarting}, nil
+					}
+					return contract.TunnelStatus{State: contract.TunnelOff}, nil
+				},
+			})
+			r := httptest.NewRequest(http.MethodPost, "http://webmux"+contract.PathTunnel, strings.NewReader(row.body))
+			if row.pid != 0 {
+				r = r.WithContext(context.WithValue(r.Context(), peerKey{}, row.pid))
+			}
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != row.want || !slices.Equal(calls, row.calls) {
+				t.Fatalf("HTTP %d calls %v: %s", w.Code, calls, w.Body.String())
+			}
+			switch row.want {
+			case 202:
+				var status contract.TunnelStatus
+				if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
+					t.Fatal(err)
+				}
+				if want := map[bool]string{true: contract.TunnelStarting, false: contract.TunnelOff}[row.calls[0]]; status.State != want {
+					t.Fatalf("state %q, want %q", status.State, want)
+				}
+			case 409:
+				if !strings.Contains(w.Body.String(), "token too weak") {
+					t.Fatalf("409 body %q", w.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestLocalTunnelUnroutedWithoutController(t *testing.T) {
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	handler := NewLocal(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, Local{})
+	r := httptest.NewRequest(http.MethodPost, "http://webmux"+contract.PathTunnel, strings.NewReader(`{"enabled":true}`))
+	r = r.WithContext(context.WithValue(r.Context(), peerKey{}, 10))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("HTTP %d: %s", w.Code, w.Body.String())
 	}
 }
 

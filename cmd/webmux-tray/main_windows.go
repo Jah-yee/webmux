@@ -73,11 +73,15 @@ func run() error {
 	environ := os.Environ()
 	newService := func(s tray.Settings) *tray.WSLService {
 		return &tray.WSLService{
-			Runner:    runner,
-			Target:    tray.TargetOf(s),
-			LogFile:   s.LogFile,
-			Environ:   environ,
-			KeepAlive: keepalive,
+			Runner:      runner,
+			Target:      tray.TargetOf(s),
+			LogFile:     s.LogFile,
+			Environ:     environ,
+			KeepAlive:   keepalive,
+			Version:     version,
+			DownloadDir: filepath.Join(localAppData, "WebMux", "downloads"),
+			Digests:     tray.BuiltinDigests(),
+			Logf:        log.Printf,
 			Dial: func(t tray.Target) localclient.Dialer {
 				return &wslclient.BridgeDialer{
 					Command: func() *exec.Cmd {

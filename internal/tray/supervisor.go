@@ -73,6 +73,46 @@ type Snapshot struct {
 	Reason    string
 	Reachable bool
 	Settings  Settings
+	// Blocker is set while webmux cannot be used at all; only an install,
+	// a settings change or a successful recheck clears it.
+	Blocker Blocker
+	// WebmuxVersion is the installed server version ("" until checked).
+	WebmuxVersion string
+	// UpgradeTo is the tray version when the installed server is older.
+	UpgradeTo string
+}
+
+// Blocker classifies failures that need user action before a start.
+type Blocker string
+
+const (
+	BlockerMissing      Blocker = "missing"
+	BlockerIncompatible Blocker = "incompatible"
+	BlockerNoWSL        Blocker = "no-wsl"
+)
+
+func blockerOf(err error) Blocker {
+	switch {
+	case errors.Is(err, ErrWebmuxMissing):
+		return BlockerMissing
+	case errors.Is(err, ErrWebmuxTooOld):
+		return BlockerIncompatible
+	case errors.Is(err, ErrNoWSL):
+		return BlockerNoWSL
+	}
+	return ""
+}
+
+// Installable reports whether the menu should offer installing or
+// upgrading the server.
+func (s Snapshot) Installable() bool {
+	return s.Blocker == BlockerMissing || s.Blocker == BlockerIncompatible || s.UpgradeTo != ""
+}
+
+// TunnelActive reports a starting or ready tunnel on the running instance.
+func (s Snapshot) TunnelActive() bool {
+	t := s.Status.Tunnel
+	return s.HasStatus && s.Status.State == contract.StateRunning && t != nil && (t.State == contract.TunnelStarting || t.State == contract.TunnelReady)
 }
 
 // Managed reports whether the tray may stop or restart the instance.
@@ -102,19 +142,9 @@ func (s Snapshot) Actions() Actions {
 		if running {
 			return Actions{Stop: s.Managed(), Restart: s.Managed(), Access: true}
 		}
-		return Actions{Start: !s.fatal()}
+		return Actions{Start: s.Blocker == ""}
 	}
 	return Actions{Start: true}
-}
-
-// fatal failures need user action (settings, upgrade) before a start.
-func (s Snapshot) fatal() bool {
-	for _, marker := range []string{ErrWebmuxMissing.Error(), ErrWebmuxTooOld.Error(), ErrNoWSL.Error()} {
-		if strings.Contains(s.Reason, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 // Supervisor runs a single event loop; Service calls run in goroutines and
@@ -123,6 +153,7 @@ type Supervisor struct {
 	service Service
 	reach   Reacher
 	clock   Clock
+	version string
 	publish func(Snapshot)
 	notify  func(title, message string)
 	logf    func(format string, args ...any)
@@ -140,6 +171,8 @@ type Options struct {
 	Reach    Reacher
 	Clock    Clock
 	Settings Settings
+	// Version is the tray version, compared with the installed server.
+	Version string
 	// Publish receives every snapshot from the loop goroutine.
 	Publish func(Snapshot)
 	Notify  func(title, message string)
@@ -153,6 +186,7 @@ const (
 	cmdStop
 	cmdRestart
 	cmdRefresh
+	cmdRecheck
 	cmdSettings
 	cmdQuit
 )
@@ -193,7 +227,13 @@ type startEvent struct {
 	status    contract.StatusV1
 	running   bool
 	fatal     bool
+	checked   bool
+	version   string
 	err       error
+}
+type checkEvent struct {
+	version string
+	err     error
 }
 type stopEvent struct {
 	gen    int
@@ -216,7 +256,7 @@ func NewSupervisor(o Options) *Supervisor {
 	if o.Publish == nil {
 		o.Publish = func(Snapshot) {}
 	}
-	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, 64), done: make(chan struct{})}
+	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, version: o.Version, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, 64), done: make(chan struct{})}
 	go s.loop(o.Settings)
 	return s
 }
@@ -239,6 +279,10 @@ func (s *Supervisor) Start()   { s.send(command{kind: cmdStart}) }
 func (s *Supervisor) Stop()    { s.send(command{kind: cmdStop}) }
 func (s *Supervisor) Restart() { s.send(command{kind: cmdRestart}) }
 func (s *Supervisor) Refresh() { s.send(command{kind: cmdRefresh}) }
+
+// Recheck verifies the installed server again, for example after an
+// install or when the menu opens on a blocked tray.
+func (s *Supervisor) Recheck() { s.send(command{kind: cmdRecheck}) }
 
 // SetSettings applies new settings. A changed distribution or mode restarts
 // a managed running instance (the UI confirms first); other path changes
@@ -268,6 +312,7 @@ type loopState struct {
 	failures   []time.Time
 	pendingOp  bool
 	statusBusy bool
+	checkBusy  bool
 	reachBusy  bool
 	watching   bool
 	watchStop  context.CancelFunc
@@ -316,7 +361,14 @@ func (s *Supervisor) publishState(ls *loopState) {
 }
 
 func snapshotKey(s Snapshot) string {
-	return fmt.Sprintf("%s|%s|%v|%d|%s|%v|%v|%s|%v|%v|%q|%v", s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable, s.HasStatus, s.Status.State, s.Status.Drift, s.Status.Config, s.Status.URLs, s.Settings)
+	return fmt.Sprintf("%s|%s|%v|%d|%s|%v|%v|%s|%v|%v|%q|%v|%s|%s|%s|%v", s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable, s.HasStatus, s.Status.State, s.Status.Drift, s.Status.Config, s.Status.URLs, s.Settings, s.Blocker, s.WebmuxVersion, s.UpgradeTo, tunnelKey(s.Status.Tunnel))
+}
+
+func tunnelKey(t *contract.TunnelStatus) string {
+	if t == nil {
+		return ""
+	}
+	return t.State + "|" + t.PublicURL + "|" + t.Error
 }
 
 func (s *Supervisor) nextWake(ls *loopState) <-chan time.Time {
@@ -425,6 +477,62 @@ func (s *Supervisor) fail(ls *loopState, reason string) {
 	s.logf("failed: %s", reason)
 }
 
+// block records a failure that needs the user to install or fix webmux.
+func (s *Supervisor) block(ls *loopState, err error) {
+	ls.Blocker = blockerOf(err)
+	ls.WebmuxVersion, ls.UpgradeTo = "", ""
+	s.fail(ls, err.Error())
+}
+
+func (s *Supervisor) recheck(ctx context.Context, ls *loopState) {
+	if ls.checkBusy || ls.pendingOp {
+		return
+	}
+	ls.checkBusy = true
+	go func() {
+		version, err := s.service.Check(ctx)
+		s.post(checkEvent{version: version, err: err})
+	}()
+}
+
+func (s *Supervisor) checked(ls *loopState, version string) {
+	ls.WebmuxVersion = version
+	ls.UpgradeTo = ""
+	if UpgradeAvailable(s.version, version) {
+		ls.UpgradeTo = s.version
+	}
+}
+
+func (s *Supervisor) onCheck(ctx context.Context, ls *loopState, ev checkEvent) {
+	if ev.err != nil {
+		blocker := blockerOf(ev.err)
+		if blocker == "" {
+			s.logf("check: %v", ev.err)
+			return
+		}
+		running := ls.HasStatus && ls.Status.State == contract.StateRunning
+		if !running && (ls.State == StateStopped || ls.State == StateFailed) {
+			s.block(ls, ev.err)
+			return
+		}
+		// A running server keeps working; the menu offers the install.
+		ls.Blocker = blocker
+		ls.WebmuxVersion, ls.UpgradeTo = "", ""
+		return
+	}
+	s.checked(ls, ev.version)
+	if ls.Blocker == "" {
+		return
+	}
+	ls.Blocker = ""
+	if ls.State == StateFailed {
+		ls.State = StateStopped
+		ls.Reason = ""
+	}
+	s.logf("webmux %s is usable again", ev.version)
+	s.refresh(ctx, ls)
+}
+
 func (s *Supervisor) handle(ctx context.Context, ls *loopState, ev any, boot *bool) bool {
 	switch ev := ev.(type) {
 	case command:
@@ -435,8 +543,13 @@ func (s *Supervisor) handle(ctx context.Context, ls *loopState, ev any, boot *bo
 		*boot = false
 		s.onStatus(ctx, ls, ev)
 		if wasBoot && ls.Settings.StartWebMux && ls.State == StateStopped {
-			s.start(ctx, ls)
+			s.start(ctx, ls) // checks webmux itself
+		} else if wasBoot && ls.Blocker == "" {
+			s.recheck(ctx, ls)
 		}
+	case checkEvent:
+		ls.checkBusy = false
+		s.onCheck(ctx, ls, ev)
 	case reachEvent:
 		ls.reachBusy = false
 		if ev.gen != ls.gen {
@@ -470,7 +583,7 @@ func (s *Supervisor) handle(ctx context.Context, ls *loopState, ev any, boot *bo
 		ls.proc = nil
 		s.logf("tray-managed WebMux exited with status %d", ev.code)
 		if !ls.userStop && ls.State != StateStopping {
-			s.unexpectedExit(ctx, ls, fmt.Sprintf("退出码 %d", ev.code))
+			s.unexpectedExit(ctx, ls, fmt.Sprintf("退出码 %d", ev.code), ls.TunnelActive())
 		}
 	case startEvent:
 		s.onStart(ctx, ls, ev)
@@ -509,6 +622,8 @@ func (s *Supervisor) command(ctx context.Context, ls *loopState, c command) bool
 		if ls.State == StateRunning || ls.State == StateUnreachable {
 			s.checkReach(ctx, ls)
 		}
+	case cmdRecheck:
+		s.recheck(ctx, ls)
 	case cmdSettings:
 		old := ls.Settings
 		ls.Settings = c.settings
@@ -526,6 +641,14 @@ func (s *Supervisor) command(ctx context.Context, ls *loopState, c command) bool
 			ls.Status = contract.StatusV1{}
 			ls.State = StateStopped
 			s.refresh(ctx, ls)
+		}
+		if old.Distro != c.settings.Distro || old.Webmux != c.settings.Webmux {
+			// The verdict belonged to the previous binary.
+			if ls.Blocker != "" && ls.State == StateFailed {
+				ls.State, ls.Reason = StateStopped, ""
+			}
+			ls.Blocker, ls.WebmuxVersion, ls.UpgradeTo = "", "", ""
+			s.recheck(ctx, ls)
 		}
 	case cmdQuit:
 		finish := func() {
@@ -559,10 +682,13 @@ func (s *Supervisor) start(ctx context.Context, ls *loopState) {
 	go func() {
 		ev := startEvent{gen: gen}
 		defer func() { s.post(ev) }()
-		if err := s.service.Check(ctx); err != nil {
-			ev.err, ev.fatal = err, errors.Is(err, ErrWebmuxMissing) || errors.Is(err, ErrWebmuxTooOld)
+		version, err := s.service.Check(ctx)
+		if err != nil {
+			b := blockerOf(err)
+			ev.err, ev.fatal = err, b == BlockerMissing || b == BlockerIncompatible
 			return
 		}
+		ev.checked, ev.version = true, version
 		ev.detection = s.service.Detect(ctx)
 		resolved, err := Resolve(mode, ev.detection)
 		if err != nil {
@@ -601,6 +727,10 @@ func (s *Supervisor) onStart(ctx context.Context, ls *loopState, ev startEvent) 
 		return
 	}
 	ls.Detection = ev.detection
+	if ev.checked {
+		ls.Blocker = ""
+		s.checked(ls, ev.version)
+	}
 	if ev.mode != "" {
 		ls.Mode = ev.mode
 	}
@@ -610,6 +740,10 @@ func (s *Supervisor) onStart(ctx context.Context, ls *loopState, ev startEvent) 
 	}
 	if ev.err != nil {
 		s.logf("start failed: %v", ev.err)
+		if b := blockerOf(ev.err); ev.fatal && (b == BlockerMissing || b == BlockerIncompatible) {
+			s.block(ls, ev.err)
+			return
+		}
 		if ev.fatal {
 			s.fail(ls, ev.err.Error())
 			return
@@ -658,13 +792,17 @@ func (s *Supervisor) failure(ls *loopState, reason string) {
 	s.logf("restart in %s after: %s", min(delay, BackoffMax), reason)
 }
 
-func (s *Supervisor) unexpectedExit(ctx context.Context, ls *loopState, detail string) {
+func (s *Supervisor) unexpectedExit(ctx context.Context, ls *loopState, detail string, tunnel bool) {
 	s.stopWatch(ls)
 	ls.watching = false
 	ls.gen++
 	ls.Sessions = 0
 	ls.readyBy = time.Time{}
-	s.notify("WebMux 已退出", "WebMux 意外退出（"+detail+"），终端会话已丢失")
+	message := "WebMux 意外退出（" + detail + "），终端会话已丢失"
+	if tunnel {
+		message += "；公网隧道已关闭"
+	}
+	s.notify("WebMux 已退出", message)
 	if ls.Mode == ModeSystemd {
 		gen := ls.gen
 		go func() {
@@ -693,15 +831,19 @@ func (s *Supervisor) onStatus(ctx context.Context, ls *loopState, ev statusEvent
 		s.notify("WebMux 服务失败", ev.err.Error())
 		return
 	}
-	if ev.err != nil && (errors.Is(ev.err, ErrWebmuxMissing) || errors.Is(ev.err, ErrWebmuxTooOld) || errors.Is(ev.err, ErrNoWSL)) {
-		s.fail(ls, ev.err.Error())
+	if ev.err != nil && blockerOf(ev.err) != "" {
+		s.block(ls, ev.err)
 		return
 	}
 	defer s.schedule(ls, now)
 	status := ev.status
 	wasRunning := ls.HasStatus && ls.Status.State == contract.StateRunning
+	tunnelWas := ls.TunnelActive()
 	if ev.err == nil {
 		ls.Status, ls.HasStatus = status, true
+	}
+	if t := status.Tunnel; ev.err == nil && tunnelWas && t != nil && t.State == contract.TunnelFailed {
+		s.notify("公网隧道已断开", t.Error)
 	}
 	running := ev.err == nil && status.State == contract.StateRunning
 	healthy := running && status.Health.Status == contract.HealthOK
@@ -760,7 +902,7 @@ func (s *Supervisor) onStatus(ctx context.Context, ls *loopState, ev statusEvent
 		return // keep waiting until the process exits or the deadline passes
 	case StateRunning, StateUnreachable, StateFailed:
 		if wasRunning && !ls.userStop && ls.Mode != "" {
-			s.unexpectedExit(ctx, ls, "实例已不再运行")
+			s.unexpectedExit(ctx, ls, "实例已不再运行", tunnelWas)
 			return
 		}
 		if ls.State == StateFailed {
@@ -826,6 +968,9 @@ func (s *Supervisor) schedule(ls *loopState, now time.Time) {
 	case StateRestarting, StateStopping:
 	default:
 		ls.nextStatus = now.Add(StatusInterval)
+		if t := ls.Status.Tunnel; ls.HasStatus && t != nil && t.State == contract.TunnelStarting {
+			ls.nextStatus = now.Add(StartingInterval)
+		}
 	}
 	if (ls.State == StateRunning || ls.State == StateUnreachable) && ls.nextReach.IsZero() && !ls.reachBusy {
 		ls.nextReach = now.Add(ReachInterval)

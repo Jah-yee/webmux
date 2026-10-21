@@ -40,9 +40,3 @@ var assets = map[string]asset{
 		archive:      true,
 	},
 }
-
-// DefaultMirrors are gh-proxy style prefixes tried, in order, after a direct
-// GitHub download fails. Each receives "<prefix>/https://github.com/...".
-// Both served the pinned linux-amd64 asset intact from mainland China at
-// 1.8-2.5 MB/s on 2026-10-20; ghproxy.net managed only ~10 KB/s and was dropped.
-var DefaultMirrors = []string{"https://ghfast.top", "https://gh-proxy.com"}

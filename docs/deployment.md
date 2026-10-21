@@ -121,14 +121,16 @@ WebMux 不原生运行在 Windows 上，而是运行在 WSL 2 发行版中，由
 
 ### 在发行版中安装 webmux
 
-在发行版的终端中把 Linux 版二进制安装到 `~/.local/bin/webmux`（托盘默认路径），并生成带随机 token 的配置：
+最简单的方式是让托盘安装：WSL 中的 `webmux` 缺失、不兼容或版本低于托盘时，菜单出现“安装 / 升级 WSL 中的 webmux”。托盘在 Windows 侧下载与托盘同版本、与发行版架构（`uname -m`）匹配的 Linux 二进制（GitHub 无响应时依次改用 `ghfast.top`、`gh-proxy.com` 镜像），只有 SHA-256 与发布构建时写入托盘的摘要一致才会使用，再以 `install -D -m 0755` 放到托盘设置中的 `webmux` 路径。托盘从不在后台自动安装。要求发行版能通过 `/mnt/<盘符>` 访问 Windows 文件（`/etc/wsl.conf` 未关闭 automount）；本地 `make tray` 构建的托盘不带摘要，不提供安装。WebMux 运行中升级时旧进程继续运行，重启后生效。
+
+也可以在发行版的终端中手动安装到 `~/.local/bin/webmux`（托盘默认路径），并生成带随机 token 的配置：
 
 ```sh
 install -m 755 webmux-linux-amd64 ~/.local/bin/webmux # arm64 设备用 webmux-linux-arm64
 webmux config init
 ```
 
-也可以跳过 `config init`，之后在托盘菜单中点击“初始化配置（生成 Token）”。托盘只在配置文件不存在时提供该入口，从不改写已有配置；修改配置请用“打开 WebMux 配置文件”。WSL 中的 `webmux` 版本过旧（不支持本机 API 与 `bridge`）时，状态行提示升级。
+也可以跳过 `config init`，之后在托盘菜单中点击“初始化配置（生成 Token）”。托盘只在配置文件不存在时提供该入口，从不改写已有配置；修改配置请用“打开 WebMux 配置文件”。缺少 webmux 时托盘停在错误状态且不定时重试；手动安装后重新打开托盘菜单即恢复。
 
 ### 放置托盘与登录启动
 
@@ -170,6 +172,10 @@ NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流�
 3. **托盘转发**：在“远程访问”子菜单中勾选 Windows 主机的地址（Tailscale 地址置顶），托盘在该地址与 WebMux 相同的端口上监听，并把 HTTP 与 WebSocket 原样转给本机链接。转发默认关闭，只在 WebMux 运行且健康、配置了 token、Windows 侧可达时启用，条件不满足时暂停、恢复后自动继续；只接受 `Host` 与 `Origin` 恰为该地址的请求，认证仍由 WebMux 完成。勾选的地址保存在 `tray.json` 中，下次启动自动恢复；端口被占用时该条目显示失败原因。转发随托盘退出而停止，需要常驻远程访问时请改用前两种途径。
 
 首次在非回环地址上监听时，Windows 防火墙可能弹出授权提示（允许需要管理员确认）；托盘不会自动修改防火墙规则。只为可信网络（如 Tailscale）放行。
+
+### 公网隧道
+
+WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、不影响会话的情况下开启或关闭 Cloudflare Tunnel（按 WebMux 配置的 `[tunnel]` 选择 Quick Tunnel 或 Named Tunnel，cloudflared 的定位与下载规则见下文“公网访问（Cloudflare Tunnel）”）。每次开启前托盘都会确认风险；要求 WebMux 已配置至少 43 个字符的 Token（`webmux config init` 生成的即可），否则拒绝开启。就绪后菜单显示公网地址，“复制公网链接”不含 Token。隧道断开时托盘通知一次且不自动重开；开关状态不保存，WebMux 重启后隧道关闭。
 
 ### Token 与剪贴板
 

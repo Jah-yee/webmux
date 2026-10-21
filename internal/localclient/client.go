@@ -151,6 +151,15 @@ func (c *Client) Token(ctx context.Context) (string, error) {
 	return token.Token, err
 }
 
+// SetTunnel starts or stops the server's Cloudflare Tunnel. It returns
+// *APIError with 409 when the token is too weak and 403 for callers inside
+// a WebMux session.
+func (c *Client) SetTunnel(ctx context.Context, enabled bool) (contract.TunnelStatus, error) {
+	var status contract.TunnelStatus
+	err := c.Do(ctx, http.MethodPost, contract.PathTunnel, contract.TunnelRequest{Enabled: &enabled}, &status)
+	return status, err
+}
+
 // DialWebSocket opens /ws/* through the same dialer; path includes any query.
 func (c *Client) DialWebSocket(ctx context.Context, path string) (*websocket.Conn, error) {
 	conn, resp, err := websocket.Dial(ctx, "ws://webmux"+path, &websocket.DialOptions{

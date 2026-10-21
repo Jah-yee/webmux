@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# One job: the Release is created only after every build and check passed,
+# so a failure never leaves a partial Release. The tray embeds the digests
+# of the Linux servers built here (see the Makefile release target).
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          go: "true"
+      - name: Check the tag
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag $GITHUB_REF_NAME is not v<MAJOR>.<MINOR>.<PATCH>" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build embedded frontend
+        run: pnpm --dir web build
+      - name: Run Go tests
+        run: go test -race -parallel=4 ./...
+      - name: Build release artifacts
+        run: make release VERSION=${{ steps.version.outputs.version }}
+      - name: Verify artifacts
+        working-directory: bin
+        run: |
+          sha256sum -c SHA256SUMS
+          [ "$(./webmux-linux-amd64 version)" = "webmux ${{ steps.version.outputs.version }}" ]
+      - name: Publish the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: bin
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "WebMux $GITHUB_REF_NAME" --generate-notes \
+            webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
+            webmux-windows-amd64.exe webmux-windows-arm64.exe \
+            webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe SHA256SUMS

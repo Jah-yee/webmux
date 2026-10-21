@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -168,9 +167,9 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if (host == "0.0.0.0" || host == "::" || host == "") && c.Token == "" {
 		slog.Warn("SHELL EXPOSED: listening on all interfaces without token; isolate with Tailscale/WireGuard")
 	}
+	locator := tunnel.Locator{Explicit: c.Tunnel.Cloudflared, StateDir: c.StateDir, Mirrors: c.Tunnel.DownloadMirrors}
 	var cloudflared string
 	if c.Tunnel.Enabled {
-		locator := tunnel.Locator{Explicit: c.Tunnel.Cloudflared, StateDir: c.StateDir, Mirrors: c.Tunnel.DownloadMirrors}
 		path, err := locator.Find(ctx)
 		if err != nil {
 			return fmt.Errorf("cloudflare tunnel: %w", err)
@@ -188,11 +187,12 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	defer workspaces.Close()
 	codes := codeview.New(m)
 	defer codes.Close()
-	var public *api.PublicOrigin
-	if c.Tunnel.Enabled {
-		public = &api.PublicOrigin{}
-	}
-	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, cancel)
+	// The public origin always exists: it allows no host until a tunnel
+	// reports ready, so a server without a tunnel behaves as before.
+	public := &api.PublicOrigin{}
+	local := localOrigin(listener.Addr())
+	tunnels := newTunnelController(c.Tunnel, local, c.Token, public, locator.Find, out, slog.Default())
+	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, cancel, tunnels)
 	server := &http.Server{
 		Handler:           api.New(c.Config, m, workspaces, public, codes),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -204,7 +204,6 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	go func() { ended <- server.Serve(listener) }()
 	rt.serve()
 	slog.Info("webmux listening", "address", listener.Addr(), "version", version)
-	local := localOrigin(listener.Addr())
 	localLink := local
 	if c.Tunnel.Enabled {
 		// Tunnel mode always prints the token because the operator cannot
@@ -213,25 +212,15 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		localLink = accessURL(local, c.Token)
 	}
 	_, _ = fmt.Fprintln(out, "WebMux local:  "+localLink)
-	var tun *tunnel.Tunnel
-	var watcher sync.WaitGroup
 	if c.Tunnel.Enabled {
-		tun, err = tunnel.Start(ctx, tunnel.Options{Binary: cloudflared, Local: local, Token: c.Tunnel.Token, Hostname: c.Tunnel.Hostname})
-		if err != nil {
-			slog.Error("cloudflare tunnel unavailable; serving locally only", "error", err)
-		} else {
-			watcher.Go(func() { watchTunnel(tun, public, c.Token, out) })
-		}
+		tunnels.startLocated(cloudflared)
 	}
 	select {
 	case <-ctx.Done():
 	case err = <-ended:
 	}
 	cancel() // Cancel HTTP and hijacked WebSocket handlers before joining sessions.
-	if tun != nil {
-		tun.Close()
-		watcher.Wait()
-	}
+	tunnels.Close()
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
 	m.Shutdown(shutdown)
@@ -244,30 +233,4 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		return err
 	}
 	return nil
-}
-
-// watchTunnel authorizes and announces the public origin once cloudflared
-// connects, and revokes it when cloudflared exits.
-func watchTunnel(tun *tunnel.Tunnel, public *api.PublicOrigin, token string, out io.Writer) {
-	for {
-		select {
-		case origin := <-tun.Ready():
-			if err := public.Set(origin); err != nil {
-				slog.Error("cloudflare tunnel reported an unusable origin", "error", err)
-				continue
-			}
-			link := accessURL(origin, token)
-			code, err := renderQR(link)
-			if err != nil {
-				slog.Error("render QR code", "error", err)
-			}
-			_, _ = fmt.Fprint(out, "WebMux public: "+link+"\n"+code)
-		case <-tun.Done():
-			public.Clear()
-			if err := tun.Err(); err != nil {
-				slog.Error("cloudflare tunnel stopped; public URL revoked, local access continues", "error", err)
-			}
-			return
-		}
-	}
 }

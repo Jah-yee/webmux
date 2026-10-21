@@ -87,6 +87,7 @@ type App struct {
 	probing      bool
 	bound        bindings
 	journal      string
+	installing   atomic.Bool
 
 	lastIcon []byte
 	lastTip  string
@@ -137,6 +138,7 @@ func (a *App) onReady() {
 			Reach:    a.o.Reach,
 			Settings: settings,
 			Publish:  func(tray.Snapshot) { a.kickUI() },
+			Version:  a.o.Version,
 			Notify:   a.notifier.Show,
 			Logf:     a.log.Printf,
 		})
@@ -173,6 +175,10 @@ func (a *App) wndProc(hwnd windows.HWND, msg uint32, wParam, lParam uintptr) uin
 func (a *App) onMenuOpen() {
 	if a.sup != nil {
 		a.sup.Refresh()
+		// A blocked tray never polls; opening the menu is the user's retry.
+		if a.sup.Snapshot().Blocker != "" {
+			a.sup.Recheck()
+		}
 	}
 	a.probe(false)
 }
@@ -239,6 +245,8 @@ func (a *App) update() {
 	v.forwarding = a.relays.listening()
 	v.relayState = a.relays.state
 	v.autostart = AutostartEnabled(a.o.Executable)
+	v.installSupported = a.svc.Current().Digests != nil
+	v.installing = a.installing.Load()
 
 	select {
 	case <-a.done:
@@ -580,6 +588,70 @@ func (a *App) initConfig() {
 	}
 }
 
+// installWebmux downloads and installs the release server into WSL, then
+// rechecks; a running server keeps its old binary until restarted.
+func (a *App) installWebmux() {
+	if !a.installing.CompareAndSwap(false, true) {
+		return
+	}
+	a.kickUI()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	err := a.svc.Current().Install(ctx)
+	cancel()
+	a.installing.Store(false)
+	a.kickUI()
+	if err != nil {
+		a.fail("安装 webmux 失败", err)
+		return
+	}
+	a.notifier.Show("WebMux", "已安装 webmux "+a.o.Version)
+	a.sup.Recheck()
+	snap := a.sup.Snapshot()
+	if !snap.HasStatus || snap.Status.State != contract.StateRunning {
+		return
+	}
+	text := "新版本在重启 WebMux 后生效，重启会结束所有终端会话。"
+	if !snap.Actions().Restart {
+		messageBox(text, windows.MB_OK|windows.MB_ICONINFORMATION)
+		return
+	}
+	if snap.Sessions > 0 {
+		text += fmt.Sprintf("\n\n当前有 %d 个终端会话。", snap.Sessions)
+	}
+	if confirm(text + "\n\n现在重启 WebMux 吗？") {
+		a.sup.Restart()
+	}
+}
+
+// toggleTunnel turns the public tunnel off, or on after the risk is
+// confirmed. The state is never saved: it ends with the instance.
+func (a *App) toggleTunnel() {
+	enable := !a.snapshot().TunnelActive()
+	if enable && !confirm(tray.TunnelWarning) {
+		a.kickUI()
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	_, err := a.svc.Current().SetTunnel(ctx, enable)
+	cancel()
+	a.sup.Refresh()
+	if err == nil {
+		return
+	}
+	if !enable {
+		a.fail("关闭公网隧道失败", err)
+		return
+	}
+	snap := a.snapshot()
+	if snap.HasStatus && !snap.Status.Config.Exists {
+		if confirm("开启公网隧道失败：" + err.Error() + "\n\n需要至少 43 个字符的 Token。现在初始化配置（生成 Token）吗？之后需要重启 WebMux。") {
+			a.initConfig()
+		}
+		return
+	}
+	a.fail("开启公网隧道失败", fmt.Errorf("%w；请在配置中设置至少 43 个字符的 Token 并重启 WebMux", err))
+}
+
 func (a *App) openServiceLog() {
 	snap := a.snapshot()
 	a.mu.Lock()
@@ -747,6 +819,11 @@ func (a *App) listen() {
 		})
 	}
 	on(m.copyToken, a.copyToken)
+	on(m.tunnel, a.toggleTunnel)
+	on(m.copyPublic, func() {
+		a.copyLink(tray.TunnelEntry(a.snapshot()).PublicURL)
+	})
+	on(m.install, a.installWebmux)
 	on(m.fwInit, a.initConfig)
 	for i, it := range m.fwCandidates {
 		on(it, func() {

@@ -30,7 +30,7 @@ type localRuntime struct {
 
 // startRuntime acquires the lock, listens on the socket and writes the
 // record. It must run after the TCP listener is bound and before it serves.
-func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, shutdown func()) *localRuntime {
+func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, shutdown func(), tunnels *tunnelController) *localRuntime {
 	rt := &localRuntime{dir: runtime.Dir(c.StateDir)}
 	if err := runtime.EnsureDir(rt.dir); err != nil {
 		slog.Warn("runtime directory unavailable; runtime record and local API disabled", "error", err)
@@ -75,10 +75,11 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Ma
 		record.Socket = path
 		rt.server = &http.Server{
 			Handler: api.NewLocal(c.Config, m, workspaces, codes, api.Local{
-				Status:    func() contract.StatusV1 { return localStatus(record, c, m) },
+				Status:    func() contract.StatusV1 { return localStatus(record, c, m, tunnels) },
 				Launcher:  record.Launcher,
 				Shutdown:  shutdown,
 				InSession: m.ContainsProcess,
+				Tunnel:    tunnels.SetEnabled,
 			}),
 			ReadHeaderTimeout: 10 * time.Second,
 			IdleTimeout:       60 * time.Second,
@@ -94,7 +95,7 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Ma
 	return rt
 }
 
-func localStatus(record runtime.Record, c serverRun, m *session.Manager) contract.StatusV1 {
+func localStatus(record runtime.Record, c serverRun, m *session.Manager, tunnels *tunnelController) contract.StatusV1 {
 	s := client.FromRecord(record, client.NetInterfaces)
 	s.State = contract.StateRunning
 	s.LocalAPI = true
@@ -102,6 +103,8 @@ func localStatus(record runtime.Record, c serverRun, m *session.Manager) contrac
 	s.Sessions = &sessions
 	s.Health = contract.Health{Status: contract.HealthOK}
 	client.ApplyConfig(&s, record, c.ConfigPath, c.ConfigExplicit)
+	tunnel := tunnels.Status()
+	s.Tunnel = &tunnel
 	return s
 }
 

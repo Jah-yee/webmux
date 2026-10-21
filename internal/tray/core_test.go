@@ -87,7 +87,7 @@ func TestInvocationsAreArgv(t *testing.T) {
 	if got := target.Systemctl("restart").Argv; !slices.Equal(got, []string{"wsl.exe", "-d", "Ubuntu", "--exec", "systemctl", "--user", "restart", "webmux.service"}) {
 		t.Fatalf("systemctl argv %q", got)
 	}
-	for _, inv := range []Invocation{serve, bridge, target.Status(), target.ForceStop(), target.ConfigInit(), target.Probe()} {
+	for _, inv := range []Invocation{serve, bridge, target.Status(), target.ForceStop(), target.ConfigInit(), target.Probe(), target.Version(), target.Arch(), target.Wslpath(`C:\a b;$(id)`), target.Install("/mnt/c/a b")} {
 		for _, arg := range inv.Argv {
 			if arg == "sh" || arg == "bash" || arg == "-c" {
 				t.Fatalf("shell in argv %q", inv.Argv)
@@ -257,7 +257,7 @@ func TestTargetServiceRetargets(t *testing.T) {
 	if svc.Current().Target.Distro != "Ubuntu" {
 		t.Fatal("deferred retarget applied early")
 	}
-	if err := svc.Check(context.Background()); err != nil || svc.Current().Target.Distro != "Debian" {
+	if _, err := svc.Check(context.Background()); err != nil || svc.Current().Target.Distro != "Debian" {
 		t.Fatalf("next start still targets %s (%v)", svc.Current().Target.Distro, err)
 	}
 	logs := next

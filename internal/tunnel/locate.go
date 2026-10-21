@@ -4,28 +4,19 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"time"
-)
 
-const (
-	maxDownloadBytes     = 100 << 20
-	defaultHeaderTimeout = 10 * time.Second
-	defaultIdleTimeout   = 20 * time.Second
-	githubBase           = "https://github.com"
+	"github.com/rainchan/webmux/internal/fetch"
 )
 
 // Locator resolves the cloudflared executable: explicit path, PATH, verified
@@ -33,7 +24,7 @@ const (
 type Locator struct {
 	Explicit string   // tunnel.cloudflared; never falls back when set
 	StateDir string   // cache root: <StateDir>/cloudflared/<Version>/cloudflared
-	Mirrors  []string // nil selects DefaultMirrors; empty means GitHub only
+	Mirrors  []string // nil selects fetch.DefaultMirrors; empty means GitHub only
 	Logger   *slog.Logger
 
 	// Test seams; zero values select production behavior.
@@ -79,7 +70,7 @@ func (l Locator) Find(ctx context.Context) (string, error) {
 	}
 	dir := filepath.Join(l.StateDir, "cloudflared", Version)
 	target := filepath.Join(dir, "cloudflared")
-	if sum, err := fileSHA256(target); err == nil {
+	if sum, err := fetch.FileSHA256(target); err == nil {
 		if sum == a.binarySHA256 {
 			return target, nil
 		}
@@ -112,169 +103,34 @@ func executable(path string) error {
 	return nil
 }
 
-func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// download tries GitHub, then each mirror, keeping the first artifact whose
-// digest matches. Mirrors therefore affect availability, never content.
+// download fetches the pinned asset from GitHub or a mirror.
 func (l Locator) download(ctx context.Context, a asset, target string) error {
-	path := "/cloudflare/cloudflared/releases/download/" + Version + "/" + a.name
-	base := l.githubBase
-	if base == "" {
-		base = githubBase
+	pinned := fetch.Asset{
+		Path:   "/cloudflare/cloudflared/releases/download/" + Version + "/" + a.name,
+		SHA256: a.sha256,
 	}
-	sources := []string{base + path}
-	mirrors := l.Mirrors
-	if mirrors == nil {
-		mirrors = DefaultMirrors
-	}
-	for _, mirror := range mirrors {
-		sources = append(sources, mirror+"/"+githubBase+path)
-	}
-	var failures []string
-	for _, source := range sources {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		host := sourceHost(source)
-		err := l.fetch(ctx, source, a, target)
-		if err == nil {
-			l.logger().Info("downloaded cloudflared", "version", Version, "source", host)
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		l.logger().Warn("cloudflared download source failed", "source", host, "error", err)
-		failures = append(failures, host+": "+err.Error())
-	}
-	return fmt.Errorf("download cloudflared %s failed from every source (%s); install cloudflared on PATH or set tunnel.cloudflared", Version, strings.Join(failures, "; "))
-}
-
-func sourceHost(source string) string {
-	if u, err := url.Parse(source); err == nil {
-		return u.Host
-	}
-	return source
-}
-
-// fetch downloads one source into a temporary file beside target, verifies
-// it, and atomically installs the executable.
-func (l Locator) fetch(parent context.Context, source string, a asset, target string) (err error) {
-	headerTimeout, idleTimeout, limit := l.headerTimeout, l.idleTimeout, l.maxBytes
-	if headerTimeout == 0 {
-		headerTimeout = defaultHeaderTimeout
-	}
-	if idleTimeout == 0 {
-		idleTimeout = defaultIdleTimeout
-	}
-	if limit == 0 {
-		limit = maxDownloadBytes
-	}
-	client := l.client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	ctx, cancel := context.WithCancel(parent)
-	defer cancel()
-	// One watchdog covers connect+headers, then each idle gap in the body.
-	// phase names the current wait; timedOut records it only if the watchdog
-	// actually fired, so unrelated failures keep their own error.
-	var phase, timedOut atomic.Pointer[string]
-	setPhase := func(s string) { phase.Store(&s) }
-	setPhase(fmt.Sprintf("no response headers within %s", headerTimeout))
-	watchdog := time.AfterFunc(headerTimeout, func() {
-		timedOut.Store(phase.Load())
-		cancel()
-	})
-	defer watchdog.Stop()
-	defer func() {
-		if reason := timedOut.Load(); err != nil && reason != nil && parent.Err() == nil {
-			err = errors.New(*reason)
-		}
-	}()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
-	if err != nil {
-		return err
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return fmt.Errorf("HTTP %s", res.Status)
-	}
-	if !watchdog.Stop() {
-		return ctx.Err()
-	}
-	setPhase(fmt.Sprintf("no data for %s", idleTimeout))
-	watchdog.Reset(idleTimeout)
-
-	dir := filepath.Dir(target)
-	tmp, err := os.CreateTemp(dir, ".download-*")
-	if err != nil {
-		return err
-	}
-	// After a successful rename these are no-ops; otherwise they discard partial data.
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	defer func() { _ = tmp.Close() }()
-	h := sha256.New()
-	body := &idleReader{r: io.LimitReader(res.Body, limit+1), watchdog: watchdog, idle: idleTimeout}
-	n, err := io.Copy(io.MultiWriter(tmp, h), body)
-	if err != nil {
-		return err
-	}
-	watchdog.Stop()
-	if n > limit {
-		return fmt.Errorf("response exceeds %d bytes", limit)
-	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != a.sha256 {
-		return fmt.Errorf("sha256 mismatch: got %s", got)
-	}
-	binary := tmp.Name()
 	if a.archive {
-		extracted, err := extract(tmp, dir, limit)
-		if err != nil {
+		pinned.Extract, pinned.BinarySHA256 = extract, a.binarySHA256
+	}
+	d := fetch.Downloader{
+		Name:          "cloudflared",
+		Mirrors:       l.Mirrors,
+		GitHubBase:    l.githubBase,
+		Client:        l.client,
+		HeaderTimeout: l.headerTimeout,
+		IdleTimeout:   l.idleTimeout,
+		MaxBytes:      l.maxBytes,
+		Logger:        l.Logger,
+	}
+	source, err := d.Download(ctx, pinned, target)
+	if err != nil {
+		if ctx.Err() != nil {
 			return err
 		}
-		defer func() { _ = os.Remove(extracted) }()
-		if sum, err := fileSHA256(extracted); err != nil {
-			return err
-		} else if sum != a.binarySHA256 {
-			return fmt.Errorf("extracted cloudflared sha256 mismatch: got %s", sum)
-		}
-		binary = extracted
+		return fmt.Errorf("download cloudflared %s %w; install cloudflared on PATH or set tunnel.cloudflared", Version, err)
 	}
-	if err := os.Chmod(binary, 0o755); err != nil {
-		return err
-	}
-	return os.Rename(binary, target)
-}
-
-// idleReader resets the watchdog whenever data arrives.
-type idleReader struct {
-	r        io.Reader
-	watchdog *time.Timer
-	idle     time.Duration
-}
-
-func (r *idleReader) Read(p []byte) (int, error) {
-	n, err := r.r.Read(p)
-	if n > 0 {
-		r.watchdog.Reset(r.idle)
-	}
-	return n, err
+	l.logger().Info("downloaded cloudflared", "version", Version, "source", source)
+	return nil
 }
 
 // extract copies the top-level "cloudflared" entry of a verified .tgz into a

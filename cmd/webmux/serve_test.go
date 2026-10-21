@@ -66,12 +66,13 @@ func TestTunnelRejectsShortConfiguredToken(t *testing.T) {
 	}
 }
 
-// fakeTunnel announces a Quick Tunnel, then exits with status 1 once
-// $FAKE_DIR/exit appears, or records SIGTERM.
+// fakeTunnel records its PID in $FAKE_DIR/pids, announces a Quick Tunnel,
+// then exits with status 1 once $FAKE_DIR/exit appears, or records SIGTERM.
 const fakeTunnel = `#!/bin/sh
+trap 'echo term > "$FAKE_DIR/term"; exit 0' TERM
+echo $$ >> "$FAKE_DIR/pids"
 echo 'INF |  https://abc-def.trycloudflare.com  |' >&2
 echo 'INF Registered tunnel connection connIndex=0' >&2
-trap 'echo term > "$FAKE_DIR/term"; exit 0' TERM
 while [ ! -e "$FAKE_DIR/exit" ]; do sleep 0.05; done
 exit 1
 `
@@ -105,13 +106,22 @@ func eventually(t *testing.T, what string, ok func() bool) {
 }
 
 type tunnelRun struct {
-	dir, local string
-	out        *syncBuffer
-	cancel     context.CancelFunc
-	result     chan error
+	dir, state, local string
+	out               *syncBuffer
+	cancel            context.CancelFunc
+	result            chan error
 }
 
+// startTunnelServe starts with --tunnel and waits for the public URL.
 func startTunnelServe(t *testing.T) *tunnelRun {
+	t.Helper()
+	return startServe(t, true, tunnelTestToken)
+}
+
+// startServe runs serve in-process with the fake cloudflared configured.
+// With startupTunnel it takes the --tunnel path and waits for the public URL.
+// The state directory sits under /tmp so the local API socket fits sun_path.
+func startServe(t *testing.T, startupTunnel bool, token string) *tunnelRun {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
@@ -120,24 +130,35 @@ func startTunnelServe(t *testing.T) *tunnelRun {
 	if err := os.WriteFile(bin, []byte(fakeTunnel), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	state, err := os.MkdirTemp("/tmp", "wmx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(state) })
 	c, err := config.Load(filepath.Join(dir, "absent.toml"), false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Listen, c.Token, c.StateDir = "127.0.0.1:0", tunnelTestToken, filepath.Join(dir, "state")
-	c.Tunnel = config.TunnelConfig{Enabled: true, Cloudflared: bin}
+	c.Listen, c.Token, c.StateDir = "127.0.0.1:0", token, state
+	c.Tunnel = config.TunnelConfig{Enabled: startupTunnel, Cloudflared: bin}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &tunnelRun{dir: dir, out: &syncBuffer{}, cancel: cancel, result: make(chan error, 1)}
+	r := &tunnelRun{dir: dir, state: state, out: &syncBuffer{}, cancel: cancel, result: make(chan error, 1)}
 	go func() { r.result <- serve(ctx, serverRun{Config: c}, r.out) }()
 	t.Cleanup(func() {
 		cancel()
 		<-r.result
 	})
-	eventually(t, "public URL", func() bool { return strings.Contains(r.out.String(), "WebMux public:") })
-	m := regexp.MustCompile(`WebMux local:  (http://127\.0\.0\.1:\d+)/#token=` + regexp.QuoteMeta(tunnelTestToken) + `\n`).FindStringSubmatch(r.out.String())
+	pattern := `WebMux local:  (http://127\.0\.0\.1:\d+)\n`
+	if startupTunnel {
+		eventually(t, "public URL", func() bool { return strings.Contains(r.out.String(), "WebMux public:") })
+		pattern = `WebMux local:  (http://127\.0\.0\.1:\d+)/#token=` + regexp.QuoteMeta(token) + `\n`
+	} else {
+		eventually(t, "local URL", func() bool { return strings.Contains(r.out.String(), "WebMux local:") })
+	}
+	m := regexp.MustCompile(pattern).FindStringSubmatch(r.out.String())
 	if m == nil {
 		t.Fatalf("local URL missing: %q", r.out.String())
 	}

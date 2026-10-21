@@ -98,6 +98,8 @@ type fakeService struct {
 	calls       []string
 	watchers    []chan int
 	stoppedPort contract.HealthStatus
+	version     string // reported by Check
+	tunnel      *contract.TunnelStatus
 }
 
 func (f *fakeService) call(name string) {
@@ -118,7 +120,12 @@ func (f *fakeService) count(name string) int {
 	return n
 }
 
-func (f *fakeService) Check(context.Context) error { f.call("check"); return f.checkErr }
+func (f *fakeService) Check(context.Context) (string, error) {
+	f.call("check")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.version, f.checkErr
+}
 func (f *fakeService) Detect(context.Context) Detection {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -146,6 +153,10 @@ func (f *fakeService) Status(context.Context) (contract.StatusV1, error) {
 	}
 	sessions := f.sessions
 	s.State, s.Record, s.Launcher, s.Sessions, s.Health, s.LocalAPI = contract.StateRunning, f.record, f.launcher, &sessions, contract.Health{Status: health}, true
+	if f.tunnel != nil {
+		t := *f.tunnel
+		s.Tunnel = &t
+	}
 	return s, nil
 }
 
@@ -255,6 +266,30 @@ func (f *fakeService) Keepalive(on bool) error {
 }
 func (f *fakeService) Token(context.Context) (string, error) { return "", nil }
 func (f *fakeService) ConfigInit(context.Context) error      { return nil }
+func (f *fakeService) Install(context.Context) error {
+	f.call("install")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.checkErr, f.version = nil, "9.9.9"
+	return nil
+}
+func (f *fakeService) SetTunnel(_ context.Context, enabled bool) (contract.TunnelStatus, error) {
+	f.call(fmt.Sprintf("tunnel %v", enabled))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	state := contract.TunnelOff
+	if enabled {
+		state = contract.TunnelStarting
+	}
+	f.tunnel = &contract.TunnelStatus{State: state}
+	return *f.tunnel, nil
+}
+
+func (f *fakeService) setTunnel(t contract.TunnelStatus) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tunnel = &t
+}
 
 type harness struct {
 	t       *testing.T
@@ -267,11 +302,17 @@ type harness struct {
 }
 
 func newHarness(t *testing.T, service *fakeService, settings Settings) *harness {
+	return newVersionedHarness(t, service, settings, "")
+}
+
+// newVersionedHarness runs a tray that reports version.
+func newVersionedHarness(t *testing.T, service *fakeService, settings Settings, version string) *harness {
 	h := &harness{t: t, clock: newFakeClock(), service: service}
 	h.sup = NewSupervisor(Options{
 		Service:  service,
 		Clock:    h.clock,
 		Settings: settings,
+		Version:  version,
 		Reach: func(context.Context, string) error {
 			h.mu.Lock()
 			defer h.mu.Unlock()
@@ -468,6 +509,100 @@ func TestSupervisorUnexpectedExitBacksOffAndGivesUp(t *testing.T) {
 	h.state(StateRunning)
 }
 
+// A blocked tray stays blocked without polling, and recovers only when the
+// user acts: a recheck after an install (or opening the menu) succeeds.
+func TestSupervisorRecoversFromMissingWebmux(t *testing.T) {
+	service := &fakeService{checkErr: fmt.Errorf("%w ~/.local/bin/webmux", ErrWebmuxMissing)}
+	h := newHarness(t, service, DefaultSettings())
+	snap := h.state(StateFailed)
+	if snap.Blocker != BlockerMissing || snap.Actions().Start || !snap.Installable() {
+		t.Fatalf("missing webmux %+v", snap)
+	}
+	h.sup.Recheck() // menu opened, nothing changed
+	h.wait("second check", func(Snapshot) bool { return service.count("check") == 2 })
+	h.clock.Advance(2*StatusInterval + BackoffMax)
+	snap = h.sup.Snapshot()
+	if snap.State != StateFailed || snap.Blocker != BlockerMissing || service.count("check") != 2 {
+		t.Fatalf("still missing %+v %v", snap, service.calls)
+	}
+	if err := service.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	h.sup.Recheck()
+	snap = h.state(StateStopped)
+	if snap.Blocker != "" || !snap.Actions().Start || snap.Reason != "" || snap.WebmuxVersion != "9.9.9" {
+		t.Fatalf("after install %+v", snap)
+	}
+	h.settle()
+	if service.count("startTray") != 0 {
+		t.Fatalf("recovery started WebMux: %v", service.calls)
+	}
+}
+
+func TestSupervisorOffersUpgradeForOlderWebmux(t *testing.T) {
+	for _, tc := range []struct {
+		tray, installed, want string
+	}{
+		{"0.2.0", "0.1.9", "0.2.0"},
+		{"0.2.0", "0.2.0", ""},
+		{"0.2.0", "0.10.0", ""},
+		{"dev", "0.1.0", ""},
+		{"0.2.0", "dev", ""},
+	} {
+		service := &fakeService{ready: true, version: tc.installed}
+		h := newVersionedHarness(t, service, DefaultSettings(), tc.tray)
+		h.settle()
+		snap := h.wait("checked", func(s Snapshot) bool { return s.State == StateRunning && s.WebmuxVersion == tc.installed })
+		if snap.UpgradeTo != tc.want || snap.Installable() != (tc.want != "") {
+			t.Errorf("tray %s, webmux %s: upgrade %q installable %v", tc.tray, tc.installed, snap.UpgradeTo, snap.Installable())
+		}
+		h.sup.Quit(false)
+	}
+}
+
+func TestSupervisorFollowsTunnel(t *testing.T) {
+	service := &fakeService{ready: true}
+	h := newHarness(t, service, DefaultSettings())
+	h.settle()
+	h.state(StateRunning)
+	if _, err := service.SetTunnel(context.Background(), true); err != nil {
+		t.Fatal(err)
+	}
+	h.sup.Refresh()
+	h.wait("tunnel starting", func(s Snapshot) bool { return s.TunnelActive() })
+	// While it starts, the status is polled at the starting interval.
+	service.setTunnel(contract.TunnelStatus{State: contract.TunnelReady, PublicURL: "https://abc.trycloudflare.com"})
+	h.clock.Advance(StartingInterval)
+	h.wait("tunnel ready", func(s Snapshot) bool {
+		return s.Status.Tunnel != nil && s.Status.Tunnel.State == contract.TunnelReady
+	})
+	service.setTunnel(contract.TunnelStatus{State: contract.TunnelFailed, Error: "cloudflared exited: exit status 1"})
+	h.clock.Advance(StatusInterval)
+	snap := h.wait("tunnel failed", func(s Snapshot) bool { return !s.TunnelActive() })
+	if snap.State != StateRunning {
+		t.Fatalf("tunnel failure changed WebMux state: %+v", snap)
+	}
+	if notes := h.notifications(); len(notes) != 1 || !strings.Contains(notes[0], "公网隧道已断开") || !strings.Contains(notes[0], "exit status 1") {
+		t.Fatalf("notifications %v", notes)
+	}
+	h.clock.Advance(StatusInterval)
+	if notes := h.notifications(); len(notes) != 1 {
+		t.Fatalf("failure notified twice: %v", notes)
+	}
+	// A crash with an open tunnel says that the tunnel is gone too.
+	service.setTunnel(contract.TunnelStatus{State: contract.TunnelReady, PublicURL: "https://abc.trycloudflare.com"})
+	h.sup.Refresh()
+	h.wait("tunnel ready again", func(s Snapshot) bool { return s.TunnelActive() })
+	service.mu.Lock()
+	service.tunnel = nil
+	service.mu.Unlock()
+	service.die(1)
+	h.state(StateRestarting)
+	if notes := h.notifications(); len(notes) != 2 || !strings.Contains(notes[1], "公网隧道已关闭") {
+		t.Fatalf("crash notifications %v", notes)
+	}
+}
+
 func TestSupervisorUserStopDoesNotRestart(t *testing.T) {
 	service := &fakeService{ready: true}
 	h := newHarness(t, service, DefaultSettings())
@@ -653,7 +788,8 @@ func TestActionsMatchMenuRules(t *testing.T) {
 		{Snapshot{State: StateStopping, HasStatus: true, Status: running}, Actions{Access: true}},
 		{Snapshot{State: StateRunning, HasStatus: true, Status: running, Mode: ModeTray}, Actions{Stop: true, Restart: true, Access: true}},
 		{Snapshot{State: StateExternal, HasStatus: true, Status: running}, Actions{Access: true}},
-		{Snapshot{State: StateFailed, Reason: "找不到 webmux ~/x"}, Actions{}},
+		{Snapshot{State: StateFailed, Reason: "找不到 webmux ~/x", Blocker: BlockerMissing}, Actions{}},
+		{Snapshot{State: StateFailed, Reason: "多次启动失败"}, Actions{Start: true}},
 	} {
 		if got := tc.snap.Actions(); got != tc.want {
 			t.Errorf("%s: %+v, want %+v", tc.snap.State, got, tc.want)

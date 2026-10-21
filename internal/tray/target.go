@@ -66,7 +66,7 @@ func (t *TargetService) swap(s Settings) {
 	t.cur = next
 }
 
-func (t *TargetService) Check(ctx context.Context) error {
+func (t *TargetService) Check(ctx context.Context) (string, error) {
 	t.mu.Lock()
 	if t.pending != nil {
 		t.swap(*t.pending)
@@ -118,6 +118,14 @@ func (t *TargetService) Token(ctx context.Context) (string, error) {
 
 func (t *TargetService) ConfigInit(ctx context.Context) error {
 	return t.Current().ConfigInit(ctx)
+}
+
+func (t *TargetService) Install(ctx context.Context) error {
+	return t.Current().Install(ctx)
+}
+
+func (t *TargetService) SetTunnel(ctx context.Context, enabled bool) (contract.TunnelStatus, error) {
+	return t.Current().SetTunnel(ctx, enabled)
 }
 
 func (t *TargetService) Close() {

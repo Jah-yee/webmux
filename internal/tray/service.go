@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/fetch"
 	"github.com/rainchan/webmux/internal/localclient"
 	"github.com/rainchan/webmux/internal/wslclient"
 )
@@ -27,8 +28,9 @@ var (
 
 // Service is everything the supervisor does inside WSL.
 type Service interface {
-	// Check verifies that webmux exists and supports the local API.
-	Check(ctx context.Context) error
+	// Check verifies that webmux exists and supports the local API, and
+	// returns its version ("" when it does not report one).
+	Check(ctx context.Context) (string, error)
 	Detect(ctx context.Context) Detection
 	// Status uses the local API, falling back to `webmux status --json`
 	// when the bridge reports that WebMux is not running.
@@ -45,6 +47,10 @@ type Service interface {
 	// Token reads the token for one clipboard copy; callers discard it.
 	Token(ctx context.Context) (string, error)
 	ConfigInit(ctx context.Context) error
+	// Install puts the release server matching the tray into WSL.
+	Install(ctx context.Context) error
+	// SetTunnel starts or stops the running server's Cloudflare Tunnel.
+	SetTunnel(ctx context.Context, enabled bool) (contract.TunnelStatus, error)
 }
 
 // WSLService implements Service with wsl.exe through a Runner and the
@@ -58,6 +64,13 @@ type WSLService struct {
 	// Dial builds the bridge dialer for a target.
 	Dial      func(Target) localclient.Dialer
 	KeepAlive *Keepalive
+	// Version is the tray version; Install fetches the same release.
+	Version string
+	// DownloadDir keeps verified server downloads on the Windows side.
+	DownloadDir string
+	// Digests are the release server digests; nil disables Install.
+	Digests map[string]string
+	Logf    func(format string, args ...any)
 
 	once   sync.Once
 	client *localclient.Client
@@ -89,18 +102,23 @@ func execFailure(res Result) bool {
 	return res.Code != 0 && (strings.Contains(text, "no such file") || strings.Contains(text, "execvpe") || strings.Contains(text, "permission denied"))
 }
 
-func (s *WSLService) Check(ctx context.Context) error {
+func (s *WSLService) Check(ctx context.Context) (string, error) {
 	res, err := s.run(ctx, s.Target.Probe(), 30*time.Second)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrNoWSL, err)
+		return "", fmt.Errorf("%w: %v", ErrNoWSL, err)
 	}
 	if execFailure(res) {
-		return fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
+		return "", fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
 	}
 	if !strings.Contains(wslclient.DecodeOutput(res.Stderr)+wslclient.DecodeOutput(res.Stdout), "-log-file") {
-		return ErrWebmuxTooOld
+		return "", ErrWebmuxTooOld
 	}
-	return nil
+	// Only now is `version` known not to start a server.
+	res, err = s.run(ctx, s.Target.Version(), 30*time.Second)
+	if err != nil || res.Code != 0 {
+		return "", nil
+	}
+	return ParseVersion(wslclient.DecodeOutput(res.Stdout)), nil
 }
 
 func (s *WSLService) Detect(ctx context.Context) Detection {
@@ -245,6 +263,24 @@ func (s *WSLService) ConfigInit(ctx context.Context) error {
 		return fmt.Errorf("webmux config init: %s", strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
 	return nil
+}
+
+func (s *WSLService) Install(ctx context.Context) error {
+	return Installer{
+		Runner:     s.Runner,
+		Target:     s.Target,
+		Version:    s.Version,
+		Dir:        s.DownloadDir,
+		Digests:    s.Digests,
+		Downloader: fetch.Downloader{Name: "webmux"},
+		Logf:       s.Logf,
+	}.Install(ctx)
+}
+
+func (s *WSLService) SetTunnel(ctx context.Context, enabled bool) (contract.TunnelStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return s.local().SetTunnel(ctx, enabled)
 }
 
 // Keepalive keeps a distribution with a systemd-managed WebMux alive through
