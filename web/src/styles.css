@@ -214,6 +214,11 @@
 .terminal-host .xterm {
   height: 100%;
 }
+/* xterm.css paints the viewport #000. It fills the host while the scrollable
+   element covers whole rows only, so the remainder showed as a black strip. */
+.terminal-host .xterm .xterm-viewport {
+  background-color: var(--terminal-background);
+}
 /* Observers show the controller's grid at its own size and pan across it. */
 .terminal-host.observing {
   overflow: auto;
