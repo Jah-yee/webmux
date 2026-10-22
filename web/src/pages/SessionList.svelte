@@ -385,7 +385,7 @@
 
 <svelte:window onkeydown={searchShortcut} />
 
-<div class="workspace-page min-h-dvh">
+<div class="workspace-page safe-area-page min-h-dvh">
   <header
     class="app-header workspace-header flex min-h-(--app-header-height) items-center border-b bg-card"
   >
