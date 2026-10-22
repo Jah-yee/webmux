@@ -15,6 +15,7 @@
     disable,
     enable,
     pushStatus,
+    requestPermission,
     savedSubscriptionId,
     sendTest,
     sync,
@@ -35,8 +36,13 @@
   let loadError = $state("");
   let subscribed = $state(false);
   let busy = $state(false);
+  // The state a toggle in flight is heading for; the switch shows it until the
+  // attempt settles and then shows the real subscription again.
+  let target = $state(false);
   let notice = $state("");
   let error = $state("");
+  // True while the browser's notification permission prompt is unanswered.
+  let awaitingPermission = $state(false);
   // A server refusal at registration time overrides the status reason.
   let refused = $state<PushAdvice>();
   const advice = $derived<PushAdvice | undefined>(
@@ -65,11 +71,20 @@
   }
 
   async function toggle(checked: boolean) {
+    target = checked;
     busy = true;
     notice = error = "";
     try {
       if (checked) {
         if (!status?.publicKey) throw new Error("服务端未提供推送公钥");
+        if (Notification.permission === "default") {
+          awaitingPermission = true;
+          try {
+            await requestPermission();
+          } finally {
+            awaitingPermission = false;
+          }
+        }
         await enable(status.publicKey);
       } else {
         await disable();
@@ -137,11 +152,22 @@
         <Label for="push-enabled">在本设备开启推送</Label>
         <Switch
           id="push-enabled"
-          checked={subscribed}
+          bind:checked={
+            () => (busy ? target : subscribed), (value) => void toggle(value)
+          }
           disabled={busy}
-          onCheckedChange={toggle}
         />
       </div>
+      {#if awaitingPermission}
+        <InlineNotice>
+          <div class="space-y-1">
+            <p class="font-medium">等待浏览器通知授权</p>
+            <p>
+              请在地址栏右侧的弹窗中选择“允许”。如果只看到铃铛图标或“通知已屏蔽”提示，请点击该图标并选择“允许”。
+            </p>
+          </div>
+        </InlineNotice>
+      {/if}
       {#if subscribed}
         <Button variant="outline" disabled={busy} onclick={test}
           >发送测试通知</Button

@@ -98,12 +98,21 @@ async function register(subscription: PushSubscription): Promise<string> {
   return id;
 }
 
+// requestPermission resolves once the user answers the browser's prompt. With
+// Chrome's quiet permission UI that answer waits on a click on the address-bar
+// bell, so callers should tell the user where to look while it is pending.
+export async function requestPermission(): Promise<void> {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted")
+    throw new Error(
+      "未获得通知权限：请点击地址栏中的铃铛图标或在浏览器网站设置中允许本站通知，然后重试",
+    );
+}
+
 // enable must run inside the click that asked for it: browsers only show the
 // permission prompt for a user gesture.
 export async function enable(publicKey: string): Promise<void> {
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted")
-    throw new Error("未获得通知权限，请在浏览器或系统设置中允许本站通知");
+  await requestPermission();
   const registration = await navigator.serviceWorker.register(WORKER, {
     scope: "/",
   });

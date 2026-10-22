@@ -1,11 +1,14 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import { page } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import PushSettings from "../../src/components/PushSettings.svelte";
 import type { PushSupport } from "../../src/push";
 import type { PushStatus } from "../../src/schemas";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const capable: PushSupport = {
   secure: true,
@@ -93,3 +96,33 @@ for (const row of cases) {
     );
   });
 }
+
+test("a pending permission prompt explains where to allow notifications", async () => {
+  // Chrome's quiet permission UI leaves the prompt pending until the user
+  // clicks the address-bar bell; the card must not sit silently disabled.
+  const prompt = Promise.withResolvers<NotificationPermission>();
+  vi.stubGlobal("Notification", {
+    permission: "default",
+    requestPermission: () => prompt.promise,
+  });
+  render(PushSettings, {
+    support: capable,
+    loadStatus: async () => available,
+  });
+  const toggle = page.getByRole("switch");
+  await toggle.click();
+  const hint = page.getByText("等待浏览器通知授权");
+  await expect.element(hint).toBeVisible();
+  await expect
+    .element(page.getByText("通知已屏蔽", { exact: false }))
+    .toBeVisible();
+  await expect.element(toggle).toBeDisabled();
+
+  prompt.resolve("denied");
+  await expect
+    .element(page.getByText("未获得通知权限", { exact: false }))
+    .toBeVisible();
+  await expect.element(hint).not.toBeInTheDocument();
+  await expect.element(toggle).not.toBeChecked();
+  await expect.element(toggle).toBeEnabled();
+});
