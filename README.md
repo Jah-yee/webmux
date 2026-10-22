@@ -30,7 +30,7 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 - **第一级别的 WSL 支持**：Windows 不是“顺带能用”的平台。WebMux 运行在 WSL 2 发行版中，Windows 托盘负责安装 / 升级（校验发布摘要）、启动、监控、自动重启和远程访问转发；`webmux.exe` 控制台客户端在 PowerShell / Windows Terminal 中直接 `run` / `attach` WSL 里的会话。Windows 客户端经 `wsl.exe --exec webmux bridge` 访问本机 API，无需 Token，也不依赖 WSL 的 localhost 转发或网络模式；当前 Windows 目录自动换算为 WSL 路径。
 - **低侵入性**：一个静态二进制，以当前用户身份运行，不需要 root 或管理员权限，不改写 shell 配置，不依赖 tmux、数据库或语言运行时。用户级服务由 `webmux service` 管理（systemd --user / launchd），卸载时保留配置；会话只在内存中，状态目录只保存显式登记的仓库清单。托盘不静默安装或升级，也不修改防火墙。
 - **融入现有终端 agent 工作流**：Claude Code、Codex、omp 等 agent 原样运行在真实 PTY 中，无需插件、适配器或改写其配置；原始字节直通 xterm.js，TUI 渲染与原生终端一致。在习惯的终端里 `webmux run -- claude` 启动，`Ctrl+]` 分离后在手机上继续，回到电脑 `webmux attach <ID>` 接续，全程是同一个进程。
-- **高性能、低占用**：服务端只转发 PTY 原始字节，不做终端仿真；每会话固定大小的字节环形缓冲（默认 2 MiB），重连只补发缺失部分；慢客户端被断开，而不会阻塞 PTY 读取。含前端的 Linux amd64 二进制约 15 MiB，实测空闲常驻内存约 13 MB、运行一个 shell 会话约 18 MB；CI 在 4 倍 CPU 降速下检查布局位移与交互延迟。
+- **高性能、低占用**：服务端只转发 PTY 原始字节，不做终端仿真；每会话固定大小的字节环形缓冲（默认 2 MiB），重连只补发缺失部分；慢客户端被断开，而不会阻塞 PTY 读取。含前端的 Linux amd64 二进制约 15 MB，实测空闲常驻内存约 13 MB、运行一个 shell 会话约 18 MB；CI 在 4 倍 CPU 降速下检查布局位移与交互延迟。
 
 ## 界面一览
 
