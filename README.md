@@ -149,6 +149,7 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 | 文档                                    | 内容                                               |
 | --------------------------------------- | -------------------------------------------------- |
+| [User Stories](docs/user-stories.md)    | 各项功能的用户目的、验收要点与功能覆盖索引         |
 | [使用指南](docs/usage.md)               | 会话、终端、草稿模式、代码工作区、worktree、移动端 |
 | [部署指南](docs/deployment.md)          | 配置、systemd / launchd、手机访问、HTTPS、平台差异 |
 | [架构设计](docs/architecture.md)        | 会话模型、缓冲与回放、状态探测、并发与资源         |
