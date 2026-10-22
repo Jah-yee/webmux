@@ -8,6 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/mzdluo123/webmux)](https://github.com/mzdluo123/webmux/releases/latest)
 [![Go](https://img.shields.io/github/go-mod/go-version/mzdluo123/webmux)](go.mod)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%28WSL%29-lightgrey)
+[![License](https://img.shields.io/github/license/mzdluo123/webmux)](LICENSE)
 
 [设计理念](#设计理念) · [快速开始](#快速开始) · [使用指南](docs/usage.md) · [部署](docs/deployment.md) · [架构](docs/architecture.md) · [协议](docs/protocol.md) · [参与贡献](CONTRIBUTING.md)
 
@@ -225,3 +226,7 @@ HTTP 不是浏览器安全上下文，Clipboard API 不可用。WebMux 会回退
 ## 技术栈
 
 Go（`creack/pty`、`coder/websocket`）· Svelte 5 · TypeScript · Vite · xterm.js · shadcn-svelte · Tailwind CSS · Zod · CodeMirror
+
+## 许可证
+
+[MIT](LICENSE)
