@@ -62,8 +62,35 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 - `web/embed.go`: embeds `web/dist`; rebuild the frontend before compiling Go to avoid missing or stale assets.
 - `Makefile`, `go.mod`, `web/package.json`, `web/pnpm-lock.yaml`, `web/pnpm-workspace.yaml`: build commands, tool/dependency versions, and permitted install scripts.
 - `web/vite.config.ts`, `web/tsconfig.json`, `web/components.json`, `.oxfmtrc.json`, `web/.oxlintrc.json`: proxy/alias, strict typing, UI generation, formatting, and lint configuration.
-- `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level; confirm implementation details against source. Documentation updates are not required for every change. `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.
+- `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level; confirm implementation details against source. Maintain `docs/user-stories.md` under the rules below; update other documentation when relevant. `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.
 - `openspec/config.yaml`: spec-driven workflow context. Write new specification artifacts in Simplified Chinese, retaining English structural headings and SHALL/MUST keywords. `.agents/`, `.claude/`, and `.omp/` contain generated workflow integrations.
+
+## User Stories Maintenance
+
+- Read `docs/user-stories.md` before changing a capability. Every implemented
+  capability MUST have one or more stories explaining the user role, intended
+  action, purpose, and observable acceptance criteria.
+- In the same change, update the affected stories when adding, changing, or
+  removing behavior. This includes UI, REST/WebSocket APIs, CLI commands,
+  configuration, security and session lifecycle, deployment, and contributor
+  tooling. Pure refactors, formatting, and dependency updates with no behavior
+  change do not require catalog edits.
+- Reuse existing stories when their purpose still fits; add stories for new
+  purposes. Keep IDs stable: do not renumber existing stories or reuse retired
+  IDs. When removing a capability, mark its stories as retired and explain the
+  replacement when applicable rather than silently losing their history.
+- Keep acceptance criteria, per-group source references, both feature indexes,
+  and any stated counts consistent. Use the existing Chinese story format and
+  functional groups; add a group only when existing groups do not fit.
+- Check behavior against the implementation and relevant tests. Distinguish
+  implemented capabilities from OpenSpec plans; investigate disagreements
+  before updating the catalog. Keep verification notes accurate and never claim
+  that tests ran or the whole catalog was reverified without that evidence.
+- Before completing the change, verify that every added or changed capability
+  maps to a story, IDs are unique, index references resolve, and linked source
+  paths exist. Run the applicable Markdown formatting and whitespace checks.
+- In the delivery or PR summary, identify the affected story IDs, or briefly
+  explain why the change has no user-story impact.
 
 ## Runtime/Tooling Preferences
 
