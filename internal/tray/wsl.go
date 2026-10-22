@@ -88,10 +88,11 @@ func (t Target) Probe() Invocation {
 	return inv
 }
 
-// Version prints "webmux <version>". Call it only after Probe succeeded:
-// older versions would treat the unknown argument as a server start.
+// Version prints `webmux version --json`; versions without --json ignore it
+// and print "webmux <version>". Call it only after Probe succeeded: older
+// versions would treat the unknown argument as a server start.
 func (t Target) Version() Invocation {
-	return Invocation{Argv: append(t.base(), "--cd", "~", "--exec", wslclient.WebmuxPath(t.Webmux), "version")}
+	return Invocation{Argv: append(t.base(), "--cd", "~", "--exec", wslclient.WebmuxPath(t.Webmux), "version", "--json")}
 }
 
 // Arch prints the distribution's machine name, e.g. x86_64.

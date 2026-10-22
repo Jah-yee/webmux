@@ -175,8 +175,9 @@ func (a *App) wndProc(hwnd windows.HWND, msg uint32, wParam, lParam uintptr) uin
 func (a *App) onMenuOpen() {
 	if a.sup != nil {
 		a.sup.Refresh()
-		// A blocked tray never polls; opening the menu is the user's retry.
-		if a.sup.Snapshot().Blocker != "" {
+		// A blocked or incompatible tray never polls the installed file;
+		// opening the menu is the user's retry.
+		if snap := a.sup.Snapshot(); snap.Blocker != "" || snap.Compat.Incompatible() {
 			a.sup.Recheck()
 		}
 	}
@@ -644,6 +645,16 @@ func (a *App) installWebmux() {
 	}
 }
 
+// openRelease opens the release page of the tray matching a newer server.
+// The tray never updates itself.
+func (a *App) openRelease() {
+	if download := tray.DownloadEntry(a.snapshot()); download.Show {
+		if err := OpenURL(download.URL); err != nil {
+			a.fail("无法打开浏览器", err)
+		}
+	}
+}
+
 // toggleTunnel turns the public tunnel off, or on after the risk is
 // confirmed. The state is never saved: it ends with the instance.
 func (a *App) toggleTunnel() {
@@ -850,6 +861,7 @@ func (a *App) listen() {
 		}
 	})
 	on(m.install, a.installWebmux)
+	on(m.download, a.openRelease)
 	on(m.fwInit, a.initConfig)
 	for i, it := range m.fwCandidates {
 		on(it, func() {

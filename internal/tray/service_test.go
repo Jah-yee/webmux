@@ -5,6 +5,7 @@ package tray
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -104,4 +105,69 @@ func TestWSLServiceStatusAndWatch(t *testing.T) {
 	expect(1)
 	stopWatch()
 	<-done
+}
+
+func TestWSLServiceCheck(t *testing.T) {
+	const webmux = "/usr/bin/webmux"
+	probe := Result{Stderr: []byte("  -log-file string\n"), Code: 1}
+	for _, tc := range []struct {
+		name   string
+		runner scriptedRunner
+		want   BuildInfo
+		err    error
+	}{
+		{"version --json", scriptedRunner{webmux + " -h": probe, webmux + " version --json": {Stdout: []byte(`{"v":1,"version":"0.5.0","contract":2}` + "\n")}}, BuildInfo{"0.5.0", 2}, nil},
+		{"text from a version without --json", scriptedRunner{webmux + " -h": probe, webmux + " version --json": {Stdout: []byte("webmux 0.2.0\n")}}, BuildInfo{"0.2.0", 1}, nil},
+		{"no local API", scriptedRunner{webmux + " -h": {Stderr: []byte("  -listen string\n"), Code: 2}}, BuildInfo{}, ErrWebmuxTooOld},
+		{"cannot execute", scriptedRunner{webmux + " -h": {Stderr: []byte("execvpe(/usr/bin/webmux) failed: No such file or directory"), Code: 1}}, BuildInfo{}, ErrWebmuxMissing},
+	} {
+		service := &WSLService{Runner: tc.runner, Target: Target{Webmux: webmux}}
+		got, err := service.Check(context.Background())
+		if got != tc.want || !errors.Is(err, tc.err) {
+			t.Errorf("%s: %v %v", tc.name, got, err)
+		}
+	}
+}
+
+// statusRunner answers `webmux status --json` with fixed output.
+type statusRunner []byte
+
+func (r statusRunner) Run(context.Context, []string, []string) (Result, error) {
+	return Result{Stdout: r, Code: contract.ExitNotRunning}, nil
+}
+func (statusRunner) Start([]string, []string) (Process, error) { return nil, nil }
+
+// A newer contract is recognized on both paths, keeping the version and
+// local link so the supervisor can follow the instance by reachability.
+func TestWSLServiceStatusRejectsUnsupportedContract(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "wst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	socket := filepath.Join(dir, "webmux.sock")
+	v2 := []byte(`{"v":2,"version":"0.5.0","state":{"name":"running"},"urls":{"local":"http://127.0.0.1:7690"}}`)
+	service := &WSLService{Runner: statusRunner(v2), Dial: func(Target) localclient.Dialer { return localclient.UnixDialer{Path: socket} }}
+	defer service.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	want := ContractError{V: 2, Version: "0.5.0", Local: "http://127.0.0.1:7690"}
+	check := func(path string) {
+		t.Helper()
+		_, err := service.Status(ctx)
+		var got *ContractError
+		if !errors.Is(err, ErrContractUnsupported) || !errors.As(err, &got) || *got != want {
+			t.Fatalf("%s: %v", path, err)
+		}
+	}
+	check("status --json")
+
+	l, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(v2) })}
+	go func() { _ = server.Serve(l) }()
+	defer func() { _ = server.Close() }()
+	check("local API")
 }

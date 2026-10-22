@@ -1,11 +1,55 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/rainchan/webmux/internal/contract"
 )
+
+// The tray parses `version --json` before anything else; a broken
+// configuration must not matter, and the text form stays stable for older
+// trays that parse "webmux <version>".
+func TestVersionCommand(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	broken := filepath.Join(dir, ".config", "webmux", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(broken), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(broken, []byte("listen = [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	version = "0.3.0"
+	t.Cleanup(func() { version = "dev" })
+	run := func(args ...string) (int, string, string) {
+		var out, stderr bytes.Buffer
+		code := dispatch(args, &out, &stderr)
+		return code, out.String(), stderr.String()
+	}
+	code, out, _ := run("version", "--json")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); code != contract.ExitOK || err != nil {
+		t.Fatalf("version --json: exit %d %q %v", code, out, err)
+	}
+	if want := map[string]any{"v": float64(contract.V), "version": "0.3.0", "contract": float64(contract.V)}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("version --json = %v, want %v", got, want)
+	}
+	for _, args := range [][]string{{"version"}, {"--version"}} {
+		if code, out, _ := run(args...); code != contract.ExitOK || out != "webmux 0.3.0\n" {
+			t.Fatalf("%q: exit %d %q", args, code, out)
+		}
+	}
+	for _, args := range [][]string{{"version", "--yaml"}, {"version", "extra"}} {
+		if code, out, _ := run(args...); code != contract.ExitUsage || out != "" {
+			t.Fatalf("%q: exit %d %q", args, code, out)
+		}
+	}
+}
 
 func TestConfigurationPrecedence(t *testing.T) {
 	dir := t.TempDir()

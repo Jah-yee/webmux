@@ -78,6 +78,8 @@ func PlanForward(networkMode string, snap Snapshot, list []WinInterface) Forward
 	plan := ForwardPlan{Needed: true, Headline: "可通过托盘转发", Candidates: WindowsCandidates(list)}
 	running := snap.HasStatus && status.State == contract.StateRunning && status.Health.Status == contract.HealthOK
 	switch {
+	case snap.Degraded:
+		plan.Blocked = "WSL 中的 webmux 与托盘不兼容，无法转发"
 	case !running:
 		plan.Blocked = "WebMux 未运行或不健康"
 	case !status.TokenConfigured:

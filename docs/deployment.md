@@ -19,7 +19,7 @@ webmux config init                 # 生成 0600 的 ~/.config/webmux/config.tom
 
 - 默认路径为 `~/.config/webmux/config.toml`，不存在时全部使用默认值；通过 `--config` 显式指定的文件不存在时启动失败。`--config` 与 `--log-file` 支持 `~/`。
 - 命令行 `--listen`、`--token` 优先于配置文件，显式传入空 token 也会覆盖配置。
-- `webmux version` 输出版本号。
+- `webmux version` 输出版本号；`webmux version --json` 另含控制契约版本（见 [API 与协议](protocol.md#控制面-json-契约)）。
 
 ```sh
 webmux --config ~/.config/webmux/config.toml   # 等同于 webmux serve --config ...
@@ -155,7 +155,9 @@ WebMux 不原生运行在 Windows 上，而是运行在 WSL 2 发行版中，由
 
 ### 在发行版中安装 webmux
 
-最简单的方式是让托盘安装：WSL 中的 `webmux` 缺失、不兼容或版本低于托盘时，菜单出现“安装 / 升级 WSL 中的 webmux”。托盘在 Windows 侧下载与托盘同版本、与发行版架构（`uname -m`）匹配的 Linux 二进制（GitHub 无响应时依次改用 `ghfast.top`、`gh-proxy.com` 镜像），只有 SHA-256 与发布构建时写入托盘的摘要一致才会使用，再以 `install -D -m 0755` 放到托盘设置中的 `webmux` 路径。托盘从不在后台自动安装。要求发行版能通过 `/mnt/<盘符>` 访问 Windows 文件（`/etc/wsl.conf` 未关闭 automount）；本地 `make tray` 构建的托盘不带摘要，不提供安装。WebMux 运行中升级时旧进程继续运行，重启后生效。
+最简单的方式是让托盘安装：WSL 中的 `webmux` 缺失、缺少本机 API、控制契约过旧或版本低于托盘时，菜单出现“安装 / 升级 WSL 中的 webmux”。托盘在 Windows 侧下载与托盘同版本、与发行版架构（`uname -m`）匹配的 Linux 二进制（GitHub 无响应时依次改用 `ghfast.top`、`gh-proxy.com` 镜像），只有 SHA-256 与发布构建时写入托盘的摘要一致才会使用，再以 `install -D -m 0755` 放到托盘设置中的 `webmux` 路径。托盘从不在后台自动安装。要求发行版能通过 `/mnt/<盘符>` 访问 Windows 文件（`/etc/wsl.conf` 未关闭 automount）；本地 `make tray` 构建的托盘不带摘要，不提供安装。WebMux 运行中升级时旧进程继续运行，重启后生效。
+
+托盘以 `webmux version --json` 检查 WSL 中的 `webmux`（托盘启动、切换发行版或路径、安装后，以及处于缺失或不兼容状态时打开菜单）。兼容只看控制契约版本，版本对应只比较版本号，`dev` 等非发布版本不比较。结果只显示在菜单状态行，不发通知：两侧版本不同时标出较旧的一方；WSL 中的版本较新时提供“下载托盘 <版本>”，打开该版本的 Release 页面；契约不兼容时仍可启动、停止和重启，托盘以 Windows 侧能否访问本机链接判断运行状态，显示“运行中（不兼容，功能受限）”，会话数、隧道等依赖状态的功能不可用。正在运行的实例版本与已安装文件不同时，状态行提示重启后生效。
 
 也可以在发行版的终端中手动安装到 `~/.local/bin/webmux`（托盘默认路径），并生成带随机 token 的配置：
 

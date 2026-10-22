@@ -98,7 +98,7 @@ type menu struct {
 	remote, fwHeadline, fwBlocked, fwInit *item
 	fwLinks, fwCandidates                 []*item
 
-	start, stop, restart, install *item
+	start, stop, restart, install, download *item
 
 	logs, logService, logTray *item
 	openConfig, initConfig    *item
@@ -189,6 +189,8 @@ func buildMenu() *menu {
 	m.restart = add("重启")
 	m.install = add("安装 WSL 中的 webmux")
 	m.install.hide()
+	m.download = add("下载托盘")
+	m.download.hide()
 	systray.AddSeparator()
 
 	m.logs = add("打开日志")
@@ -240,35 +242,14 @@ func kindLabel(kind string) string {
 	return kind
 }
 
-func stateLabel(s tray.State) string {
-	switch s {
-	case tray.StateStarting:
-		return "启动中"
-	case tray.StateRunning:
-		return "运行中"
-	case tray.StateUnreachable:
-		return "运行中（Windows 侧不可达）"
-	case tray.StateExternal:
-		return "运行中（外部实例）"
-	case tray.StateStopping:
-		return "停止中"
-	case tray.StateRestarting:
-		return "重启中"
-	case tray.StateFailed:
-		return "异常"
-	}
-	return "已停止"
-}
-
-func runningState(s tray.State) bool {
-	return s == tray.StateRunning || s == tray.StateUnreachable || s == tray.StateExternal
-}
-
 // tooltip is the hover text; it never contains the token.
 func tooltip(snap tray.Snapshot) string {
-	text := "WebMux · " + stateLabel(snap.State)
-	if runningState(snap.State) && snap.HasStatus && snap.Status.URLs.Local != "" {
-		text += fmt.Sprintf(" · %d 个会话 · %s", snap.Sessions, snap.Status.URLs.Local)
+	text := "WebMux · " + tray.StateLabel(snap)
+	if tray.RunningState(snap.State) && snap.HasStatus && snap.Status.URLs.Local != "" {
+		if !snap.Degraded {
+			text += fmt.Sprintf(" · %d 个会话", snap.Sessions)
+		}
+		text += " · " + snap.Status.URLs.Local
 	}
 	return text
 }
@@ -434,21 +415,14 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	}
 	busy := snap.State == tray.StateStarting || snap.State == tray.StateStopping
 
-	line := "状态：" + stateLabel(snap.State)
-	if runningState(snap.State) {
-		line += fmt.Sprintf(" · %d 个会话", snap.Sessions)
-	}
-	if snap.HasStatus && status.Version != "" {
-		line += " · WebMux " + status.Version
-	}
-	m.status1.set(line, false, false)
+	m.status1.set(tray.StatusLine(snap), false, false)
 	m.status2.set("发行版："+distroLabel(v)+" · 启动方式："+modeLabel(snap, v), false, false)
 	hint := snap.Reason
-	if upgrade := tray.UpgradeHint(snap); upgrade != "" {
+	if version := tray.VersionHint(snap); version != "" {
 		if hint != "" {
 			hint += "；"
 		}
-		hint += upgrade
+		hint += version
 	}
 	if hint != "" {
 		m.hint1.set(hint, false, false)
@@ -585,11 +559,16 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 	} else {
 		m.install.hide()
 	}
+	if download := tray.DownloadEntry(snap); download.Show && !v.noWSL {
+		m.download.set(download.Title, true, false)
+	} else {
+		m.download.hide()
+	}
 
 	serviceLog := !v.noWSL && (systemdMode(snap, v) || (snap.HasStatus && strings.HasPrefix(status.LogFile, "/")))
 	m.logService.set("打开 WebMux 日志", serviceLog, false)
 	switch {
-	case snap.HasStatus && !status.Config.Exists:
+	case snap.HasStatus && !snap.Degraded && !status.Config.Exists:
 		m.openConfig.hide()
 		m.initConfig.set("初始化配置（生成 Token）", !v.noWSL, false)
 	default:

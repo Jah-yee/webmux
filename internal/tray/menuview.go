@@ -21,10 +21,10 @@ func InstallEntry(snap Snapshot, supported, installing bool) InstallItem {
 	}
 	title := "安装 WSL 中的 webmux"
 	switch {
-	case snap.Blocker == BlockerIncompatible:
+	case snap.Blocker == BlockerIncompatible, snap.Compat == CompatIncompatibleOlder:
 		title = "升级 WSL 中的 webmux"
-	case snap.UpgradeTo != "":
-		title = "升级 WSL 中的 webmux（" + snap.WebmuxVersion + " → " + snap.UpgradeTo + "）"
+	case snap.Compat == CompatServerOlder:
+		title = "升级 WSL 中的 webmux（" + snap.Installed.Version + " → " + snap.Tray.Version + "）"
 	}
 	switch {
 	case !supported:
@@ -36,12 +36,98 @@ func InstallEntry(snap Snapshot, supported, installing bool) InstallItem {
 	return InstallItem{Show: true, Enabled: !busy, Title: title}
 }
 
-// UpgradeHint is the status line for an older installed server.
-func UpgradeHint(snap Snapshot) string {
-	if snap.UpgradeTo == "" {
-		return ""
+// DownloadItem describes the entry opening a newer tray's release page.
+type DownloadItem struct {
+	Show       bool
+	Title, URL string
+}
+
+// DownloadEntry offers the tray matching a newer installed server; only
+// release versions have a release page.
+func DownloadEntry(snap Snapshot) DownloadItem {
+	version := snap.Installed.Version
+	if !snap.Compat.Newer() || !releaseVersion(version) {
+		return DownloadItem{}
 	}
-	return "WSL 中的 webmux " + snap.WebmuxVersion + " 可升级到 " + snap.UpgradeTo
+	return DownloadItem{Show: true, Title: "下载托盘 " + version, URL: ReleasePage(version)}
+}
+
+// ReleasePage is the GitHub release page of a version.
+func ReleasePage(version string) string {
+	return "https://github.com/" + ReleaseRepo + "/releases/tag/v" + version
+}
+
+// VersionHint is the status line of the version check: the older side when
+// both are compatible but differ, the direction when incompatible, and a
+// running instance that differs from the installed file. It is "" when
+// they match or cannot be compared.
+func VersionHint(snap Snapshot) string {
+	var hints []string
+	installed := snap.Installed.Version
+	wsl := "WSL 中的 webmux"
+	if installed != "" {
+		wsl += " " + installed
+	}
+	switch snap.Compat {
+	case CompatServerOlder:
+		hints = append(hints, "托盘 "+snap.Tray.Version+" · WSL "+installed+"（WSL 较旧）")
+	case CompatServerNewer:
+		hints = append(hints, "托盘 "+snap.Tray.Version+" · WSL "+installed+"（托盘较旧）")
+	case CompatIncompatibleOlder:
+		hints = append(hints, "WSL 中的 webmux 版本过旧，请升级")
+	case CompatIncompatibleNewer:
+		hints = append(hints, wsl+" 比托盘新，请升级托盘")
+	}
+	if r := snap.Running; r != nil && snap.Compat != "" && installed != "" && r.Version != installed {
+		hints = append(hints, "WSL 中已安装 "+installed+"，重启 WebMux 后生效，重启会结束所有会话")
+	}
+	return strings.Join(hints, "；")
+}
+
+// RunningState reports the states with a running instance.
+func RunningState(s State) bool {
+	return s == StateRunning || s == StateUnreachable || s == StateExternal
+}
+
+// StateLabel names the state; a degraded instance is marked limited.
+func StateLabel(snap Snapshot) string {
+	switch snap.State {
+	case StateStarting:
+		return "启动中"
+	case StateRunning:
+		if snap.Degraded {
+			return "运行中（不兼容，功能受限）"
+		}
+		return "运行中"
+	case StateUnreachable:
+		return "运行中（Windows 侧不可达）"
+	case StateExternal:
+		return "运行中（外部实例）"
+	case StateStopping:
+		return "停止中"
+	case StateRestarting:
+		return "重启中"
+	case StateFailed:
+		return "异常"
+	}
+	return "已停止"
+}
+
+// StatusLine is the first menu line. A degraded instance reports no
+// session count.
+func StatusLine(snap Snapshot) string {
+	line := "状态：" + StateLabel(snap)
+	if RunningState(snap.State) {
+		if snap.Degraded {
+			line += " · 会话数未知"
+		} else {
+			line += fmt.Sprintf(" · %d 个会话", snap.Sessions)
+		}
+	}
+	if snap.HasStatus && snap.Status.Version != "" {
+		line += " · WebMux " + snap.Status.Version
+	}
+	return line
 }
 
 // TunnelItem describes the public tunnel entries.

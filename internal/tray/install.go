@@ -97,7 +97,7 @@ func (i Installer) Install(ctx context.Context) error {
 	if res, err = i.run(ctx, i.Target.Version()); err != nil {
 		return err
 	}
-	if got := ParseVersion(wslclient.DecodeOutput(res.Stdout)); got != i.Version {
+	if got := ParseBuildInfo(wslclient.DecodeOutput(res.Stdout)).Version; got != i.Version {
 		return fmt.Errorf("安装后的 webmux 报告版本 %q，应为 %s：%s", got, i.Version, output(res))
 	}
 	i.logf("installed webmux %s (%s) at %s", i.Version, arch, i.Target.Webmux)
@@ -146,23 +146,6 @@ func ParseVersion(out string) string {
 		return ""
 	}
 	return fields[1]
-}
-
-// UpgradeAvailable reports whether the installed release version is older
-// than the tray release version. Anything other than MAJOR.MINOR.PATCH on
-// either side (dev builds) never asks for an upgrade.
-func UpgradeAvailable(tray, installed string) bool {
-	t, ok1 := semver(tray)
-	w, ok2 := semver(installed)
-	if !ok1 || !ok2 {
-		return false
-	}
-	for n := range t {
-		if w[n] != t[n] {
-			return w[n] < t[n]
-		}
-	}
-	return false
 }
 
 func releaseVersion(v string) bool {

@@ -198,6 +198,15 @@ type ValidateV1 struct {
 	Errors []string `json:"errors"`
 }
 
+// VersionV1 is printed by `webmux version --json`. Contract is the control
+// contract version this build speaks, so clients can check compatibility
+// before talking to a server.
+type VersionV1 struct {
+	V        int    `json:"v"`
+	Version  string `json:"version"`
+	Contract int    `json:"contract"`
+}
+
 // Exit codes shared by every client command.
 const (
 	ExitOK         = 0

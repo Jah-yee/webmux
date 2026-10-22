@@ -38,7 +38,7 @@ const cliHelp = `Usage: webmux [command] [options]
 
 Commands:
   serve             Run the server in the foreground (default)
-  version           Print the version
+  version           Print the version; --json adds the control contract
   status            Show server health and access URLs
   stop              Stop the server through its local control API
   config            Initialize, locate, show or validate configuration
@@ -84,8 +84,7 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 	case "serve":
 		return runServe(args[1:])
 	case "version":
-		_, _ = fmt.Fprintln(stdout, "webmux", version)
-		return contract.ExitOK
+		return versionCommand(args[1:], stdout, stderr)
 	case "status":
 		return statusCommand(args[1:], stdout, stderr)
 	case "stop":
@@ -101,6 +100,30 @@ func dispatch(args []string, stdout, stderr io.Writer) int {
 	}
 	_, _ = fmt.Fprintf(stderr, "webmux: unknown subcommand %q\navailable subcommands: %s\n", args[0], subcommands)
 	return contract.ExitUsage
+}
+
+// versionCommand never reads configuration or starts anything: the Windows
+// tray runs it to decide compatibility before any other call.
+func versionCommand(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("webmux version", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	asJSON := flags.Bool("json", false, "print the version and control contract as JSON")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return contract.ExitOK
+		}
+		return contract.ExitUsage
+	}
+	if flags.NArg() > 0 {
+		_, _ = fmt.Fprintf(stderr, "webmux: unexpected argument %q\n", flags.Arg(0))
+		return contract.ExitUsage
+	}
+	if *asJSON {
+		writeJSON(stdout, contract.VersionV1{V: contract.V, Version: version, Contract: contract.V})
+		return contract.ExitOK
+	}
+	_, _ = fmt.Fprintln(stdout, "webmux", version)
+	return contract.ExitOK
 }
 
 // serverRun is the validated server configuration plus how it was obtained.

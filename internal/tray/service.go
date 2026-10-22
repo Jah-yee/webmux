@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,11 +30,12 @@ var (
 // Service is everything the supervisor does inside WSL.
 type Service interface {
 	// Check verifies that webmux exists and supports the local API, and
-	// returns its version ("" when it does not report one).
-	Check(ctx context.Context) (string, error)
+	// returns its build (an empty version when it does not report one).
+	Check(ctx context.Context) (BuildInfo, error)
 	Detect(ctx context.Context) Detection
 	// Status uses the local API, falling back to `webmux status --json`
-	// when the bridge reports that WebMux is not running.
+	// when the bridge reports that WebMux is not running. A contract the
+	// tray does not speak is a *ContractError on both paths.
 	Status(ctx context.Context) (contract.StatusV1, error)
 	// Watch follows /ws/sessions, reporting the session count, until the
 	// subscription ends.
@@ -102,23 +104,28 @@ func execFailure(res Result) bool {
 	return res.Code != 0 && (strings.Contains(text, "no such file") || strings.Contains(text, "execvpe") || strings.Contains(text, "permission denied"))
 }
 
-func (s *WSLService) Check(ctx context.Context) (string, error) {
-	res, err := s.run(ctx, s.Target.Probe(), 30*time.Second)
+// Check runs within one 30 s deadline: the flag probe, then `version --json`.
+func (s *WSLService) Check(ctx context.Context) (BuildInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	probe := s.Target.Probe()
+	res, err := s.Runner.Run(ctx, probe.Argv, probe.Env)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrNoWSL, err)
+		return BuildInfo{}, fmt.Errorf("%w: %v", ErrNoWSL, err)
 	}
 	if execFailure(res) {
-		return "", fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
+		return BuildInfo{}, fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
 	}
 	if !strings.Contains(wslclient.DecodeOutput(res.Stderr)+wslclient.DecodeOutput(res.Stdout), "-log-file") {
-		return "", ErrWebmuxTooOld
+		return BuildInfo{}, ErrWebmuxTooOld
 	}
 	// Only now is `version` known not to start a server.
-	res, err = s.run(ctx, s.Target.Version(), 30*time.Second)
+	version := s.Target.Version()
+	res, err = s.Runner.Run(ctx, version.Argv, version.Env)
 	if err != nil || res.Code != 0 {
-		return "", nil
+		return BuildInfo{Contract: 1}, nil
 	}
-	return ParseVersion(wslclient.DecodeOutput(res.Stdout)), nil
+	return ParseBuildInfo(wslclient.DecodeOutput(res.Stdout)), nil
 }
 
 func (s *WSLService) Detect(ctx context.Context) Detection {
@@ -129,10 +136,15 @@ func (s *WSLService) Detect(ctx context.Context) Detection {
 
 func (s *WSLService) Status(ctx context.Context) (contract.StatusV1, error) {
 	requestCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	status, err := s.local().Status(requestCtx)
+	var raw json.RawMessage
+	err := s.local().Do(requestCtx, http.MethodGet, contract.PathStatus, nil, &raw)
 	cancel()
 	if err == nil {
-		return status, nil
+		status, err := decodeStatus(raw)
+		if errors.Is(err, errNoContract) {
+			return contract.StatusV1{}, fmt.Errorf("local status: %w", err)
+		}
+		return status, err
 	}
 	if !errors.Is(err, localclient.ErrNotRunning) {
 		return contract.StatusV1{}, err
@@ -144,13 +156,11 @@ func (s *WSLService) Status(ctx context.Context) (contract.StatusV1, error) {
 	if execFailure(res) {
 		return contract.StatusV1{}, fmt.Errorf("%w %s", ErrWebmuxMissing, s.Target.Webmux)
 	}
-	if err := json.Unmarshal(res.Stdout, &status); err != nil || status.V == 0 {
+	status, err := decodeStatus(res.Stdout)
+	if errors.Is(err, errNoContract) {
 		return contract.StatusV1{}, fmt.Errorf("%w: status --json: %s", ErrWebmuxTooOld, strings.TrimSpace(wslclient.DecodeOutput(res.Stderr)))
 	}
-	if status.V > contract.V {
-		return contract.StatusV1{}, fmt.Errorf("WSL 中的 webmux 使用状态契约 v%d，请升级托盘", status.V)
-	}
-	return status, nil
+	return status, err
 }
 
 func (s *WSLService) Watch(ctx context.Context, sessions func(int)) error {

@@ -66,7 +66,7 @@ func (t *TargetService) swap(s Settings) {
 	t.cur = next
 }
 
-func (t *TargetService) Check(ctx context.Context) (string, error) {
+func (t *TargetService) Check(ctx context.Context) (BuildInfo, error) {
 	t.mu.Lock()
 	if t.pending != nil {
 		t.swap(*t.pending)

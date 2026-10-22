@@ -43,8 +43,8 @@ func (r *installRunner) Run(_ context.Context, argv, _ []string) (Result, error)
 	case "install":
 		return Result{}, nil
 	}
-	if argv[len(argv)-1] == "version" {
-		return Result{Stdout: []byte("webmux " + r.installed + "\n")}, nil
+	if slices.Equal(argv[len(argv)-2:], []string{"version", "--json"}) {
+		return Result{Stdout: []byte(`{"v":1,"version":"` + r.installed + `","contract":1}` + "\n")}, nil
 	}
 	return Result{Code: 1}, nil
 }

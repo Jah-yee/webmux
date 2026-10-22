@@ -281,7 +281,9 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 
 ## 控制面 JSON 契约
 
-`webmux status|stop|config ... --json` 向标准输出写入恰好一个 JSON 对象，诊断只写标准错误。所有对象带 `v`（当前 `1`）；同一版本内只增加可选字段，不删除或改变既有字段含义，不兼容变更提升 `v`。退出码：`0` 运行中且健康或操作成功，`1` 其他错误，`2` 用法错误，`3` 未运行（`status`、`bridge`）。
+`webmux version|status|stop|config ... --json` 向标准输出写入恰好一个 JSON 对象，诊断只写标准错误。所有对象带 `v`（当前 `1`）；同一版本内只增加可选字段，不删除或改变既有字段含义，不兼容变更提升 `v`。退出码：`0` 运行中且健康或操作成功，`1` 其他错误，`2` 用法错误，`3` 未运行（`status`、`bridge`）。
+
+`version`：`{"v": 1, "version": "0.3.0", "contract": 1}`。`contract` 是该构建支持的控制契约版本，不读取配置、不启动服务；客户端据此判断兼容。不带 `--json` 的 `webmux version` 与 `webmux --version` 仍输出 `webmux <版本>`。旧版本会忽略 `--json` 并输出文本，客户端应回退解析文本。
 
 `status`（亦为 `/local/v1/status`）：
 

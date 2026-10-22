@@ -98,7 +98,10 @@ type fakeService struct {
 	calls       []string
 	watchers    []chan int
 	stoppedPort contract.HealthStatus
-	version     string // reported by Check
+	version     string // reported by Check; a start runs it
+	contract    int    // reported by Check and Status; 0 means 1
+	runningAs   string // version of the running instance
+	installs    string // version Install puts in place; default 9.9.9
 	tunnel      *contract.TunnelStatus
 }
 
@@ -120,11 +123,11 @@ func (f *fakeService) count(name string) int {
 	return n
 }
 
-func (f *fakeService) Check(context.Context) (string, error) {
+func (f *fakeService) Check(context.Context) (BuildInfo, error) {
 	f.call("check")
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.version, f.checkErr
+	return BuildInfo{Version: f.version, Contract: max(f.contract, 1)}, f.checkErr
 }
 func (f *fakeService) Detect(context.Context) Detection {
 	f.mu.Lock()
@@ -138,7 +141,10 @@ func (f *fakeService) Status(context.Context) (contract.StatusV1, error) {
 	if f.statusErr != nil {
 		return contract.StatusV1{}, f.statusErr
 	}
-	s := contract.StatusV1{V: 1, URLs: contract.URLs{Local: "http://127.0.0.1:7681", Remote: []contract.RemoteURL{}}, Listen: "127.0.0.1:7681", Config: contract.ConfigRef{Exists: true}}
+	s := contract.StatusV1{V: 1, Version: f.runningAs, URLs: contract.URLs{Local: "http://127.0.0.1:7681", Remote: []contract.RemoteURL{}}, Listen: "127.0.0.1:7681", Config: contract.ConfigRef{Exists: true}}
+	if f.contract > 1 {
+		return contract.StatusV1{}, &ContractError{V: f.contract, Version: f.runningAs, Local: s.URLs.Local}
+	}
 	if !f.running {
 		s.State = contract.StateStopped
 		s.Health = contract.Health{Status: contract.HealthRefused}
@@ -192,6 +198,12 @@ func (f *fakeService) setSessions(n int) {
 	}
 }
 
+func (f *fakeService) isRunning() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.running
+}
+
 // die simulates WebMux exiting: subscriptions drop, processes end.
 func (f *fakeService) die(code int) {
 	f.mu.Lock()
@@ -214,7 +226,7 @@ func (f *fakeService) StartTray(context.Context) (Process, error) {
 	f.procs = append(f.procs, p)
 	crash := f.crash
 	if !crash && f.ready {
-		f.running, f.launcher, f.record = true, contract.LauncherWindowsTray, true
+		f.running, f.launcher, f.record, f.runningAs = true, contract.LauncherWindowsTray, true, f.version
 	}
 	f.mu.Unlock()
 	if crash {
@@ -245,7 +257,7 @@ func (f *fakeService) Systemctl(_ context.Context, action string) error {
 	f.mu.Lock()
 	switch action {
 	case "start":
-		f.running, f.launcher, f.record = true, contract.LauncherSystemd, true
+		f.running, f.launcher, f.record, f.runningAs = true, contract.LauncherSystemd, true, f.version
 	}
 	f.mu.Unlock()
 	if action == "stop" {
@@ -271,6 +283,9 @@ func (f *fakeService) Install(context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.checkErr, f.version = nil, "9.9.9"
+	if f.installs != "" {
+		f.version = f.installs
+	}
 	return nil
 }
 func (f *fakeService) SetTunnel(_ context.Context, enabled bool) (contract.TunnelStatus, error) {
@@ -316,6 +331,9 @@ func newVersionedHarness(t *testing.T, service *fakeService, settings Settings, 
 		Reach: func(context.Context, string) error {
 			h.mu.Lock()
 			defer h.mu.Unlock()
+			if h.reach == nil && !service.isRunning() {
+				return errors.New("connection refused")
+			}
 			return h.reach
 		},
 		Notify: func(title, message string) {
@@ -530,7 +548,7 @@ func TestSupervisorRecoversFromMissingWebmux(t *testing.T) {
 	}
 	h.sup.Recheck()
 	snap = h.state(StateStopped)
-	if snap.Blocker != "" || !snap.Actions().Start || snap.Reason != "" || snap.WebmuxVersion != "9.9.9" {
+	if snap.Blocker != "" || !snap.Actions().Start || snap.Reason != "" || snap.Installed.Version != "9.9.9" {
 		t.Fatalf("after install %+v", snap)
 	}
 	h.settle()
@@ -539,24 +557,78 @@ func TestSupervisorRecoversFromMissingWebmux(t *testing.T) {
 	}
 }
 
-func TestSupervisorOffersUpgradeForOlderWebmux(t *testing.T) {
-	for _, tc := range []struct {
-		tray, installed, want string
-	}{
-		{"0.2.0", "0.1.9", "0.2.0"},
-		{"0.2.0", "0.2.0", ""},
-		{"0.2.0", "0.10.0", ""},
-		{"dev", "0.1.0", ""},
-		{"0.2.0", "dev", ""},
-	} {
-		service := &fakeService{ready: true, version: tc.installed}
-		h := newVersionedHarness(t, service, DefaultSettings(), tc.tray)
-		h.settle()
-		snap := h.wait("checked", func(s Snapshot) bool { return s.State == StateRunning && s.WebmuxVersion == tc.installed })
-		if snap.UpgradeTo != tc.want || snap.Installable() != (tc.want != "") {
-			t.Errorf("tray %s, webmux %s: upgrade %q installable %v", tc.tray, tc.installed, snap.UpgradeTo, snap.Installable())
-		}
-		h.sup.Quit(false)
+// An older WSL webmux shows both versions and the upgrade; after the install
+// the running instance still differs until the user restarts it.
+func TestSupervisorUpgradeRestoresVersionHint(t *testing.T) {
+	service := &fakeService{ready: true, version: "0.2.0", installs: "0.3.0"}
+	h := newVersionedHarness(t, service, DefaultSettings(), "0.3.0")
+	h.settle()
+	snap := h.wait("checked", func(s Snapshot) bool { return s.State == StateRunning && s.Running != nil && s.Compat != "" })
+	if snap.Compat != CompatServerOlder || !snap.Installable() || VersionHint(snap) != "托盘 0.3.0 · WSL 0.2.0（WSL 较旧）" {
+		t.Fatalf("older %s %q", snap.Compat, VersionHint(snap))
+	}
+	if err := service.Install(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	h.sup.Recheck()
+	snap = h.wait("rechecked", func(s Snapshot) bool { return s.Compat == CompatMatched })
+	if snap.Installable() || VersionHint(snap) != "WSL 中已安装 0.3.0，重启 WebMux 后生效，重启会结束所有会话" || !snap.Actions().Restart {
+		t.Fatalf("after install %q %+v", VersionHint(snap), snap.Actions())
+	}
+	h.sup.Restart()
+	h.wait("second start", func(Snapshot) bool { return service.count("startTray") == 2 })
+	h.settle()
+	snap = h.wait("restarted", func(s Snapshot) bool {
+		return s.State == StateRunning && s.Running != nil && s.Running.Version == "0.3.0"
+	})
+	if hint := VersionHint(snap); hint != "" || snap.RunningCompat != CompatMatched {
+		t.Fatalf("after restart %q %s", hint, snap.RunningCompat)
+	}
+	if notes := h.notifications(); len(notes) != 0 {
+		t.Fatalf("version results notified: %v", notes)
+	}
+}
+
+// A newer contract never blocks: the tray starts it, follows it by
+// reachability without counting unparsed statuses, and stops it.
+func TestSupervisorRunsIncompatibleWebmux(t *testing.T) {
+	service := &fakeService{ready: true, version: "0.5.0", contract: 2}
+	h := newVersionedHarness(t, service, manualSettings(), "0.3.0")
+	snap := h.wait("checked", func(s Snapshot) bool { return s.Compat != "" })
+	if snap.Compat != CompatIncompatibleNewer || snap.Blocker != "" || !snap.Actions().Start || snap.Installable() || DownloadEntry(snap).Title != "下载托盘 0.5.0" {
+		t.Fatalf("incompatible %+v", snap)
+	}
+	h.sup.Start()
+	h.state(StateStarting)
+	h.settle()
+	snap = h.state(StateRunning)
+	if !snap.Degraded || StateLabel(snap) != "运行中（不兼容，功能受限）" || snap.Running == nil || *snap.Running != (BuildInfo{"0.5.0", 2}) || snap.RunningCompat != CompatIncompatibleNewer || !snap.Actions().Stop || !snap.Actions().Restart || !snap.Actions().Access {
+		t.Fatalf("degraded running %+v", snap)
+	}
+	h.clock.Advance(UnhealthyLimit * 2 * StatusInterval)
+	snap = h.sup.Snapshot()
+	if snap.State != StateRunning || service.count("startTray") != 1 || len(h.notifications()) != 0 {
+		t.Fatalf("after status cycles %s %q %v %v", snap.State, snap.Reason, service.calls, h.notifications())
+	}
+	h.sup.Stop()
+	h.state(StateStopped)
+	h.clock.Advance(2 * StatusInterval)
+	snap = h.sup.Snapshot()
+	if snap.State != StateStopped || snap.Running != nil || service.count("shutdown") != 1 || service.count("forceStop") != 0 || service.count("startTray") != 1 {
+		t.Fatalf("after stop %+v %v", snap, service.calls)
+	}
+}
+
+// An instance started from an older file keeps running after an upgrade;
+// one the tray does not manage gets the hint but no restart.
+func TestSupervisorRunningInstanceDiffersFromInstalled(t *testing.T) {
+	service := &fakeService{running: true, record: true, launcher: contract.LauncherSystemd, runningAs: "0.2.0", version: "0.3.0"}
+	settings := manualSettings()
+	settings.Mode = ModeTray
+	h := newVersionedHarness(t, service, settings, "0.3.0")
+	snap := h.wait("checked", func(s Snapshot) bool { return s.State == StateExternal && s.Compat != "" && s.Running != nil })
+	if snap.Compat != CompatMatched || snap.RunningCompat != CompatServerOlder || snap.Actions().Restart || VersionHint(snap) != "WSL 中已安装 0.3.0，重启 WebMux 后生效，重启会结束所有会话" {
+		t.Fatalf("systemd instance %+v %q", snap, VersionHint(snap))
 	}
 }
 
@@ -698,7 +770,7 @@ func TestSupervisorRefusesOccupiedPortAndOldWebmux(t *testing.T) {
 	old := &fakeService{checkErr: ErrWebmuxTooOld}
 	h = newHarness(t, old, DefaultSettings())
 	snap = h.state(StateFailed)
-	if snap.Reason != ErrWebmuxTooOld.Error() || snap.Actions().Start {
+	if snap.Reason != ErrWebmuxTooOld.Error() || snap.Actions().Start || snap.Blocker != BlockerIncompatible || InstallEntry(snap, true, false).Title != "升级 WSL 中的 webmux" {
 		t.Fatalf("old webmux %+v", snap)
 	}
 	h.clock.Advance(2*StatusInterval + BackoffMax)

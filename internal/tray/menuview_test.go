@@ -9,7 +9,8 @@ import (
 
 func TestInstallEntry(t *testing.T) {
 	missing := Snapshot{State: StateFailed, Blocker: BlockerMissing}
-	older := Snapshot{State: StateRunning, WebmuxVersion: "0.1.0", UpgradeTo: "0.2.0"}
+	tray := BuildInfo{Version: "0.2.0", Contract: 1}
+	older := Snapshot{State: StateRunning, Tray: tray, Installed: BuildInfo{Version: "0.1.0", Contract: 1}, Compat: CompatServerOlder}
 	for _, tc := range []struct {
 		name               string
 		snap               Snapshot
@@ -17,18 +18,78 @@ func TestInstallEntry(t *testing.T) {
 		show, enabled      bool
 		title              string
 	}{
-		{"usable", Snapshot{State: StateStopped, WebmuxVersion: "0.2.0"}, true, false, false, false, ""},
+		{"usable", Snapshot{State: StateStopped, Tray: tray, Installed: tray, Compat: CompatMatched}, true, false, false, false, ""},
+		{"newer", Snapshot{State: StateStopped, Tray: tray, Installed: BuildInfo{Version: "0.3.0", Contract: 1}, Compat: CompatServerNewer}, true, false, false, false, ""},
 		{"missing", missing, true, false, true, true, "安装 WSL 中的 webmux"},
-		{"incompatible", Snapshot{State: StateFailed, Blocker: BlockerIncompatible}, true, false, true, true, "升级 WSL 中的 webmux"},
+		{"no local API", Snapshot{State: StateFailed, Blocker: BlockerIncompatible}, true, false, true, true, "升级 WSL 中的 webmux"},
+		{"contract too old", Snapshot{State: StateStopped, Compat: CompatIncompatibleOlder}, true, false, true, true, "升级 WSL 中的 webmux"},
 		{"older while running", older, true, false, true, true, "升级 WSL 中的 webmux（0.1.0 → 0.2.0）"},
 		{"development tray", missing, false, false, true, false, ErrInstallUnsupported.Error()},
 		{"installing", missing, true, true, true, false, "正在安装"},
-		{"while starting", Snapshot{State: StateStarting, UpgradeTo: "0.2.0", WebmuxVersion: "0.1.0"}, true, false, true, false, "升级"},
+		{"while starting", Snapshot{State: StateStarting, Tray: tray, Installed: older.Installed, Compat: CompatServerOlder}, true, false, true, false, "升级"},
 	} {
 		got := InstallEntry(tc.snap, tc.supported, tc.running)
 		if got.Show != tc.show || got.Enabled != tc.enabled || !strings.Contains(got.Title, tc.title) {
 			t.Errorf("%s: %+v", tc.name, got)
 		}
+	}
+}
+
+// Every classification yields its status line and update entry; none of
+// them is a notification, so the menu is the only surface.
+func TestVersionHintAndDownloadEntry(t *testing.T) {
+	tray := BuildInfo{Version: "0.3.0", Contract: 1}
+	snap := func(installed BuildInfo) Snapshot {
+		return Snapshot{State: StateStopped, Tray: tray, Installed: installed, Compat: Classify(tray, installed)}
+	}
+	for _, tc := range []struct {
+		name     string
+		snap     Snapshot
+		hint     string
+		download string
+		install  bool
+	}{
+		{"matched", snap(tray), "", "", false},
+		{"dev", snap(BuildInfo{Version: "dev", Contract: 1}), "", "", false},
+		{"WSL older", snap(BuildInfo{Version: "0.2.0", Contract: 1}), "托盘 0.3.0 · WSL 0.2.0（WSL 较旧）", "", true},
+		{"WSL newer", snap(BuildInfo{Version: "0.4.0", Contract: 1}), "托盘 0.3.0 · WSL 0.4.0（托盘较旧）", "0.4.0", false},
+		{"contract newer", snap(BuildInfo{Version: "0.5.0", Contract: 2}), "WSL 中的 webmux 0.5.0 比托盘新，请升级托盘", "0.5.0", false},
+		{"contract newer dev", snap(BuildInfo{Version: "dev", Contract: 2}), "WSL 中的 webmux dev 比托盘新，请升级托盘", "", false},
+		{"contract older", snap(BuildInfo{Version: "0.0.1", Contract: 0}), "WSL 中的 webmux 版本过旧，请升级", "", true},
+	} {
+		if got := VersionHint(tc.snap); got != tc.hint {
+			t.Errorf("%s: hint %q, want %q", tc.name, got, tc.hint)
+		}
+		got := DownloadEntry(tc.snap)
+		if got.Show != (tc.download != "") || (got.Show && (got.Title != "下载托盘 "+tc.download || got.URL != "https://github.com/"+ReleaseRepo+"/releases/tag/v"+tc.download)) {
+			t.Errorf("%s: download %+v", tc.name, got)
+		}
+		if got := tc.snap.Installable(); got != tc.install {
+			t.Errorf("%s: installable %v", tc.name, got)
+		}
+	}
+	running := snap(tray)
+	running.State, running.Running = StateExternal, &BuildInfo{Version: "0.2.0", Contract: 1}
+	if got := VersionHint(running); got != "WSL 中已安装 0.3.0，重启 WebMux 后生效，重启会结束所有会话" {
+		t.Errorf("restart hint %q", got)
+	}
+	running.Running = &BuildInfo{Version: "0.3.0", Contract: 1}
+	if got := VersionHint(running); got != "" {
+		t.Errorf("same running build hint %q", got)
+	}
+}
+
+func TestStatusLine(t *testing.T) {
+	running := Snapshot{State: StateRunning, Sessions: 2, HasStatus: true, Status: contract.StatusV1{State: contract.StateRunning, Version: "0.3.0"}}
+	if got := StatusLine(running); got != "状态：运行中 · 2 个会话 · WebMux 0.3.0" {
+		t.Errorf("running %q", got)
+	}
+	running.Degraded, running.Status.Version = true, "0.5.0"
+	if got := StatusLine(running); got != "状态：运行中（不兼容，功能受限） · 会话数未知 · WebMux 0.5.0" {
+		t.Errorf("degraded %q", got)
+	}
+	if got := StatusLine(Snapshot{State: StateStopped}); got != "状态：已停止" {
+		t.Errorf("stopped %q", got)
 	}
 }
 

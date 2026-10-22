@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -76,13 +77,24 @@ type Snapshot struct {
 	// Blocker is set while webmux cannot be used at all; only an install,
 	// a settings change or a successful recheck clears it.
 	Blocker Blocker
-	// WebmuxVersion is the installed server version ("" until checked).
-	WebmuxVersion string
-	// UpgradeTo is the tray version when the installed server is older.
-	UpgradeTo string
+	// Tray is this tray's build.
+	Tray BuildInfo
+	// Installed is the build at the configured webmux path; Compat
+	// classifies it and is "" until checked.
+	Installed BuildInfo
+	Compat    Compat
+	// Running is the build of the running instance, or nil; RunningCompat
+	// classifies it.
+	Running       *BuildInfo
+	RunningCompat Compat
+	// Degraded marks an instance whose status uses a contract the tray does
+	// not speak; only reachability from Windows follows it.
+	Degraded bool
 }
 
 // Blocker classifies failures that need user action before a start.
+// BlockerIncompatible is a webmux without the local API, which the tray
+// cannot start; an unsupported contract is a Compat, not a Blocker.
 type Blocker string
 
 const (
@@ -106,7 +118,7 @@ func blockerOf(err error) Blocker {
 // Installable reports whether the menu should offer installing or
 // upgrading the server.
 func (s Snapshot) Installable() bool {
-	return s.Blocker == BlockerMissing || s.Blocker == BlockerIncompatible || s.UpgradeTo != ""
+	return s.Blocker == BlockerMissing || s.Blocker == BlockerIncompatible || s.Compat.Older()
 }
 
 // TunnelActive reports a starting or ready tunnel on the running instance.
@@ -153,7 +165,7 @@ type Supervisor struct {
 	service Service
 	reach   Reacher
 	clock   Clock
-	version string
+	tray    BuildInfo
 	publish func(Snapshot)
 	notify  func(title, message string)
 	logf    func(format string, args ...any)
@@ -228,12 +240,15 @@ type startEvent struct {
 	running   bool
 	fatal     bool
 	checked   bool
-	version   string
-	err       error
+	info      BuildInfo
+	// degraded is set with running for a reachable instance whose status
+	// uses an unsupported contract.
+	degraded *ContractError
+	err      error
 }
 type checkEvent struct {
-	version string
-	err     error
+	info BuildInfo
+	err  error
 }
 type stopEvent struct {
 	gen    int
@@ -256,7 +271,7 @@ func NewSupervisor(o Options) *Supervisor {
 	if o.Publish == nil {
 		o.Publish = func(Snapshot) {}
 	}
-	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, version: o.Version, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, 64), done: make(chan struct{})}
+	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, tray: BuildInfo{Version: o.Version, Contract: slices.Max(SupportedContracts)}, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, 64), done: make(chan struct{})}
 	go s.loop(o.Settings)
 	return s
 }
@@ -326,7 +341,7 @@ type loopState struct {
 
 func (s *Supervisor) loop(settings Settings) {
 	defer close(s.done)
-	ls := &loopState{Snapshot: Snapshot{State: StateStopped, Settings: settings, Mode: settings.Mode}}
+	ls := &loopState{Snapshot: Snapshot{State: StateStopped, Settings: settings, Mode: settings.Mode, Tray: s.tray}}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	boot := true
@@ -361,7 +376,11 @@ func (s *Supervisor) publishState(ls *loopState) {
 }
 
 func snapshotKey(s Snapshot) string {
-	return fmt.Sprintf("%s|%s|%v|%d|%s|%v|%v|%s|%v|%v|%q|%v|%s|%s|%s|%v", s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable, s.HasStatus, s.Status.State, s.Status.Drift, s.Status.Config, s.Status.URLs, s.Settings, s.Blocker, s.WebmuxVersion, s.UpgradeTo, tunnelKey(s.Status.Tunnel))
+	running := ""
+	if s.Running != nil {
+		running = s.Running.String()
+	}
+	return fmt.Sprintf("%s|%s|%v|%d|%s|%v|%v|%s|%s|%v|%v|%q|%v|%s|%v|%s|%s|%s|%v|%v", s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable, s.HasStatus, s.Status.State, s.Status.Version, s.Status.Drift, s.Status.Config, s.Status.URLs, s.Settings, s.Blocker, s.Installed, s.Compat, running, s.RunningCompat, s.Degraded, tunnelKey(s.Status.Tunnel))
 }
 
 func tunnelKey(t *contract.TunnelStatus) string {
@@ -480,7 +499,7 @@ func (s *Supervisor) fail(ls *loopState, reason string) {
 // block records a failure that needs the user to install or fix webmux.
 func (s *Supervisor) block(ls *loopState, err error) {
 	ls.Blocker = blockerOf(err)
-	ls.WebmuxVersion, ls.UpgradeTo = "", ""
+	ls.Installed, ls.Compat = BuildInfo{}, ""
 	s.fail(ls, err.Error())
 }
 
@@ -490,17 +509,16 @@ func (s *Supervisor) recheck(ctx context.Context, ls *loopState) {
 	}
 	ls.checkBusy = true
 	go func() {
-		version, err := s.service.Check(ctx)
-		s.post(checkEvent{version: version, err: err})
+		info, err := s.service.Check(ctx)
+		s.post(checkEvent{info: info, err: err})
 	}()
 }
 
-func (s *Supervisor) checked(ls *loopState, version string) {
-	ls.WebmuxVersion = version
-	ls.UpgradeTo = ""
-	if UpgradeAvailable(s.version, version) {
-		ls.UpgradeTo = s.version
-	}
+// checked classifies the installed build and logs both sides.
+func (s *Supervisor) checked(ls *loopState, info BuildInfo) {
+	ls.Installed = info
+	ls.Compat = Classify(ls.Tray, info)
+	s.logf("check: tray %s, WSL webmux %s: %s", ls.Tray, info, ls.Compat)
 }
 
 func (s *Supervisor) onCheck(ctx context.Context, ls *loopState, ev checkEvent) {
@@ -517,10 +535,10 @@ func (s *Supervisor) onCheck(ctx context.Context, ls *loopState, ev checkEvent) 
 		}
 		// A running server keeps working; the menu offers the install.
 		ls.Blocker = blocker
-		ls.WebmuxVersion, ls.UpgradeTo = "", ""
+		ls.Installed, ls.Compat = BuildInfo{}, ""
 		return
 	}
-	s.checked(ls, ev.version)
+	s.checked(ls, ev.info)
 	if ls.Blocker == "" {
 		return
 	}
@@ -529,7 +547,7 @@ func (s *Supervisor) onCheck(ctx context.Context, ls *loopState, ev checkEvent) 
 		ls.State = StateStopped
 		ls.Reason = ""
 	}
-	s.logf("webmux %s is usable again", ev.version)
+	s.logf("webmux %s is usable again", ev.info.Version)
 	s.refresh(ctx, ls)
 }
 
@@ -639,6 +657,8 @@ func (s *Supervisor) command(ctx context.Context, ls *loopState, c command) bool
 			ls.watching = false
 			ls.HasStatus = false
 			ls.Status = contract.StatusV1{}
+			ls.Degraded = false
+			clearRunning(ls)
 			ls.State = StateStopped
 			s.refresh(ctx, ls)
 		}
@@ -647,7 +667,7 @@ func (s *Supervisor) command(ctx context.Context, ls *loopState, c command) bool
 			if ls.Blocker != "" && ls.State == StateFailed {
 				ls.State, ls.Reason = StateStopped, ""
 			}
-			ls.Blocker, ls.WebmuxVersion, ls.UpgradeTo = "", "", ""
+			ls.Blocker, ls.Installed, ls.Compat = "", BuildInfo{}, ""
 			s.recheck(ctx, ls)
 		}
 	case cmdQuit:
@@ -682,13 +702,13 @@ func (s *Supervisor) start(ctx context.Context, ls *loopState) {
 	go func() {
 		ev := startEvent{gen: gen}
 		defer func() { s.post(ev) }()
-		version, err := s.service.Check(ctx)
+		info, err := s.service.Check(ctx)
 		if err != nil {
 			b := blockerOf(err)
 			ev.err, ev.fatal = err, b == BlockerMissing || b == BlockerIncompatible
 			return
 		}
-		ev.checked, ev.version = true, version
+		ev.checked, ev.info = true, info
 		ev.detection = s.service.Detect(ctx)
 		resolved, err := Resolve(mode, ev.detection)
 		if err != nil {
@@ -697,6 +717,15 @@ func (s *Supervisor) start(ctx context.Context, ls *loopState) {
 		}
 		ev.mode = resolved
 		status, err := s.service.Status(ctx)
+		var unsupported *ContractError
+		if errors.As(err, &unsupported) {
+			// Only Windows reachability tells whether it already runs.
+			if unsupported.Local != "" && s.reach != nil && s.reach(ctx, unsupported.Local) == nil {
+				ev.running, ev.degraded = true, unsupported
+				return
+			}
+			status, err = contract.StatusV1{}, nil
+		}
 		if err != nil {
 			ev.err = err
 			return
@@ -729,10 +758,16 @@ func (s *Supervisor) onStart(ctx context.Context, ls *loopState, ev startEvent) 
 	ls.Detection = ev.detection
 	if ev.checked {
 		ls.Blocker = ""
-		s.checked(ls, ev.version)
+		s.checked(ls, ev.info)
 	}
 	if ev.mode != "" {
 		ls.Mode = ev.mode
+	}
+	if ev.degraded != nil {
+		// Reachability decides; the deadline covers it never answering.
+		ls.readyBy = s.clock.Now().Add(ReadyTimeout)
+		s.onStatus(ctx, ls, statusEvent{gen: ls.gen, err: ev.degraded})
+		return
 	}
 	if ev.running {
 		s.onStatus(ctx, ls, statusEvent{gen: ls.gen, status: ev.status})
@@ -797,6 +832,7 @@ func (s *Supervisor) unexpectedExit(ctx context.Context, ls *loopState, detail s
 	ls.watching = false
 	ls.gen++
 	ls.Sessions = 0
+	clearRunning(ls)
 	ls.readyBy = time.Time{}
 	message := "WebMux 意外退出（" + detail + "），终端会话已丢失"
 	if tunnel {
@@ -831,6 +867,11 @@ func (s *Supervisor) onStatus(ctx context.Context, ls *loopState, ev statusEvent
 		s.notify("WebMux 服务失败", ev.err.Error())
 		return
 	}
+	var unsupported *ContractError
+	if errors.As(ev.err, &unsupported) {
+		s.onDegraded(ctx, ls, unsupported, now)
+		return
+	}
 	if ev.err != nil && blockerOf(ev.err) != "" {
 		s.block(ls, ev.err)
 		return
@@ -840,7 +881,12 @@ func (s *Supervisor) onStatus(ctx context.Context, ls *loopState, ev statusEvent
 	wasRunning := ls.HasStatus && ls.Status.State == contract.StateRunning
 	tunnelWas := ls.TunnelActive()
 	if ev.err == nil {
-		ls.Status, ls.HasStatus = status, true
+		ls.Status, ls.HasStatus, ls.Degraded = status, true, false
+		if status.State == contract.StateRunning {
+			setRunning(ls, BuildInfo{Version: status.Version, Contract: status.V})
+		} else {
+			clearRunning(ls)
+		}
 	}
 	if t := status.Tunnel; ev.err == nil && tunnelWas && t != nil && t.State == contract.TunnelFailed {
 		s.notify("公网隧道已断开", t.Error)
@@ -920,6 +966,70 @@ func (s *Supervisor) onStatus(ctx context.Context, ls *loopState, ev statusEvent
 	}
 }
 
+// onDegraded follows an instance whose status uses a contract the tray does
+// not speak. Only reachability from Windows tells whether it runs, so the
+// unparsed status never counts as unresponsive: it neither fails nor
+// restarts the instance.
+func (s *Supervisor) onDegraded(ctx context.Context, ls *loopState, e *ContractError, now time.Time) {
+	defer s.schedule(ls, now)
+	ls.lastReason = e.Error()
+	ls.unhealthy = 0
+	local := e.Local
+	if local == "" {
+		local = ls.Status.URLs.Local
+	}
+	var state contract.State
+	if ls.Degraded && ls.HasStatus {
+		state = ls.Status.State // what reachability last decided
+	}
+	if !ls.Degraded {
+		s.logf("status: %v; following the instance by reachability", e)
+		s.stopWatch(ls)
+		ls.watching = false
+		ls.Sessions = 0
+	}
+	ls.Degraded = true
+	ls.Status = contract.StatusV1{V: e.V, Version: e.Version, State: state, URLs: contract.URLs{Local: local}}
+	ls.HasStatus = true
+	s.checkReach(ctx, ls)
+}
+
+// onDegradedReach turns reachability into the state of a degraded instance.
+func (s *Supervisor) onDegradedReach(ls *loopState, err error) {
+	if ls.State == StateStopping || ls.State == StateRestarting {
+		return
+	}
+	now := s.clock.Now()
+	if err != nil {
+		// Starting waits for its deadline; stopped and failed stay.
+		if ls.State == StateRunning || ls.State == StateUnreachable {
+			s.logf("Windows cannot reach %s: %v", ls.Status.URLs.Local, err)
+			ls.State = StateUnreachable
+			ls.Reachable = false
+			ls.Reason = s.hint(ls)
+			ls.nextReach = now.Add(ReachInterval)
+		}
+		return
+	}
+	if ls.State != StateRunning {
+		s.logf("WebMux %s running with an unsupported contract (%s)", ls.Status.Version, ModeLabel(ls.Mode))
+	}
+	ls.Status.State = contract.StateRunning
+	setRunning(ls, BuildInfo{Version: ls.Status.Version, Contract: ls.Status.V})
+	ls.State = StateRunning
+	ls.Reachable = true
+	ls.readyBy = time.Time{}
+	ls.Reason = s.hint(ls)
+	ls.nextReach = now.Add(ReachInterval)
+}
+
+func setRunning(ls *loopState, b BuildInfo) {
+	ls.Running = &b
+	ls.RunningCompat = Classify(ls.Tray, b)
+}
+
+func clearRunning(ls *loopState) { ls.Running, ls.RunningCompat = nil, "" }
+
 // sessionsUnknown is true before the subscription reports a count.
 func (s *Supervisor) sessionsUnknown(ls *loopState) bool { return !ls.watching || ls.Sessions == 0 }
 
@@ -978,6 +1088,10 @@ func (s *Supervisor) schedule(ls *loopState, now time.Time) {
 }
 
 func (s *Supervisor) onReach(ls *loopState, err error) {
+	if ls.Degraded {
+		s.onDegradedReach(ls, err)
+		return
+	}
 	if ls.State != StateRunning && ls.State != StateUnreachable {
 		return
 	}
@@ -1042,7 +1156,13 @@ func (s *Supervisor) waitStopped(ctx context.Context, proc Process) bool {
 		case <-deadline:
 			return false
 		case <-s.clock.After(500 * time.Millisecond):
-			if status, err := s.service.Status(ctx); err == nil && status.State == contract.StateStopped {
+			status, err := s.service.Status(ctx)
+			if err == nil && status.State == contract.StateStopped {
+				return true
+			}
+			// A degraded instance has stopped once its link stops answering.
+			var unsupported *ContractError
+			if errors.As(err, &unsupported) && unsupported.Local != "" && s.reach != nil && s.reach(ctx, unsupported.Local) != nil {
 				return true
 			}
 		}
@@ -1062,6 +1182,8 @@ func (s *Supervisor) onStop(ctx context.Context, ls *loopState, ev stopEvent) {
 	ls.Mode = ls.Settings.Mode
 	ls.HasStatus = false
 	ls.Status = contract.StatusV1{}
+	ls.Degraded = false
+	clearRunning(ls)
 	if ev.err != nil {
 		ls.Reason = "停止失败：" + ev.err.Error()
 	}
