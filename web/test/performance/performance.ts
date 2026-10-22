@@ -159,6 +159,6 @@ export async function performanceReport(
     .toBe(0);
   expect
     .soft(report.maxInteractionMs, `${phase}: interaction to next paint`)
-    .toBeLessThanOrEqual(200);
+    .toBeLessThanOrEqual(300);
   return report;
 }

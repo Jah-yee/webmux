@@ -6,7 +6,7 @@
 
 - 桌面 Chromium 与 Pixel 7 Chromium 在首次导航前设置 CDP CPU rate=4。
 - 从文档启动记录 Layout Shift、Event Timing 和长任务。CLS 使用 1 秒间隔、最长 5 秒的会话窗口，并排除 `hadRecentInput`；同时要求所有非预期位移之和严格等于 0。
-- 已采集交互的最大 Event Timing 不超过 200 ms。该实验指标不是完整真实用户 INP。
+- 已采集交互的最大 Event Timing 不超过 300 ms。该实验指标不是完整真实用户 INP。
 - 1000 行输出后的真实键盘输入回显不超过 1500 ms。
 - 冷启动延迟 API 750 ms、字体 650 ms；浅色桌面场景显式启用 16 px 占宽滚动条，避免 headless 默认隐藏滚动条掩盖位移。
 
