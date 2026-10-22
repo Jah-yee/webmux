@@ -39,7 +39,11 @@
     ["Ctrl+L", "\x0c"],
     ["Ctrl+R", "\x12"],
   ];
-  const keepFocus = (event: PointerEvent) => event.preventDefault();
+  // iOS Safari drops the active element on pointerdown even when the event is
+  // canceled if the element has a click handler, so cancel the compatibility
+  // mousedown instead. Canceling pointerdown would suppress that mousedown and
+  // leave the keyboard to close. Click still fires after a canceled mousedown.
+  const keepFocus = (event: MouseEvent) => event.preventDefault();
 </script>
 
 <aside class="soft-keys shrink-0 border-t bg-card" aria-label="终端软键">
@@ -48,27 +52,24 @@
       variant="outline"
       size="sm"
       aria-label="唤起或收起键盘"
-      onpointerdown={keepFocus}
+      onmousedown={keepFocus}
       onclick={keyboard}>⌨</Button
     >
-    <Button
-      variant="outline"
-      size="sm"
-      onpointerdown={keepFocus}
-      onclick={paste}>粘贴</Button
+    <Button variant="outline" size="sm" onmousedown={keepFocus} onclick={paste}
+      >粘贴</Button
     >
     {#each symbols as symbol (symbol)}
       <Button
         variant="outline"
         size="sm"
-        onpointerdown={keepFocus}
+        onmousedown={keepFocus}
         onclick={() => send(symbol)}>{symbol}</Button
       >
     {/each}
     {#each keys.slice(0, 2) as [label, input] (label)}<Button
         variant="outline"
         size="sm"
-        onpointerdown={keepFocus}
+        onmousedown={keepFocus}
         onclick={() => send(input)}>{label}</Button
       >{/each}
     {#each ["ctrl", "alt"] as key (key)}
@@ -76,7 +77,7 @@
         variant={modifiers[key as keyof Modifiers] ? "default" : "outline"}
         size="sm"
         aria-pressed={modifiers[key as keyof Modifiers]}
-        onpointerdown={keepFocus}
+        onmousedown={keepFocus}
         onclick={() => toggle(key as keyof Modifiers)}
         >{key === "ctrl" ? "Ctrl" : "Alt"}</Button
       >
@@ -84,13 +85,13 @@
     {#each keys.slice(2) as [label, input] (label)}<Button
         variant="outline"
         size="sm"
-        onpointerdown={keepFocus}
+        onmousedown={keepFocus}
         onclick={() => send(input)}>{label}</Button
       >{/each}
     {#each combinations as [label, input] (label)}<Button
         variant="outline"
         size="sm"
-        onpointerdown={keepFocus}
+        onmousedown={keepFocus}
         onclick={() => send(input)}>{label}</Button
       >{/each}
   </div>

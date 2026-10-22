@@ -91,9 +91,8 @@ test("mobile terminal taps leave input unfocused and only the keyboard button to
   await createShell(page, "Explicit mobile keyboard", workDir);
   const input = page.locator(".xterm-helper-textarea");
   const screen = page.locator(".xterm-screen");
-  const keyboard = page
-    .getByRole("complementary", { name: "终端软键" })
-    .getByRole("button", { name: "唤起或收起键盘" });
+  const bar = page.getByRole("complementary", { name: "终端软键" });
+  const keyboard = bar.getByRole("button", { name: "唤起或收起键盘" });
 
   await expect(input).not.toBeFocused();
   // Locator.tap uses the browser's native touch path, including compatibility
@@ -105,6 +104,10 @@ test("mobile terminal taps leave input unfocused and only the keyboard button to
   await page.keyboard.type("printf 'mobile-keyboard-%s\\n' ready");
   await page.keyboard.press("Enter");
   await expectTerminalLine(page, "mobile-keyboard-ready");
+  // Soft keys must not dismiss an open keyboard: the direction key sends its
+  // sequence without moving focus off the terminal input.
+  await bar.getByRole("button", { name: "←", exact: true }).tap();
+  await expect(input).toBeFocused();
   await keyboard.tap();
   await expect(input).not.toBeFocused();
   await screen.tap();
