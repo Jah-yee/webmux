@@ -73,7 +73,7 @@ func Load(path string, required bool) (Config, error) {
 			{Name: "shell", Label: "Shell", Cmd: []string{}},
 			{Name: "claude", Label: "Claude Code", Cmd: []string{"claude"}, AllowArgs: true},
 			{Name: "codex", Label: "Codex CLI", Cmd: []string{"codex"}, AllowArgs: true},
-			{Name: "omp", Label: "omp", Cmd: []string{"omp"}, AllowArgs: true},
+			{Name: "omp", Label: "omp", Cmd: []string{"bash", "-ic", `exec omp "$@"`, "omp"}, AllowArgs: true},
 		},
 	}
 	if _, err := toml.DecodeFile(path, &c); err != nil {

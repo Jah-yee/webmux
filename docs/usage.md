@@ -109,9 +109,9 @@ jq -nc --arg seq "$seq" '{terminalSequence: $seq}'
 - **已有工作树**：在已登记仓库的某个工作树（或其子目录）中启动。
 - **新工作树**：先创建 Git worktree，再启动会话。
 
-启动命令可选预设（Shell、Claude Code、Codex CLI、omp，可在配置中自定义）并追加参数，或选择“自定义”输入完整命令。命令按 argv 直接执行，**不经 shell 展开**；需要管道、变量等 shell 语法时，请显式写成 `bash -lc 'npm run dev | tee dev.log'`。
+启动命令可选预设（Shell、Claude Code、Codex CLI、omp，可在配置中自定义）并追加参数，或选择“自定义”输入完整命令。命令按 argv 直接执行，**不经 shell 展开**；需要管道、变量等 shell 语法时，请显式写成 `bash -lc 'npm run dev | tee dev.log'`。omp 预设经交互式 bash 启动，以加载 `~/.bashrc` 中的环境变量；追加参数会原样传给 omp。
 
-预设不会自动安装 agent，对应程序必须在服务进程的 `PATH` 中。
+预设不会自动安装 agent，对应程序必须能被服务找到；omp 经交互式 bash 启动，因此也可由 `~/.bashrc` 中的 `PATH` 补充。
 
 ## 从终端启动与附着
 

@@ -50,5 +50,5 @@ allow_args = true
 [[presets]]
 name = "omp"
 label = "omp"
-cmd = ["omp"]
+cmd = ["bash", "-ic", "exec omp \"$@\"", "omp"]
 allow_args = true
