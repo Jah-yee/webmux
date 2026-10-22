@@ -95,6 +95,20 @@ type StatusV1 struct {
 	// Tunnel is present when the running server can start and stop its
 	// Cloudflare Tunnel at runtime; older servers omit it.
 	Tunnel *TunnelStatus `json:"tunnel,omitempty"`
+	// Push is present when the running server supports attention push;
+	// older servers omit it.
+	Push *PushStatus `json:"push,omitempty"`
+}
+
+// PushStatus describes Web Push on a running server. It never carries
+// subscription endpoints or keys. PublicOrigin is https://<tunnel.hostname>
+// when a Named Tunnel is configured, the only origin phones can subscribe from.
+type PushStatus struct {
+	Enabled       bool   `json:"enabled"`
+	Available     bool   `json:"available"`
+	Error         string `json:"error,omitempty"`
+	Subscriptions int    `json:"subscriptions"`
+	PublicOrigin  string `json:"publicOrigin,omitempty"`
 }
 
 // Tunnel states.

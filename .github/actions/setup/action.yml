@@ -76,6 +76,8 @@ runs:
         key: go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
         restore-keys: go-${{ runner.os }}-${{ runner.arch }}-
 
+    # The shell runs most suites; the push E2E needs new headless Chromium,
+    # whose notification permission and service worker notifications work.
     - if: inputs.browsers == 'true'
       shell: bash
-      run: pnpm --dir web exec playwright install --with-deps --only-shell chromium
+      run: pnpm --dir web exec playwright install --with-deps chromium

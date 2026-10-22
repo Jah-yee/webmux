@@ -147,3 +147,50 @@ func TestTunnelCloudflaredPathExpandsHome(t *testing.T) {
 		t.Fatalf("cloudflared path %q", c.Tunnel.Cloudflared)
 	}
 }
+
+func TestPushConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	for _, row := range []struct {
+		name, body string
+		err        string // substring; empty means valid
+		want       PushConfig
+	}{
+		{name: "absent", want: PushConfig{Enabled: true, Subject: DefaultPushSubject, TTLSeconds: 86400, Kinds: DefaultPushKinds(), IncludeTitle: true}},
+		{name: "custom", body: "enabled = false\nsubject = 'mailto:me@example.com'\nttl_seconds = 0\nkinds = ['question', 'bell']\ninclude_title = false\n",
+			want: PushConfig{Subject: "mailto:me@example.com", Kinds: []string{"question", "bell"}}},
+		{name: "no kinds", body: "kinds = []\n", want: PushConfig{Enabled: true, Subject: DefaultPushSubject, TTLSeconds: 86400, Kinds: []string{}, IncludeTitle: true}},
+		{name: "max ttl", body: "ttl_seconds = 2419200\n", want: PushConfig{Enabled: true, Subject: DefaultPushSubject, TTLSeconds: MaxPushTTLSeconds, Kinds: DefaultPushKinds(), IncludeTitle: true}},
+		{name: "heuristic waiting", body: "kinds = ['question', 'waiting']\n", err: `push.kinds: "waiting" is not supported`},
+		{name: "duplicate kind", body: "kinds = ['done', 'done']\n", err: `"done" is listed twice`},
+		{name: "http subject", body: "subject = 'http://example.com'\n", err: "https:// URL or a mailto:"},
+		{name: "bare subject", body: "subject = 'example.com'\n", err: "https:// URL or a mailto:"},
+		{name: "mailto without address", body: "subject = 'mailto:'\n", err: "https:// URL or a mailto:"},
+		{name: "negative ttl", body: "ttl_seconds = -1\n", err: "push.ttl_seconds -1"},
+		{name: "ttl too long", body: "ttl_seconds = 2419201\n", err: "push.ttl_seconds"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			path := filepath.Join(dir, strings.ReplaceAll(row.name, " ", "-")+".toml")
+			if err := os.WriteFile(path, []byte("[push]\n"+row.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := Load(path, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = c.Validate()
+			if row.err != "" {
+				if err == nil || !strings.Contains(err.Error(), row.err) {
+					t.Fatalf("Validate() = %v, want %q", err, row.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(c.Push, row.want) {
+				t.Fatalf("push = %#v, want %#v", c.Push, row.want)
+			}
+		})
+	}
+}

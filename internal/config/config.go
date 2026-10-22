@@ -29,6 +29,7 @@ type Config struct {
 	AllowedOrigins   []string         `toml:"allowed_origins"`
 	Presets          []session.Preset `toml:"presets"`
 	Tunnel           TunnelConfig     `toml:"tunnel"`
+	Push             PushConfig       `toml:"push"`
 }
 
 // TunnelConfig selects a Cloudflare Tunnel. An empty Token means a Quick
@@ -45,6 +46,69 @@ type TunnelConfig struct {
 
 // Named reports whether the tunnel runs with Cloudflare credentials.
 func (t TunnelConfig) Named() bool { return t.Token != "" }
+
+// NamedHostname returns the public hostname of a configured Named Tunnel, or
+// "" when the instance has no Named Tunnel.
+func (t TunnelConfig) NamedHostname() string {
+	if !t.Named() {
+		return ""
+	}
+	return t.Hostname
+}
+
+// PushConfig controls Web Push attention alerts.
+type PushConfig struct {
+	Enabled bool   `toml:"enabled"`
+	Subject string `toml:"subject"`
+	// TTLSeconds is how long a push service keeps an undelivered alert.
+	TTLSeconds   int      `toml:"ttl_seconds"`
+	Kinds        []string `toml:"kinds"`
+	IncludeTitle bool     `toml:"include_title"`
+}
+
+const (
+	DefaultPushSubject = "https://github.com/mzdluo123/webmux"
+	// MaxPushTTLSeconds is the four-week ceiling push services accept.
+	MaxPushTTLSeconds = 2419200
+)
+
+// DefaultPushKinds leaves out bell: a bare BEL is too weak to wake a phone.
+func DefaultPushKinds() []string {
+	return []string{"question", "permission", "error", "done", "notify"}
+}
+
+func (p *PushConfig) validate() error {
+	if p.Subject == "" {
+		p.Subject = DefaultPushSubject
+	}
+	if p.Kinds == nil {
+		p.Kinds = DefaultPushKinds()
+	}
+	u, err := url.Parse(p.Subject)
+	switch {
+	case err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil:
+	case err == nil && u.Scheme == "mailto" && strings.Contains(u.Opaque, "@"):
+	default:
+		return fmt.Errorf("push.subject %q must be an https:// URL or a mailto: address", p.Subject)
+	}
+	if p.TTLSeconds < 0 || p.TTLSeconds > MaxPushTTLSeconds {
+		return fmt.Errorf("push.ttl_seconds %d must be between 0 and %d", p.TTLSeconds, MaxPushTTLSeconds)
+	}
+	seen := map[string]bool{}
+	for _, kind := range p.Kinds {
+		switch session.AttentionKind(kind) {
+		case session.AttentionQuestion, session.AttentionPermission, session.AttentionError,
+			session.AttentionDone, session.AttentionNotify, session.AttentionBell:
+		default:
+			return fmt.Errorf("push.kinds: %q is not supported; use question, permission, error, done, notify or bell", kind)
+		}
+		if seen[kind] {
+			return fmt.Errorf("push.kinds: %q is listed twice", kind)
+		}
+		seen[kind] = true
+	}
+	return nil
+}
 
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
@@ -74,6 +138,13 @@ func Load(path string, required bool) (Config, error) {
 			{Name: "claude", Label: "Claude Code", Cmd: []string{"claude"}, AllowArgs: true},
 			{Name: "codex", Label: "Codex CLI", Cmd: []string{"codex"}, AllowArgs: true},
 			{Name: "omp", Label: "omp", Cmd: []string{"bash", "-ic", `exec omp "$@"`, "omp"}, AllowArgs: true},
+		},
+		Push: PushConfig{
+			Enabled:      true,
+			Subject:      DefaultPushSubject,
+			TTLSeconds:   86400,
+			Kinds:        DefaultPushKinds(),
+			IncludeTitle: true,
 		},
 	}
 	if _, err := toml.DecodeFile(path, &c); err != nil {
@@ -130,7 +201,10 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("prompt pattern: %w", err)
 		}
 	}
-	return c.Tunnel.validate()
+	if err := c.Tunnel.validate(); err != nil {
+		return err
+	}
+	return c.Push.validate()
 }
 func (t *TunnelConfig) validate() error {
 	if t.Hostname != "" {

@@ -13,6 +13,7 @@ import (
 	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -30,7 +31,7 @@ type localRuntime struct {
 
 // startRuntime acquires the lock, listens on the socket and writes the
 // record. It must run after the TCP listener is bound and before it serves.
-func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, shutdown func(), tunnels *tunnelController) *localRuntime {
+func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, pushes *push.Service, shutdown func(), tunnels *tunnelController) *localRuntime {
 	rt := &localRuntime{dir: runtime.Dir(c.StateDir)}
 	if err := runtime.EnsureDir(rt.dir); err != nil {
 		slog.Warn("runtime directory unavailable; runtime record and local API disabled", "error", err)
@@ -74,8 +75,8 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Ma
 	} else {
 		record.Socket = path
 		rt.server = &http.Server{
-			Handler: api.NewLocal(c.Config, m, workspaces, codes, api.Local{
-				Status:    func() contract.StatusV1 { return localStatus(record, c, m, tunnels) },
+			Handler: api.NewLocal(c.Config, m, workspaces, codes, pushes, api.Local{
+				Status:    func() contract.StatusV1 { return localStatus(record, c, m, tunnels, pushes) },
 				Launcher:  record.Launcher,
 				Shutdown:  shutdown,
 				InSession: m.ContainsProcess,
@@ -95,7 +96,7 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, m *session.Ma
 	return rt
 }
 
-func localStatus(record runtime.Record, c serverRun, m *session.Manager, tunnels *tunnelController) contract.StatusV1 {
+func localStatus(record runtime.Record, c serverRun, m *session.Manager, tunnels *tunnelController, pushes *push.Service) contract.StatusV1 {
 	s := client.FromRecord(record, client.NetInterfaces)
 	s.State = contract.StateRunning
 	s.LocalAPI = true
@@ -105,6 +106,11 @@ func localStatus(record runtime.Record, c serverRun, m *session.Manager, tunnels
 	client.ApplyConfig(&s, record, c.ConfigPath, c.ConfigExplicit)
 	tunnel := tunnels.Status()
 	s.Tunnel = &tunnel
+	state := pushes.Status()
+	s.Push = &contract.PushStatus{Enabled: state.Enabled, Available: state.Available, Error: state.Error, Subscriptions: state.Subscriptions}
+	if host := c.Tunnel.NamedHostname(); host != "" {
+		s.Push.PublicOrigin = "https://" + host
+	}
 	return s
 }
 

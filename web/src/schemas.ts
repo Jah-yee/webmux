@@ -196,7 +196,11 @@ export const RemovalPreviewSchema = z.object({
 });
 export type RemovalPreview = z.infer<typeof RemovalPreviewSchema>;
 export const DirectoriesSchema = z.array(z.string());
-export const ErrorSchema = z.object({ error: z.string() });
+// `reason` accompanies push 409s; other errors omit it.
+export const ErrorSchema = z.object({
+  error: z.string(),
+  reason: z.string().optional(),
+});
 export const UploadSchema = z.object({ path: z.string().startsWith("/") });
 export const RecentDirsSchema = z
   .array(z.string())
@@ -229,6 +233,23 @@ export const QuickCommandsSchema = z
     "快捷指令 ID 不能重复",
   );
 export const NoContentSchema = z.undefined();
+export const PushReasonSchema = z.enum([
+  "disabled",
+  "storage",
+  "quick_tunnel",
+  "unsupported_origin",
+]);
+export type PushReason = z.infer<typeof PushReasonSchema>;
+export const PushStatusSchema = z.object({
+  enabled: z.boolean(),
+  available: z.boolean(),
+  reason: PushReasonSchema.optional(),
+  // Base64url uncompressed P-256 VAPID key, present only when available.
+  publicKey: z.string().optional(),
+  subscriptions: z.number().int().min(0),
+});
+export type PushStatus = z.infer<typeof PushStatusSchema>;
+export const PushSubscriptionResultSchema = z.object({ id: z.string() });
 
 const CodeSourceSchema = z.enum(["worktree", "index", "head", "empty"]);
 export const CodeContextSchema = z.object({

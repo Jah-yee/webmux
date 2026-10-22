@@ -20,6 +20,7 @@ import (
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tunnel"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -238,14 +239,15 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	defer workspaces.Close()
 	codes := codeview.New(m)
 	defer codes.Close()
+	pushes := push.New(c.Push, c.StateDir, m, slog.Default(), nil)
 	// The public origin always exists: it allows no host until a tunnel
 	// reports ready, so a server without a tunnel behaves as before.
 	public := &api.PublicOrigin{}
 	local := localOrigin(listener.Addr())
 	tunnels := newTunnelController(c.Tunnel, local, c.Token, public, locator.Find, out, slog.Default())
-	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, cancel, tunnels)
+	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, pushes, cancel, tunnels)
 	server := &http.Server{
-		Handler:           api.New(c.Config, m, workspaces, public, codes),
+		Handler:           api.New(c.Config, m, workspaces, public, pushes, codes),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -274,6 +276,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	tunnels.Close()
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
+	pushes.Close() // Stop sending before sessions exit.
 	m.Shutdown(shutdown)
 	if shutdownErr := server.Shutdown(shutdown); shutdownErr != nil {
 		_ = server.Close()

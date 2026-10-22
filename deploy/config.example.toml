@@ -29,6 +29,17 @@ bell_attention = true
 # Mirror prefixes tried after GitHub; [] = GitHub only.
 # download_mirrors = ["https://ghfast.top", "https://gh-proxy.com"]
 
+# Web Push attention alerts (question, approval, turn done, error, notify).
+# Phones subscribe only from the Named Tunnel origin https://<tunnel.hostname>
+# (a Quick Tunnel address changes every start); loopback works on desktops.
+# Keys and subscriptions live in <state_dir>/push.json.
+# [push]
+# enabled = true
+# subject = "https://github.com/mzdluo123/webmux"  # https:// URL or mailto:
+# ttl_seconds = 86400                                 # 0..2419200
+# kinds = ["question", "permission", "error", "done", "notify"]  # also "bell"
+# include_title = true                                # false: title "WebMux"
+
 [[presets]]
 name = "shell"
 label = "Shell"

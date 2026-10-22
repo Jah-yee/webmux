@@ -55,7 +55,7 @@ func newFixture() *fixture {
 	must(c.Validate())
 	f.manager = session.NewManager(c.SessionOptions())
 	f.workspace = workspace.New(c.StateDir, f.manager, root)
-	f.server = httptest.NewServer(api.New(c, f.manager, f.workspace, nil))
+	f.server = httptest.NewServer(api.New(c, f.manager, f.workspace, nil, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	f.stopSignals = stop
 	go func() { <-ctx.Done(); f.close() }()

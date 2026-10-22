@@ -93,6 +93,7 @@ type menu struct {
 	remoteLinks, forwardLinks                                         []*item
 	copyToken                                                         *item
 	tunnel, tunnelInfo, copyPublic                                    *item
+	pushInfo, pushGuide                                               *item
 
 	remote, fwHeadline, fwBlocked, fwInit *item
 	fwLinks, fwCandidates                 []*item
@@ -167,7 +168,11 @@ func buildMenu() *menu {
 	m.tunnelInfo.mi.Disable()
 	m.tunnelInfo.enabled = false
 	m.copyPublic = add("复制公网链接")
-	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.copyPublic} {
+	m.pushInfo = add("")
+	m.pushInfo.mi.Disable()
+	m.pushInfo.enabled = false
+	m.pushGuide = add("手机推送设置说明…")
+	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.copyPublic, m.pushInfo, m.pushGuide} {
 		it.hide()
 	}
 	m.remote = add("远程访问")
@@ -521,6 +526,13 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 		m.tunnel.hide()
 		m.tunnelInfo.hide()
 		m.copyPublic.hide()
+	}
+	if push := tray.PushEntry(snap); push.Show && !v.noWSL {
+		m.pushInfo.set(push.Info, false, false)
+		m.pushGuide.set("手机推送设置说明…", true, false)
+	} else {
+		m.pushInfo.hide()
+		m.pushGuide.hide()
 	}
 
 	m.remote.set("远程访问", !v.noWSL, false)

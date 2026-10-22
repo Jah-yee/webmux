@@ -14,6 +14,7 @@ import (
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -52,12 +53,13 @@ func LocalConnContext(ctx context.Context, c net.Conn) context.Context {
 // the authentication, and browsers cannot reach a Unix socket, so token,
 // Host and Origin checks are skipped. Routes match the TCP handler, plus
 // /local/v1/*.
-func NewLocal(c config.Config, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, local Local) http.Handler {
+func NewLocal(c config.Config, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, pushes *push.Service, local Local) http.Handler {
 	var shared []*codeview.Service
 	if codes != nil {
 		shared = append(shared, codes)
 	}
-	s := newServer(c, m, workspaces, nil, shared)
+	s := newServer(c, m, workspaces, nil, pushes, shared)
+	s.local = true
 	routes := s.routes()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+contract.PathStatus, func(w http.ResponseWriter, r *http.Request) {

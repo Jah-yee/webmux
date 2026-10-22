@@ -30,6 +30,7 @@
   } from "../quickCommands";
   import { quickCommands, saveQuickCommands } from "../quickCommands.svelte";
   import QuickCommandDialog from "../components/QuickCommandDialog.svelte";
+  import PushSettings from "../components/PushSettings.svelte";
   import { Switch } from "$lib/components/ui/switch";
   import { browserDraftStorage } from "../draftStorage";
 
@@ -83,8 +84,8 @@
   });
   onMount(() => {
     document.title = "WebMux · 设置";
-    if (location.hash === "#quick-commands")
-      document.getElementById("quick-commands")?.scrollIntoView();
+    if (location.hash === "#quick-commands" || location.hash === "#push")
+      document.getElementById(location.hash.slice(1))?.scrollIntoView();
   });
 </script>
 
@@ -236,6 +237,7 @@
         </div>
       </Card.Content>
     </Card.Root>
+    <PushSettings />
     <Card.Root>
       <Card.Header>
         <Card.Title>会话输出预览</Card.Title>

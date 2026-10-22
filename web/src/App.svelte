@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api, consumeTokenFragment, store, stored } from "./api";
   import { HealthSchema } from "./schemas";
+  import { sync as syncPush } from "./push";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -27,6 +28,9 @@
       await api("/health", HealthSchema);
       ready = true;
       error = "";
+      // Re-registers an existing push subscription, e.g. after the server
+      // rebuilt its store; without one it touches nothing.
+      void syncPush().catch(() => undefined);
     } catch (err) {
       error = (err as Error).message;
     } finally {

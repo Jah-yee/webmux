@@ -10,6 +10,7 @@ import (
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/hub"
+	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
 	"io"
@@ -28,12 +29,17 @@ type Server struct {
 	Workspace *workspace.Service
 	Code      *codeview.Service
 	Public    *PublicOrigin
+	// Push is nil when [push] enabled = false.
+	Push *push.Service
+	// local marks the Unix-socket handler, which serves no browser page.
+	local bool
 }
 
 // New builds the TCP handler. public is the runtime tunnel origin; nil means
-// no tunnel. Local-only endpoints are not found here.
-func New(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, codes ...*codeview.Service) http.Handler {
-	s := newServer(c, m, workspaces, public, codes)
+// no tunnel. pushes is nil when push is disabled. Local-only endpoints are not
+// found here.
+func New(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, pushes *push.Service, codes ...*codeview.Service) http.Handler {
+	s := newServer(c, m, workspaces, public, pushes, codes)
 	mux := s.routes()
 	return s.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/local/") {
@@ -44,8 +50,8 @@ func New(c config.Config, m *session.Manager, workspaces *workspace.Service, pub
 	}))
 }
 
-func newServer(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, codes []*codeview.Service) *Server {
-	s := &Server{Config: c, Manager: m, Workspace: workspaces, Public: public}
+func newServer(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, pushes *push.Service, codes []*codeview.Service) *Server {
+	s := &Server{Config: c, Manager: m, Workspace: workspaces, Public: public, Push: pushes}
 	if len(codes) > 0 {
 		s.Code = codes[0]
 	} else {
@@ -76,6 +82,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/fs/dirs", s.dirs)
 	mux.HandleFunc("POST /api/fs/mkdir", s.mkdir)
 	s.workspaceRoutes(mux)
+	s.pushRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })

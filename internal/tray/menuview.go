@@ -1,6 +1,9 @@
 package tray
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/rainchan/webmux/internal/contract"
 )
 
@@ -66,6 +69,66 @@ func TunnelEntry(snap Snapshot) TunnelItem {
 		item.Info = "公网隧道失败：" + t.Error
 	}
 	return item
+}
+
+// PushItem describes the phone push hint under the tunnel entries.
+type PushItem struct {
+	// Show is false when the tunnel entries are hidden or the server
+	// predates push.
+	Show bool
+	// Info is the hint line; Guide is the setup dialog text. Neither
+	// carries a token, tunnel credential or subscription endpoint.
+	Info, Guide string
+}
+
+// PushEntry derives the push hint. Phones can only subscribe from a Named
+// Tunnel origin, so the hint names that prerequisite first.
+func PushEntry(snap Snapshot) PushItem {
+	p := snap.Status.Push
+	if p == nil || !TunnelEntry(snap).Show {
+		return PushItem{}
+	}
+	item := PushItem{Show: true}
+	switch {
+	case !p.Enabled:
+		item.Info = "手机推送：已在配置中停用"
+	case !p.Available:
+		item.Info = "手机推送不可用：" + p.Error
+	case p.PublicOrigin == "":
+		item.Info = "手机推送：需要 Named Tunnel"
+	case p.Subscriptions == 0:
+		item.Info = "手机推送：尚未有设备开启"
+	default:
+		item.Info = fmt.Sprintf("手机推送：%d 台设备已开启", p.Subscriptions)
+	}
+	item.Guide = pushGuide(p, snap.Status.URLs.Local)
+	return item
+}
+
+const pushPhoneSteps = "在手机上开启推送：\n" +
+	"1. 点击托盘“复制公网链接”，在手机浏览器中打开；\n" +
+	"2. iPhone / iPad（iOS 16.4 以上）：在 Safari 中点“分享 → 添加到主屏幕”，从主屏幕图标打开 WebMux 并输入 Token；\n" +
+	"3. 进入 设置 → 通知推送，打开开关。"
+
+func pushGuide(p *contract.PushStatus, local string) string {
+	var b strings.Builder
+	if !p.Enabled {
+		b.WriteString("推送已在配置中停用：在 WebMux 配置文件的 [push] 中设置 enabled = true，再通过托盘重启 WebMux。\n\n")
+	}
+	if p.PublicOrigin == "" {
+		target := "WebMux 本地地址"
+		if local != "" {
+			target += "（" + local + "）"
+		}
+		b.WriteString("Quick Tunnel 的地址每次启动都会变化，旧订阅点开即失效，无法用于手机推送。请先配置 Cloudflare Named Tunnel：\n" +
+			"1. 在 Cloudflare 控制台创建 Tunnel，把公共主机名指向" + target + "；\n" +
+			"2. 在 WebMux 配置文件的 [tunnel] 中写入 token（tunnel.token）与 hostname（tunnel.hostname）；\n" +
+			"3. 通过托盘重启 WebMux，再开启“公网隧道（Cloudflare）”。\n\n")
+	} else {
+		b.WriteString("公网地址：" + p.PublicOrigin + "\n\n")
+	}
+	b.WriteString(pushPhoneSteps)
+	return b.String()
 }
 
 // TunnelWarning is the confirmation shown before every enable.

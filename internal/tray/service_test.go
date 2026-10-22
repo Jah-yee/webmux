@@ -51,9 +51,10 @@ func TestWSLServiceStatusAndWatch(t *testing.T) {
 	ws := workspace.New(dir, m, dir)
 	defer ws.Close()
 	c := config.Config{DefaultCwd: dir}
-	handler := api.NewLocal(c, m, ws, nil, api.Local{Status: func() contract.StatusV1 {
+	handler := api.NewLocal(c, m, ws, nil, nil, api.Local{Status: func() contract.StatusV1 {
 		return contract.StatusV1{V: 1, State: contract.StateRunning, LocalAPI: true, Record: true}
 	}})
+
 	l, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)

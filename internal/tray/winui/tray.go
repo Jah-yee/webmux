@@ -844,6 +844,11 @@ func (a *App) listen() {
 	on(m.copyPublic, func() {
 		a.copyLink(tray.TunnelEntry(a.snapshot()).PublicURL)
 	})
+	on(m.pushGuide, func() {
+		if guide := tray.PushEntry(a.snapshot()).Guide; guide != "" {
+			messageBox(guide, windows.MB_OK|windows.MB_ICONINFORMATION)
+		}
+	})
 	on(m.install, a.installWebmux)
 	on(m.fwInit, a.initConfig)
 	for i, it := range m.fwCandidates {

@@ -59,6 +59,7 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 | `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                        |
 | `presets`            | shell / claude / codex / omp                               | `name`、`label`、`cmd`（argv 数组）、`allow_args`；配置后替换默认列表                       |
 | `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                    |
+| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                               |
 
 `custom` 是保留预设名。追加参数按引号与反斜杠规则拆分为 argv，不经 shell 求值。要改变 shell 的启动参数，可为 shell 预设显式设置 `cmd = ["/bin/zsh", "-l", "-i"]`。
 
@@ -210,6 +211,8 @@ NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流�
 
 WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、不影响会话的情况下开启或关闭 Cloudflare Tunnel（按 WebMux 配置的 `[tunnel]` 选择 Quick Tunnel 或 Named Tunnel，cloudflared 的定位与下载规则见下文“公网访问（Cloudflare Tunnel）”）。每次开启前托盘都会确认风险；要求 WebMux 已配置至少 43 个字符的 Token（`webmux config init` 生成的即可），否则拒绝开启。就绪后菜单显示公网地址，“复制公网链接”与其他复制链接一样带 Token。隧道断开时托盘通知一次且不自动重开；开关状态不保存，WebMux 重启后隧道关闭。
 
+隧道项下方的“手机推送”一行显示推送前置条件与已开启的设备数：未配置 Named Tunnel 时提示“需要 Named Tunnel”，配置后显示设备数。“手机推送设置说明…”按当前隧道类型列出 Named Tunnel 配置步骤与手机端开启步骤（见下文“手机推送（Web Push）”）；托盘不会修改配置文件。
+
 ### Token 与剪贴板
 
 托盘不在 Windows 侧保存 token。点击“复制 Token”时才经本机 API 从 WSL 读取，写入剪贴板后立即丢弃；剪贴板内容标记为不进入 Windows 剪贴板历史（Win+V）与跨设备云剪贴板，60 秒后若剪贴板仍是该 token 则自动清空（期间复制了其他内容则保持不变）。所有“复制…链接”在配置了 token 时同样当场读取 token，复制 `<链接>/#token=<token>`（片段不会发送到服务器，打开即登录），并按同样规则排除剪贴板历史、60 秒后自动清除；通知中只显示不含 token 的地址。未配置 token 时复制普通链接。
@@ -271,6 +274,26 @@ cloudflared = "" # 可选：cloudflared 路径
 - cloudflared 意外退出时公网地址立即失效（返回 403），本地访问和会话不受影响；webmux 退出时 cloudflared 随之结束。Linux 上即使 webmux 被 SIGKILL 或 OOM 终止，内核也会结束 cloudflared；macOS 没有等价机制，依赖 launchd 结束作业的全部进程，手动运行时需自行确认没有残留。
 
 > 隧道模式打印的链接与二维码包含 token；以 systemd / launchd 运行时它们会写入 journal 或日志文件，请限制日志访问权限；自动生成的 token 每次重启都会更换。非隧道模式不打印固定的已配置 token。
+
+## 手机推送（Web Push）
+
+会话出现提问、等待授权、回合结束、错误或终端通知时，WebMux 可以经浏览器推送服务（APNs、FCM、Mozilla）提醒已开启推送的设备；页面关闭或手机锁屏后仍能收到，点击通知回到对应会话。
+
+```toml
+[push]
+enabled = true
+subject = "https://github.com/mzdluo123/webmux" # VAPID 联系方式：https:// URL 或 mailto:
+ttl_seconds = 86400 # 推送服务为离线设备保留提醒的秒数，0..2419200
+kinds = ["question", "permission", "error", "done", "notify"] # 还可加 "bell"
+include_title = true # false 时通知标题固定为 WebMux
+```
+
+- Web Push 只在安全上下文可用。手机须从 **Cloudflare Named Tunnel** 地址 `https://<tunnel.hostname>` 开启；Quick Tunnel 每次启动更换地址，旧订阅点开即失效，因此不支持。桌面浏览器也可从 `127.0.0.1` / `localhost` 开启。其他 HTTPS 反向代理与 VPN / 局域网地址不支持。
+- 隧道关闭期间推送照常发出，但点开通知要等隧道恢复后才能打开页面。修改 `tunnel.hostname` 后需在各设备重新开启。
+- 开启步骤：用 Named Tunnel 公网链接打开 WebMux → 设置 → 通知推送 → 开启。iOS / iPadOS 需要 16.4 以上，先在 Safari 中“分享 → 添加到主屏幕”，从主屏幕图标打开并重新输入 Token（主屏幕应用不共享 Safari 的登录）。
+- 通知只含会话标题、提醒种类与会话链接，不含工作目录、命令、预览或终端输出。同一信号只提醒一次，spinner 输出与重连不会重复提醒；启发式“可能在等你”和进程退出不推送。
+- VAPID 密钥与订阅保存在 `<state_dir>/push.json`（0600）。文件损坏时改名为 `push.json.corrupt-<时间>` 后重建，所有设备需重新开启。没有设备开启时不产生任何出站请求。
+- 推送是尽力送达：省电、勿扰或离线超过 `ttl_seconds` 时可能延迟或丢失；无 Google Play 服务的 Android 设备不支持；中国大陆网络通常无法访问 FCM；桌面 Chrome、Edge 与 Firefox 需要浏览器进程在运行。会话列表仍是唯一准确的状态来源。
 
 ## HTTPS
 

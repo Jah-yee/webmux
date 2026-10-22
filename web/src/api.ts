@@ -11,6 +11,8 @@ export class APIError extends Error {
   constructor(
     public status: number,
     message: string,
+    // Machine-readable cause some endpoints add, such as push 409 reasons.
+    public reason?: string,
   ) {
     super(message);
   }
@@ -53,7 +55,9 @@ export function consumeTokenFragment(): boolean {
 function responseError(status: number, body: unknown, fallback: string) {
   const detail = ErrorSchema.safeParse(body);
   if (status === 401) window.dispatchEvent(new Event("webmux:auth"));
-  return new APIError(status, detail.success ? detail.data.error : fallback);
+  return detail.success
+    ? new APIError(status, detail.data.error, detail.data.reason)
+    : new APIError(status, fallback);
 }
 
 async function request(
