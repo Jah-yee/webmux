@@ -1,6 +1,7 @@
 package session
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -13,6 +14,7 @@ func (l *signalLog) handler() *SignalHandler {
 		Bell:   func() { *l = append(*l, "bell") },
 		Notify: func() { *l = append(*l, "notify") },
 		Event:  func(e string) { *l = append(*l, "event:"+e) },
+		Cwd:    func(path, host string) { *l = append(*l, "cwd:"+path+"|"+host) },
 	}
 }
 
@@ -61,6 +63,71 @@ func TestSignalChunkBoundaries(t *testing.T) {
 		if got := strings.Join(scanSignals(sequence[:split], sequence[split:]), ","); got != want {
 			t.Fatalf("split %d: %s", split, got)
 		}
+	}
+}
+
+func TestOSC7DirectoryReports(t *testing.T) {
+	for _, row := range []struct{ name, input, want string }{
+		{"bel", "\x1b]7;file:///home/u/proj\a", "cwd:/home/u/proj|"},
+		{"st localhost", "\x1b]7;file://localhost/home/u/my%20proj\x1b\\", "cwd:/home/u/my proj|localhost"},
+		{"remote host", "\x1b]7;file://build.example/home/u\x07", "cwd:/home/u|build.example"},
+		{"root", "\x1b]7;file:///\x07", "cwd:/|"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if got := strings.Join(scanSignals(row.input), ","); got != row.want {
+				t.Fatalf("got %q, want %q", got, row.want)
+			}
+		})
+	}
+}
+
+func TestOSC7IgnoresInvalidReports(t *testing.T) {
+	for _, row := range []struct{ name, input string }{
+		{"other scheme", "\x1b]7;http://host/tmp\a"},
+		{"relative path", "\x1b]7;file:relative\a"},
+		{"missing path", "\x1b]7;file://host\a"},
+		{"user info", "\x1b]7;file://user@host/tmp\a"},
+		{"port", "\x1b]7;file://host:22/tmp\a"},
+		{"query", "\x1b]7;file:///tmp?x\a"},
+		{"fragment", "\x1b]7;file:///tmp#x\a"},
+		{"control byte", "\x1b]7;file:///tmp/%00bad\a"},
+		{"c1 control", "\x1b]7;file:///tmp/%c2%9bbad\a"},
+		{"oversized", "\x1b]7;file:///tmp/" + strings.Repeat("x", maxSignalPayload) + "\a"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if got := scanSignals(row.input); len(got) != 0 {
+				t.Fatalf("invalid report produced %v", got)
+			}
+		})
+	}
+}
+
+func TestReportedHostClassification(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct {
+		name, host, local string
+		want              bool
+	}{
+		{"empty", "", hostname, true},
+		{"localhost", "localhost", hostname, true},
+		{"loopback v4", "127.0.0.1", hostname, true},
+		{"loopback v6", "::1", hostname, true},
+		{"local name", hostname, hostname, true},
+		{"local case", strings.ToUpper(hostname), hostname, true},
+		{"trailing dot", hostname + ".", hostname, true},
+		{"short name", shortHost(normalizeHost(hostname)), hostname, true},
+		{"remote name", "build.example", hostname, false},
+		{"different domains", "host.other.example", "host.local.example", false},
+		{"bare remote", "webmux-remote", "webmux-local", false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if got := reportedHostIsLocal(row.host, row.local); got != row.want {
+				t.Fatalf("reportedHostIsLocal(%q, %q) = %v, want %v", row.host, row.local, got, row.want)
+			}
+		})
 	}
 }
 

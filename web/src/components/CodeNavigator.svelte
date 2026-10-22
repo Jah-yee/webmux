@@ -6,6 +6,7 @@
     CodeContextSchema,
     type CodeChange,
     type CodeListing,
+    type ReportedCwd,
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import * as Tabs from "$lib/components/ui/tabs";
@@ -27,6 +28,9 @@
     load,
     openFile,
     openDiff,
+    locate,
+    sessionCwd,
+    reportedCwd,
   }: {
     context: z.infer<typeof CodeContextSchema> | undefined;
     listing: CodeListing | undefined;
@@ -44,7 +48,41 @@
     load: (append?: boolean) => void;
     openFile: (path: string, nodeId: string) => void;
     openDiff: (change: CodeChange) => void;
+    locate: (input: string) => Promise<void>;
+    sessionCwd: string;
+    reportedCwd: ReportedCwd | null;
   } = $props();
+  let locateInput = $state("");
+  let locateError = $state("");
+  const locateBase = $derived.by(() => {
+    if (reportedCwd?.remote) return null;
+    if (reportedCwd) return { path: reportedCwd.path, label: "Shell 报告目录" };
+    return sessionCwd
+      ? { path: sessionCwd, label: "启动目录（Shell 未报告）" }
+      : null;
+  });
+  const locateHint = $derived(
+    reportedCwd?.remote
+      ? `Shell 报告的是远端目录（${reportedCwd.host}），不能用于定位本机文件。`
+      : locateBase
+        ? `基点：${locateBase.label} ${locateBase.path}`
+        : "暂无可用基点。",
+  );
+  let locating = $state(false);
+  async function submitLocate(event: SubmitEvent) {
+    event.preventDefault();
+    locateError = "";
+    if (!context || !locateBase || locating) return;
+    locating = true;
+    try {
+      await locate(locateInput);
+      locateInput = "";
+    } catch (err) {
+      locateError = (err as Error).message;
+    } finally {
+      locating = false;
+    }
+  }
 </script>
 
 <nav
@@ -88,6 +126,28 @@
         /> 显示忽略项</label
       >
     </form>
+    <details class="px-2 pb-2 text-xs">
+      <summary class="cursor-pointer text-muted-foreground">按路径打开</summary>
+      <form class="mt-1 flex flex-col gap-1" onsubmit={submitLocate}>
+        <input
+          aria-label="定位文件路径"
+          placeholder="相对路径，如 src/main.go"
+          bind:value={locateInput}
+          disabled={!locateBase}
+          class="min-w-0 rounded border bg-background p-1 text-sm"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          type="submit"
+          disabled={!locateBase || locating || !locateInput.trim()}>打开</Button
+        >
+      </form>
+      <p class="mt-1 break-all text-muted-foreground">{locateHint}</p>
+      {#if locateError}<p role="alert" class="mt-1 break-all text-destructive">
+          {locateError}
+        </p>{/if}
+    </details>
     <div class="flex flex-wrap gap-1 p-2 text-xs" aria-label="路径导航">
       <button
         onclick={() => {

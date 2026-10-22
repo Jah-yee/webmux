@@ -68,6 +68,13 @@ type Listing struct {
 	Version  string    `json:"contentVersion"`
 	Checked  time.Time `json:"checkedAt"`
 }
+
+// Location is a root-relative node found from a path the user typed.
+type Location struct {
+	NodeID string `json:"nodeId"`
+	Path   string `json:"path"`
+	Kind   string `json:"kind"`
+}
 type Document struct {
 	NodeID        string `json:"nodeId"`
 	rawPath       string

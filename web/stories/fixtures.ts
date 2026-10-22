@@ -26,6 +26,12 @@ export const session = SessionInfoSchema.parse({
   clients: 12345,
   workspace: null,
   attention: null,
+  reportedCwd: {
+    path: `${longPath}/internal/session`,
+    host: "developer-mac.local",
+    remote: false,
+    since: "2026-01-01T11:58:00Z",
+  },
 });
 
 export const worktree = WorktreeSchema.parse({

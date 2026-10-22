@@ -31,6 +31,10 @@ func (s *Server) codeRoutes(mux *http.ServeMux) {
 		q := r.URL.Query()
 		return s.Code.Search(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("q"), q.Get("includeIgnored") == "true")
 	})
+	handle("GET"+base+"/locate", func(ctx context.Context, r *http.Request) (any, error) {
+		q := r.URL.Query()
+		return s.Code.Locate(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("path"))
+	})
 	handle("GET"+base+"/file", func(ctx context.Context, r *http.Request) (any, error) {
 		q := r.URL.Query()
 		source := q.Get("source")

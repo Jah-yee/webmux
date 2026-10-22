@@ -32,25 +32,36 @@ type Workspace struct {
 	WorktreePath string `json:"worktreePath"`
 }
 
+// ReportedCwd is the directory a program reported through OSC 7. It is a
+// navigation hint only; session ownership, file access roots and command
+// execution stay bound to the immutable launch directory and Workspace.
+type ReportedCwd struct {
+	Path   string    `json:"path"`
+	Host   string    `json:"host"`
+	Remote bool      `json:"remote"`
+	Since  time.Time `json:"since"`
+}
+
 type Info struct {
 	ID string `json:"id"`
 	// Generation distinguishes this run from any other session that could
 	// carry the same ID. Output offsets and submissions are bound to it.
-	Generation   string     `json:"generation"`
-	Title        string     `json:"title"`
-	Cwd          string     `json:"cwd"`
-	Preset       string     `json:"preset"`
-	Cmd          []string   `json:"cmd"`
-	Status       Status     `json:"status"`
-	ExitCode     *int       `json:"exitCode"`
-	Preview      string     `json:"preview"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	LastActiveAt time.Time  `json:"lastActiveAt"`
-	Cols         uint16     `json:"cols"`
-	Rows         uint16     `json:"rows"`
-	Clients      int        `json:"clients"`
-	Workspace    *Workspace `json:"workspace"`
-	Attention    *Attention `json:"attention"`
+	Generation   string       `json:"generation"`
+	Title        string       `json:"title"`
+	Cwd          string       `json:"cwd"`
+	Preset       string       `json:"preset"`
+	Cmd          []string     `json:"cmd"`
+	Status       Status       `json:"status"`
+	ExitCode     *int         `json:"exitCode"`
+	Preview      string       `json:"preview"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	LastActiveAt time.Time    `json:"lastActiveAt"`
+	Cols         uint16       `json:"cols"`
+	Rows         uint16       `json:"rows"`
+	Clients      int          `json:"clients"`
+	Workspace    *Workspace   `json:"workspace"`
+	Attention    *Attention   `json:"attention"`
+	ReportedCwd  *ReportedCwd `json:"reportedCwd"`
 }
 type Subscriber struct {
 	Out    chan []byte
@@ -191,6 +202,10 @@ func (s *Session) infoLocked() Info {
 	if i.Attention != nil {
 		attention := *i.Attention
 		i.Attention = &attention
+	}
+	if i.ReportedCwd != nil {
+		reported := *i.ReportedCwd
+		i.ReportedCwd = &reported
 	}
 	return i
 }
@@ -447,6 +462,8 @@ func (s *Session) wait() {
 	s.mu.Lock()
 	s.info.Status = StatusExited
 	s.info.Attention = nil
+	// A finished program can no longer stand behind its last directory report.
+	s.info.ReportedCwd = nil
 	s.info.ExitCode = &code
 	s.broadcastLocked(s.stateLocked())
 	data, _ := json.Marshal(map[string]int{"exitCode": code})

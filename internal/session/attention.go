@@ -1,6 +1,7 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -84,6 +85,7 @@ func (s *Session) bellLocked(now time.Time) {
 }
 
 func (s *Session) signalHandler() *SignalHandler {
+	hostname, _ := os.Hostname()
 	return &SignalHandler{
 		Title: func(title string) {
 			if s.userTitle == "" {
@@ -96,6 +98,15 @@ func (s *Session) signalHandler() *SignalHandler {
 		Bell:   func() { s.bellLocked(time.Now()) },
 		Notify: func() { s.raiseAttentionLocked(AttentionNotify, SourceTerminal, time.Now()) },
 		Event:  func(event string) { s.agentEventLocked(event, time.Now()) },
+		Cwd: func(path, host string) {
+			remote := !reportedHostIsLocal(host, hostname)
+			current := s.info.ReportedCwd
+			if current != nil && current.Path == path && current.Host == host && current.Remote == remote {
+				// A prompt in the same directory is not a state change.
+				return
+			}
+			s.info.ReportedCwd = &ReportedCwd{Path: path, Host: host, Remote: remote, Since: time.Now()}
+		},
 	}
 }
 

@@ -76,3 +76,20 @@ func TestWorkspaceMetadataParticipatesInDisplayComparison(t *testing.T) {
 		t.Fatal("workspace path change was invisible")
 	}
 }
+
+func TestReportedCwdParticipatesInDisplayComparison(t *testing.T) {
+	a := Info{}
+	since := time.Now()
+	b := Info{ReportedCwd: &ReportedCwd{Path: "/work/sub", Host: "", Since: since}}
+	if sameDisplay(a, b) {
+		t.Fatal("reported directory change was invisible")
+	}
+	a.ReportedCwd = &ReportedCwd{Path: "/work/sub", Host: "", Since: since}
+	if !sameDisplay(a, b) {
+		t.Fatal("equal reported directories were compared by pointer")
+	}
+	b.ReportedCwd.Remote = true
+	if sameDisplay(a, b) {
+		t.Fatal("remote classification change was invisible")
+	}
+}

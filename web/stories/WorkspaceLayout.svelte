@@ -51,6 +51,12 @@
     title: "Codex · 完善移动端终端交互",
     status: "running",
     clients: 1,
+    reportedCwd: {
+      path: "/srv/builds/webmux-agent",
+      host: "build.example",
+      remote: true,
+      since: "2026-01-01T11:59:00Z",
+    },
     preview: [
       "› 检查终端在小屏幕上的输入和滚动行为",
       "",

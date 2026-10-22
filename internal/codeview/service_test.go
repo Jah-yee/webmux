@@ -642,3 +642,88 @@ func TestCodeReadsDoNotRunCleanFiltersOrExternalDiff(t *testing.T) {
 		t.Fatalf("read-only code comparison executed configured helper: %v", e)
 	}
 }
+
+// Shells keep logical $PWD paths through symlinks (macOS /tmp, linked home
+// directories) while the code root is canonical.
+func TestLocateResolvesLogicalBasesAgainstCanonicalRoot(t *testing.T) {
+	t.Parallel()
+	root, _ := filepath.EvalSymlinks(t.TempDir())
+	gitTest(t, root, "init", "-q")
+	for _, dir := range []string{"src", "other"} {
+		if e := os.Mkdir(filepath.Join(root, dir), 0700); e != nil {
+			t.Fatal(e)
+		}
+	}
+	write(t, root, "src/main.go", "package main\n")
+	write(t, root, "other/x.go", "package other\n")
+	alias := filepath.Join(t.TempDir(), "alias")
+	if e := os.Symlink(root, alias); e != nil {
+		t.Fatal(e)
+	}
+	m := session.NewManager(session.Options{DefaultCwd: root})
+	s := New(m)
+	t.Cleanup(func() {
+		s.Close()
+		ctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+		defer c()
+		m.Shutdown(ctx)
+	})
+	start := func(host string) string {
+		t.Helper()
+		argv := []string{"/bin/sh", "-c", "sleep 30"}
+		if host != "" {
+			argv = []string{"/bin/sh", "-c", `printf '\033]7;file://%s%s\007' "$1" "$2"; sleep 30`, "sh", host, filepath.Join(alias, "other")}
+		}
+		item, e := m.Create(filepath.Join(alias, "src"), "custom", argv, nil, "", nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		id := item.Info().ID
+		for deadline := time.Now().Add(5 * time.Second); host != "" && item.Info().ReportedCwd == nil; {
+			if time.Now().After(deadline) {
+				t.Fatal("OSC 7 report was not recorded")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		return id
+	}
+	locate := func(id, input string) (Location, error) {
+		t.Helper()
+		c, e := s.Context(context.Background(), id)
+		if e != nil || c.Root != root {
+			t.Fatalf("context %+v %v", c, e)
+		}
+		return s.Locate(context.Background(), id, c.ID, input)
+	}
+	launch, local, remote := start(""), start("localhost"), start("elsewhere.invalid")
+	for _, tc := range []struct {
+		id, input, path, kind string
+	}{
+		{launch, "main.go", "src/main.go", "file"},
+		{launch, " ../other/x.go ", "other/x.go", "file"},
+		{launch, filepath.Join(alias, "other"), "other", "directory"},
+		{launch, "..", "", "directory"},
+		{local, "x.go", "other/x.go", "file"},
+	} {
+		got, e := locate(tc.id, tc.input)
+		if e != nil || got.Path != tc.path || got.Kind != tc.kind || got.NodeID != nodeID(tc.path) {
+			t.Errorf("locate %q: %+v %v", tc.input, got, e)
+		}
+	}
+	for _, tc := range []struct {
+		id, input string
+		status    int
+	}{
+		{launch, "missing.go", 404},
+		{launch, "main.go/child", 404},
+		{launch, "../..", 403},
+		{launch, filepath.Dir(root), 403},
+		{launch, "../.git/config", 400},
+		{launch, " ", 400},
+		{remote, "x.go", 409},
+	} {
+		if got, e := locate(tc.id, tc.input); Status(e) != tc.status {
+			t.Errorf("locate %q: want %d, got %+v %v", tc.input, tc.status, got, e)
+		}
+	}
+}

@@ -45,6 +45,7 @@
     setPinned,
     worktreeTitle,
   } from "../homeWorktrees";
+  import { matchesSessionQuery } from "../session-location";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
 
   let { drafts }: { drafts: TerminalDrafts } = $props();
@@ -131,8 +132,11 @@
       const tree = repository?.worktrees.find(
         (worktree) => worktree.id === session.workspace?.worktreeId,
       );
-      return [session.title, session.cwd, repository?.name, tree?.branch].some(
-        (value) => value?.toLocaleLowerCase().includes(search),
+      return matchesSessionQuery(
+        session,
+        search,
+        repository?.name,
+        tree?.branch,
       );
     }),
   );
@@ -180,7 +184,13 @@
         !repositories.some((r) => r.id === s.workspace?.repositoryId),
     ),
   );
+  // Shell-reported directories are navigation hints; grouping stays on the
+  // immutable launch directory so a `cd` never moves a session between groups.
   const directPaths = $derived([...new Set(direct.map((s) => s.cwd))].sort());
+  const directReported = $derived(direct.some((s) => s.reportedCwd));
+  const directSummary = $derived(
+    `普通目录或未注册的仓库 · ${counts(direct)}${directReported ? "。按启动目录分组；Shell 报告目录仅作导航线索，不改变归属" : ""}`,
+  );
   $effect(() => {
     if (!loading)
       for (const repo of repositories) {
@@ -702,9 +712,7 @@
           <section class="min-w-0 space-y-8" aria-label="直接会话">
             <div>
               <h2 class="font-semibold">直接会话</h2>
-              <p class="mt-1 text-xs text-muted-foreground">
-                普通目录或未注册的仓库 · {counts(direct)}
-              </p>
+              <p class="mt-1 text-xs text-muted-foreground">{directSummary}</p>
             </div>
             {#each directPaths as path (path)}<WorkspaceGroup
                 title={path.split("/").pop() || "/"}

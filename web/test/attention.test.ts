@@ -19,6 +19,7 @@ const session = {
   clients: 0,
   workspace: null,
   attention: null,
+  reportedCwd: null,
 };
 
 describe("session attention contract", () => {
@@ -43,6 +44,24 @@ describe("session attention contract", () => {
       expect(
         SessionInfoSchema.safeParse({ ...session, attention }).success,
       ).toBe(false);
+  });
+
+  test("accepts a shell-reported directory", () => {
+    const reportedCwd = {
+      path: "/work/sub",
+      host: "",
+      remote: false,
+      since: "2026-10-16T00:00:02Z",
+    };
+    expect(
+      SessionInfoSchema.parse({ ...session, reportedCwd }).reportedCwd,
+    ).toEqual(reportedCwd);
+    expect(
+      SessionInfoSchema.safeParse({
+        ...session,
+        reportedCwd: { ...reportedCwd, remote: "no" },
+      }).success,
+    ).toBe(false);
   });
 
   test("labels prefer the reported attention over the heuristic status", () => {

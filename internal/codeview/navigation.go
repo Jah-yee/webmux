@@ -2,6 +2,7 @@ package codeview
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/rainchan/webmux/internal/workspace"
 	"golang.org/x/sys/unix"
@@ -263,4 +264,71 @@ func (s *Service) Search(ctx context.Context, id, cid, q string, include bool) (
 	}
 	r.Version = version(r.Children)
 	return r, nil
+}
+
+// Locate resolves a typed path from the session's local OSC 7 report, or its
+// launch directory when the shell has not reported one. Both bases may be
+// logical paths through symlinks while the root is canonical, so the target is
+// resolved through the filesystem before comparing it with the root. The result
+// only names a node; reads still walk the root with O_NOFOLLOW.
+func (s *Service) Locate(ctx context.Context, id, cid, input string) (Location, error) {
+	release, e := s.acquire(ctx)
+	if e != nil {
+		return Location{}, e
+	}
+	defer release()
+	b, e := s.root(ctx, id, cid)
+	if e != nil {
+		return Location{}, e
+	}
+	item, e := s.manager.Get(id)
+	if e != nil {
+		return Location{}, problem(404, "会话不存在")
+	}
+	input = strings.TrimSpace(input)
+	if input == "" || len(input) > 4096 || strings.ContainsRune(input, 0) {
+		return Location{}, problem(400, "路径无效")
+	}
+	info := item.Info()
+	base := info.Cwd
+	if reported := info.ReportedCwd; reported != nil {
+		if reported.Remote {
+			return Location{}, problem(409, "Shell 报告的是远端目录，不能用于本机定位")
+		}
+		base = reported.Path
+	}
+	target := input
+	if !filepath.IsAbs(target) {
+		// Concatenate rather than Join: `..` after a symlink follows the real
+		// parent, as the shell's own file commands would.
+		target = base + string(os.PathSeparator) + target
+	}
+	resolved, e := filepath.EvalSymlinks(target)
+	if errors.Is(e, os.ErrNotExist) || errors.Is(e, unix.ENOTDIR) {
+		return Location{}, problem(404, "路径不存在")
+	}
+	if e != nil {
+		return Location{}, problem(400, "无法解析路径")
+	}
+	rel, e := filepath.Rel(b.Root, resolved)
+	if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return Location{}, problem(403, "路径不在代码工作区根内，只允许打开根目录下的文件")
+	}
+	if rel == "." {
+		rel = ""
+	}
+	if _, e := nodePath(nodeID(rel)); e != nil {
+		return Location{}, e
+	}
+	stat, e := os.Stat(resolved)
+	if e != nil {
+		return Location{}, e
+	}
+	kind := "file"
+	if stat.IsDir() {
+		kind = "directory"
+	} else if !stat.Mode().IsRegular() {
+		return Location{}, problem(400, "不支持打开特殊文件")
+	}
+	return Location{NodeID: nodeID(rel), Path: rel, Kind: kind}, nil
 }

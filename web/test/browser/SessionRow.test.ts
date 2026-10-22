@@ -23,6 +23,7 @@ const base: SessionInfo = {
   clients: 0,
   workspace: null,
   attention: null,
+  reportedCwd: null,
 };
 
 test("an agent permission request is labelled precisely", async () => {
@@ -54,6 +55,82 @@ test("heuristic waiting keeps the cautious label", async () => {
     onclose: () => {},
   });
   await expect.element(page.getByText("可能在等你")).toBeVisible();
+});
+
+test("shows the shell directory without repeating the group path", async () => {
+  render(SessionRow, {
+    session: {
+      ...base,
+      cwd: "/work/main",
+      reportedCwd: {
+        path: "/work/main/src",
+        host: "",
+        remote: false,
+        since: "2026-10-16T00:00:02Z",
+      },
+    },
+    groupPath: "/work/main",
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await expect.element(page.getByText("Shell 报告目录")).toBeVisible();
+  await expect.element(page.getByText("/work/main/src")).toBeVisible();
+  expect(page.getByText("启动目录").elements()).toHaveLength(0);
+});
+
+test("offers a copy action for the shell directory", async () => {
+  render(SessionRow, {
+    session: {
+      ...base,
+      cwd: "/work/main",
+      reportedCwd: {
+        path: "/work/main/src",
+        host: "",
+        remote: false,
+        since: "2026-10-16T00:00:02Z",
+      },
+    },
+    groupPath: "/work/main",
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await page.getByRole("button", { name: /会话菜单/ }).click();
+  await expect
+    .element(page.getByRole("menuitem", { name: "复制 Shell 报告目录" }))
+    .toBeVisible();
+});
+
+test("shows a launch directory below the worktree root", async () => {
+  render(SessionRow, {
+    session: { ...base, cwd: "/work/main/sub" },
+    groupPath: "/work/main",
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await expect.element(page.getByText("启动目录")).toBeVisible();
+  await expect.element(page.getByText("/work/main/sub")).toBeVisible();
+  expect(page.getByText("Shell 报告目录").elements()).toHaveLength(0);
+});
+
+test("marks a remote shell directory", async () => {
+  render(SessionRow, {
+    session: {
+      ...base,
+      cwd: "/work/main",
+      reportedCwd: {
+        path: "/srv/agent",
+        host: "build.example",
+        remote: true,
+        since: "2026-10-16T00:00:02Z",
+      },
+    },
+    groupPath: "/work/main",
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  await expect.element(page.getByText("Shell 报告目录")).toBeVisible();
+  await expect.element(page.getByText("/srv/agent")).toBeVisible();
+  await expect.element(page.getByText("远端 build.example")).toBeVisible();
 });
 
 test("status, connection and time read as one aligned, grouped line on a wide row", async () => {

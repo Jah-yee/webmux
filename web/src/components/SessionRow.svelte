@@ -1,10 +1,14 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { navigate } from "../api";
   import SessionStatus from "./SessionStatus.svelte";
   import type { SessionInfo } from "../schemas";
   import { previewSettings } from "../previewSettings.svelte";
   import { selectPreview } from "../preview";
+  import { copyText } from "../clipboard";
+  import { locationHints } from "../session-location";
   import { IconArrowUpRight, IconDots } from "@tabler/icons-svelte";
+  import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Item from "$lib/components/ui/item";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -12,10 +16,12 @@
   let {
     session,
     now,
+    groupPath,
     onclose,
   }: {
     session: SessionInfo;
     now: number;
+    groupPath?: string;
     onclose: (session: SessionInfo) => void;
   } = $props();
   const seconds = $derived(
@@ -29,6 +35,26 @@
         : `${Math.floor(seconds / 3600)} 小时前`,
   );
   const preview = $derived(selectPreview(session.preview, previewSettings));
+  const hints = $derived(locationHints(session, groupPath));
+  const copyTarget = $derived(
+    session.reportedCwd
+      ? { label: "复制 Shell 报告目录", value: session.reportedCwd.path }
+      : { label: "复制启动目录", value: session.cwd },
+  );
+  const reportedSince = $derived(
+    session.reportedCwd
+      ? new Date(session.reportedCwd.since).toLocaleString()
+      : "",
+  );
+  let copyNotice = $state("");
+  let copyTimer: ReturnType<typeof setTimeout> | undefined;
+  onDestroy(() => clearTimeout(copyTimer));
+  async function copyDirectory() {
+    const copied = await copyText(copyTarget.value);
+    copyNotice = copied ? "已复制" : "复制失败，请手动选择路径";
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => (copyNotice = ""), 2000);
+  }
 </script>
 
 <Item.Root
@@ -77,7 +103,36 @@
         <span class="border border-transparent py-0.5"
           >{session.clients ? `${session.clients} 个设备已连接` : "后台会话"} · {relative}</span
         >
+        {#if copyNotice}<span role="status" class="text-success"
+            >{copyNotice}</span
+          >{/if}
       </div>
+      {#if hints.launch || hints.reported}
+        <div class="mt-2 space-y-1 text-xs text-muted-foreground">
+          {#if hints.launch}
+            <p class="flex min-w-0 items-baseline gap-1.5">
+              <span class="shrink-0">启动目录</span>
+              <span class="min-w-0 font-mono break-all" title={hints.launch}
+                >{hints.launch}</span
+              >
+            </p>
+          {/if}
+          {#if hints.reported}
+            <p
+              class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1"
+              title={`Shell 通过 OSC 7 于 ${reportedSince} 报告；仅作导航线索，不改变会话归属`}
+            >
+              <span class="shrink-0">Shell 报告目录</span>
+              <span class="min-w-0 font-mono break-all"
+                >{hints.reported.path}</span
+              >
+              {#if hints.reported.remote}<Badge variant="outline"
+                  >远端 {hints.reported.host}</Badge
+                >{/if}
+            </p>
+          {/if}
+        </div>
+      {/if}
     </div>
     <pre
       data-slot="terminal-preview"
@@ -104,6 +159,10 @@
         {/snippet}
       </DropdownMenu.Trigger>
       <DropdownMenu.Content align="end">
+        <DropdownMenu.Item onSelect={() => void copyDirectory()}
+          >{copyTarget.label}</DropdownMenu.Item
+        >
+        <DropdownMenu.Separator />
         <DropdownMenu.Item
           variant="destructive"
           onSelect={() => onclose(session)}

@@ -13,6 +13,14 @@ export const AttentionSchema = z.object({
 });
 export type Attention = z.infer<typeof AttentionSchema>;
 
+export const ReportedCwdSchema = z.object({
+  path: z.string(),
+  host: z.string(),
+  remote: z.boolean(),
+  since: z.iso.datetime({ offset: true }),
+});
+export type ReportedCwd = z.infer<typeof ReportedCwdSchema>;
+
 export const SessionInfoSchema = z.object({
   id: z.string().regex(/^[a-z2-7]{8}$/),
   generation: z.string().regex(/^[0-9a-f]{16}$/),
@@ -30,6 +38,7 @@ export const SessionInfoSchema = z.object({
   clients: z.number().int().nonnegative(),
   workspace: WorkspaceLinkSchema.nullable(),
   attention: AttentionSchema.nullable(),
+  reportedCwd: ReportedCwdSchema.nullable(),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
 
@@ -248,6 +257,11 @@ export const CodeListingSchema = z.object({
   complete: z.boolean(),
   contentVersion: z.string(),
   checkedAt: z.string(),
+});
+export const CodeLocationSchema = z.object({
+  nodeId: z.string(),
+  path: z.string(),
+  kind: z.enum(["file", "directory"]),
 });
 export const CodeDocumentSchema = z.object({
   nodeId: z.string().optional(),

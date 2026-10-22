@@ -22,7 +22,11 @@
   import SoftKeys from "../components/SoftKeys.svelte";
   import QuickCommandMenu from "../components/QuickCommandMenu.svelte";
   import { quickCommands } from "../quickCommands.svelte";
-  import type { QuickCommand, SubmissionProgress } from "../schemas";
+  import type {
+    QuickCommand,
+    ReportedCwd,
+    SubmissionProgress,
+  } from "../schemas";
   import { newSubmissionId } from "../terminalProtocol";
   import { browserDraftStorage } from "../draftStorage";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
@@ -72,6 +76,8 @@
       connection: string;
       paste: (text: string) => TextInsertion;
       draftEnabled: boolean;
+      sessionCwd: string;
+      reportedCwd: ReportedCwd | null;
     }>
   >();
   let loadingCode = false;
@@ -795,6 +801,8 @@
             connection={t.connection}
             paste={insertReference}
             draftEnabled={draft.enabled}
+            sessionCwd={t.info?.cwd ?? ""}
+            reportedCwd={t.info?.reportedCwd ?? null}
           />{/if}
       </Resizable.Pane>
     </Resizable.PaneGroup>

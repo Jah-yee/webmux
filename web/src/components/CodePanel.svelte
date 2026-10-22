@@ -8,11 +8,13 @@
     CodeFileSchema,
     CodeChangesSchema,
     CodeDiffSchema,
+    CodeLocationSchema,
     CodeCheckSchema,
     type CodeFile,
     type CodeDiff,
     type CodeChange,
     type CodeListing,
+    type ReportedCwd,
   } from "../schemas";
   import type { z } from "zod";
   import { nodeId } from "../code-reference";
@@ -34,12 +36,16 @@
     connection,
     paste,
     draftEnabled,
+    sessionCwd,
+    reportedCwd,
   }: {
     id: string;
     visible: boolean;
     connection: string;
     paste: (text: string) => TextInsertion;
     draftEnabled: boolean;
+    sessionCwd: string;
+    reportedCwd: ReportedCwd | null;
   } = $props();
   type Tab = {
     key: string;
@@ -241,6 +247,20 @@
   // reveal it; side-by-side layouts keep the navigator until the user collapses it.
   function closeOverlayNav() {
     if (matchMedia("(max-width:1023px)").matches) navOpen = false;
+  }
+  // The server resolves typed paths against the canonical code root; shell
+  // reports and launch directories may be logical paths through symlinks.
+  async function locate(input: string) {
+    if (!context) return;
+    const target = await api(
+      `${base}/locate?${params({ path: input })}`,
+      CodeLocationSchema,
+    );
+    if (target.kind === "directory") {
+      directory = target.path;
+      query = "";
+      await load();
+    } else await openFile(target.path, target.nodeId);
   }
   async function openFile(path: string, opaqueId = nodeId(path)) {
     if (!context) return;
@@ -572,6 +592,8 @@
           {changes}
           {changesError}
           {pending}
+          {sessionCwd}
+          {reportedCwd}
           changesEnabled={shown && !changesError && !navStatus}
           bind:nav
           bind:query
@@ -582,6 +604,7 @@
           bind:changeSearch
           load={(append) => void load(append)}
           openFile={(path, opaqueId) => void openFile(path, opaqueId)}
+          {locate}
           openDiff={(change) => void openDiff(change)}
         />
         <!-- A focusable separator with aria-valuenow is an interactive widget (WAI-ARIA window splitter). -->

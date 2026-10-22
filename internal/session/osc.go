@@ -2,12 +2,17 @@ package session
 
 import (
 	"encoding/json"
+	"net"
+	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
 	maxSignalPayload = 4096
 	maxTitlePayload  = 512
+	maxCwdPath       = 4096
+	maxCwdHost       = 255
 	warpAgentTitle   = "warp://cli-agent"
 )
 
@@ -19,6 +24,7 @@ type SignalHandler struct {
 	Bell   func()
 	Notify func()
 	Event  func(string)
+	Cwd    func(path, host string)
 }
 
 // OSCScanner is incremental and bounded, including across split ST terminators.
@@ -118,6 +124,10 @@ func (s *OSCScanner) finish(h *SignalHandler) {
 		if len(text) <= maxTitlePayload && h.Title != nil {
 			h.Title(strings.TrimSpace(text[2:]))
 		}
+	case strings.HasPrefix(text, "7;"):
+		if path, host, ok := parseOSC7(text[2:]); ok && h.Cwd != nil {
+			h.Cwd(path, host)
+		}
 	case strings.HasPrefix(text, "9;"):
 		if !numericSubcommand(text[2:]) && h.Notify != nil {
 			h.Notify()
@@ -134,6 +144,72 @@ func (s *OSCScanner) finish(h *SignalHandler) {
 			h.Event(event)
 		}
 	}
+}
+
+// parseOSC7 accepts the file URL shape used by shell integrations. Only the
+// path and host are retained; credentials, ports, queries and fragments are
+// rejected so a report cannot smuggle a different location into the UI.
+func parseOSC7(raw string) (path, host string, ok bool) {
+	u, err := url.Parse(raw)
+	if err != nil || !strings.EqualFold(u.Scheme, "file") || u.Opaque != "" ||
+		u.User != nil || u.Port() != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
+		return "", "", false
+	}
+	path, host = u.Path, u.Hostname()
+	if len(path) > maxCwdPath || len(host) > maxCwdHost || !strings.HasPrefix(path, "/") {
+		return "", "", false
+	}
+	if !utf8.ValidString(path) || !utf8.ValidString(host) || containsControl(path) || containsControl(host) {
+		return "", "", false
+	}
+	return path, host, true
+}
+
+func containsControl(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || (r >= 0x7f && r <= 0x9f) {
+			return true
+		}
+	}
+	return false
+}
+
+// reportedHostIsLocal treats loopback names and the service host's own name as
+// local. A host with a domain only matches a local hostname with the same
+// domain; a bare name may match the local short name.
+func reportedHostIsLocal(host, hostname string) bool {
+	h := normalizeHost(host)
+	if h == "" || h == "localhost" || h == "localhost.localdomain" || h == "ip6-localhost" {
+		return true
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.IsLoopback()
+	}
+	local := normalizeHost(hostname)
+	if local == "" {
+		return false
+	}
+	if h == local {
+		return true
+	}
+	if !strings.Contains(h, ".") {
+		return h == shortHost(local)
+	}
+	if !strings.Contains(local, ".") {
+		return shortHost(h) == local
+	}
+	return false
+}
+
+func normalizeHost(host string) string {
+	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+}
+
+func shortHost(host string) string {
+	if i := strings.IndexByte(host, '.'); i > 0 {
+		return host[:i]
+	}
+	return host
 }
 
 // numericSubcommand reports ConEmu-style OSC 9 subcommands such as 9;4 progress.

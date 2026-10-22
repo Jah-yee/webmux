@@ -43,6 +43,7 @@
     waiting: sessions.filter((s) => s.status === "waiting").length,
     exited: sessions.filter((s) => s.status === "exited").length,
   });
+  const groupPath = $derived(path ?? worktree?.path);
 </script>
 
 <section
@@ -169,7 +170,7 @@
   {#if sessions.length}
     <Item.Group class="gap-3" aria-label={`${title} 的会话`}>
       {#each sessions as session (session.id)}
-        <SessionRow {session} {now} {onclose} />
+        <SessionRow {session} {now} {groupPath} {onclose} />
       {/each}
     </Item.Group>
   {:else}

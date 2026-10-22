@@ -47,7 +47,7 @@ func (s *Session) publishState() {
 	}
 }
 func sameDisplay(a, b Info) bool {
-	return a.Title == b.Title && a.Status == b.Status && a.Preview == b.Preview && a.LastActiveAt.Equal(b.LastActiveAt) && a.Cols == b.Cols && a.Rows == b.Rows && a.Clients == b.Clients && sameExit(a.ExitCode, b.ExitCode) && sameWorkspace(a.Workspace, b.Workspace) && sameAttention(a.Attention, b.Attention)
+	return a.Title == b.Title && a.Status == b.Status && a.Preview == b.Preview && a.LastActiveAt.Equal(b.LastActiveAt) && a.Cols == b.Cols && a.Rows == b.Rows && a.Clients == b.Clients && sameExit(a.ExitCode, b.ExitCode) && sameWorkspace(a.Workspace, b.Workspace) && sameAttention(a.Attention, b.Attention) && sameReportedCwd(a.ReportedCwd, b.ReportedCwd)
 }
 func sameExit(a, b *int) bool {
 	if a == nil || b == nil {
@@ -68,4 +68,11 @@ func sameAttention(a, b *Attention) bool {
 		return a == b
 	}
 	return a.Kind == b.Kind && a.Source == b.Source && a.Since.Equal(b.Since)
+}
+
+func sameReportedCwd(a, b *ReportedCwd) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Path == b.Path && a.Host == b.Host && a.Remote == b.Remote && a.Since.Equal(b.Since)
 }

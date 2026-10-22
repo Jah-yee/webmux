@@ -57,6 +57,49 @@ func TestPersistentPTY(t *testing.T) {
 	}
 }
 
+func TestReportedCwdTracksShellSignals(t *testing.T) {
+	s := &Session{info: Info{Cwd: "/work"}}
+	handler := s.signalHandler()
+	handler.Cwd("/work/sub", "")
+	first := s.info.ReportedCwd
+	if first == nil || first.Path != "/work/sub" || first.Remote || first.Since.IsZero() {
+		t.Fatalf("local report: %+v", first)
+	}
+	handler.Cwd("/work/sub", "")
+	if s.info.ReportedCwd != first {
+		t.Fatal("a repeated report replaced the existing value")
+	}
+	handler.Cwd("/srv/remote", "remote.example")
+	if got := s.info.ReportedCwd; got == nil || got.Path != "/srv/remote" || !got.Remote {
+		t.Fatalf("remote report: %+v", got)
+	}
+}
+
+func TestReportedCwdClearsWhenSessionExits(t *testing.T) {
+	t.Parallel()
+	s := newIdleSession(t, "/bin/sh", "-c", "printf '\\033]7;file:///tmp\\007'; read _")
+	until := time.Now().Add(5 * time.Second)
+	for s.Info().ReportedCwd == nil {
+		if time.Now().After(until) {
+			t.Fatal("session did not report its directory")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := s.Write([]byte("leave\n")); err != nil {
+		t.Fatal(err)
+	}
+	until = time.Now().Add(5 * time.Second)
+	for s.Info().ExitCode == nil {
+		if time.Now().After(until) {
+			t.Fatal("session did not exit")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := s.Info().ReportedCwd; got != nil {
+		t.Fatalf("reported directory survived exit: %+v", got)
+	}
+}
+
 func TestResizeFromRequiresTheControllingConnection(t *testing.T) {
 	t.Parallel()
 	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "idle", Cmd: []string{"/bin/sleep", "30"}}}})

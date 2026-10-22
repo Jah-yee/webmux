@@ -66,6 +66,14 @@ interface SessionInfo {
     source: "agent" | "terminal"; // 结构化事件 / 普通通知或响铃
     since: string; // RFC 3339，种类变化时更新
   } | null;
+  // 程序通过 OSC 7 报告的目录；null 表示未报告或进程已退出。
+  // 只作导航线索，不改变 cwd、workspace、读取边界或命令执行环境。
+  reportedCwd: {
+    path: string; // 已解码的绝对路径
+    host: string; // 报告中的主机名，可能为空
+    remote: boolean; // 非本机（例如 SSH 远端）；不得用于本机文件定位
+    since: string; // RFC 3339，路径或主机变化时更新
+  } | null;
 }
 ```
 
@@ -102,11 +110,14 @@ interface SessionInfo {
 | `GET /context`                                     | 根目录与能力：`contextId`、`rootPath`、`browseAvailable`、`diffAvailable` 等 |
 | `GET /tree?contextId&nodeId&includeIgnored&cursor` | 分页目录列表                                                                 |
 | `GET /files?contextId&q&includeIgnored`            | 有界路径搜索                                                                 |
+| `GET /locate?contextId&path`                       | 解析用户输入的路径，返回根内 `nodeId`、`path`、`kind`（file / directory）    |
 | `GET /file?contextId&nodeId&source`                | 文件快照，`source` 为 worktree / index / head                                |
 | `GET /changes?contextId&cursor&q&nodeId&group`     | 分页 Git 修改列表                                                            |
 | `GET /diff?contextId&changeId`                     | 冻结的新旧双侧原文                                                           |
 | `GET /snapshots/{snapshotId}/file?side=old\|new`   | 读取已捕获的比较侧全文                                                       |
 | `POST /check`                                      | 批量变化检测，返回 unchanged / updated / missing / expired / unknown         |
+
+`/locate` 的相对路径以本机 OSC 7 报告目录为基点，没有报告时用启动目录；按实际文件系统解析符号链接后，必须位于代码根内（403），远端报告返回 409。结果只是节点标识，读取仍走根目录的逐段 `O_NOFOLLOW` 检查。
 
 错误码：400 非法路径，404 不存在，409 版本冲突，410 快照失效，413 超出限制，504 取消或超时。
 
