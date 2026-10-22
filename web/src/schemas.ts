@@ -250,6 +250,15 @@ export const PushStatusSchema = z.object({
 });
 export type PushStatus = z.infer<typeof PushStatusSchema>;
 export const PushSubscriptionResultSchema = z.object({ id: z.string() });
+// A test notification goes to every device; failures name only the push
+// service host, and removed lists subscriptions the service reported expired.
+export const PushTestResultSchema = z.object({
+  devices: z.number().int().min(0),
+  accepted: z.number().int().min(0),
+  removed: z.array(z.string()),
+  errors: z.array(z.string()),
+});
+export type PushTestResult = z.infer<typeof PushTestResultSchema>;
 
 const CodeSourceSchema = z.enum(["worktree", "index", "head", "empty"]);
 export const CodeContextSchema = z.object({

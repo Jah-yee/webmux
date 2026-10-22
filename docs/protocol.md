@@ -123,12 +123,12 @@ interface SessionInfo {
 
 ### 注意力推送（Web Push）
 
-| 方法   | 路径                           | 说明                                                                                                                                                                                                            |
-| ------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/api/push`                    | `{enabled, available, reason?, publicKey?, subscriptions}`；`publicKey` 为 base64url 未压缩 P-256 VAPID 公钥，仅可用时出现                                                                                      |
-| POST   | `/api/push/subscriptions`      | `{endpoint, expirationTime?, keys: {p256dh, auth}}`（即 `PushSubscription.toJSON()`，`expirationTime` 接受但不保存）→ 200 `{id}`；同一 endpoint 幂等返回原 ID；400 非法订阅，409 `{error, reason}` 或已满 32 台 |
-| DELETE | `/api/push/subscriptions/{id}` | 204，ID 不存在同样 204                                                                                                                                                                                          |
-| POST   | `/api/push/test`               | `{id}` → 204 已被推送服务接受；404 不存在；410 推送服务报告失效并已删除；409 不可用；502 其他推送服务失败                                                                                                       |
+| 方法   | 路径                           | 说明                                                                                                                                                                                                              |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/push`                    | `{enabled, available, reason?, publicKey?, subscriptions}`；`publicKey` 为 base64url 未压缩 P-256 VAPID 公钥，仅可用时出现                                                                                        |
+| POST   | `/api/push/subscriptions`      | `{endpoint, expirationTime?, keys: {p256dh, auth}}`（即 `PushSubscription.toJSON()`，`expirationTime` 接受但不保存）→ 200 `{id}`；同一 endpoint 幂等返回原 ID；400 非法订阅，409 `{error, reason}` 或已满 32 台   |
+| DELETE | `/api/push/subscriptions/{id}` | 204，ID 不存在同样 204                                                                                                                                                                                            |
+| POST   | `/api/push/test`               | 无请求体；同时向全部已登记设备发送测试通知并等待推送服务应答 → 200 `{devices, accepted, removed: [订阅 ID], errors: [信息]}`；`removed` 为推送服务报告失效并已删除的订阅，`errors` 只含推送服务主机名；409 不可用 |
 
 `reason` 取值：`disabled`（`[push] enabled = false`）、`storage`（`<state_dir>/push.json` 不可读写）、`quick_tunnel`、`unsupported_origin`。来源按请求 `Origin` 判定（没有时由 `Host` 推断，经隧道到达的视为 `https`）：只有已配置 Named Tunnel 的 `https://<tunnel.hostname>`（与隧道是否运行无关）和 `127.0.0.1` / `::1` / `localhost` 回环来源可以订阅；当前 Quick Tunnel 公网来源为 `quick_tunnel`，其余（VPN、局域网、其他反向代理、本机套接字）为 `unsupported_origin`。
 

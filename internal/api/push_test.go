@@ -143,14 +143,11 @@ func TestPushAPI(t *testing.T) {
 		t.Fatalf("subscriptions %v", status)
 	}
 
-	if code, _ := call("POST", "/api/push/test", loopback, "secret", `{"id":"`+first["id"].(string)+`"}`); code != http.StatusNoContent {
-		t.Fatalf("test notification: %d", code)
-	}
-	if code, _ := call("POST", "/api/push/test", loopback, "secret", `{"id":"unknown"}`); code != http.StatusNotFound {
-		t.Fatalf("unknown test id: %d", code)
-	}
-	if code, _ := call("POST", "/api/push/test", loopback, "secret", `{"id":"`+gone["id"].(string)+`"}`); code != http.StatusGone {
-		t.Fatalf("gone test: %d", code)
+	// The test reaches every device: one accepts, one is expired and deleted.
+	code, report := call("POST", "/api/push/test", loopback, "secret", "")
+	removed, _ := report["removed"].([]any)
+	if code != http.StatusOK || report["devices"] != float64(2) || report["accepted"] != float64(1) || len(removed) != 1 || removed[0] != gone["id"] || len(report["errors"].([]any)) != 0 {
+		t.Fatalf("test notification: %d %v", code, report)
 	}
 	if _, status := call("GET", "/api/push", "", "secret", ""); status["subscriptions"] != float64(1) {
 		t.Fatalf("gone subscription kept: %v", status)
@@ -183,7 +180,7 @@ func TestPushAPIWhenDisabled(t *testing.T) {
 	}{
 		{"GET", "/api/push", "", http.StatusOK},
 		{"POST", "/api/push/subscriptions", browserSubscription(t, "https://push.example/x"), http.StatusConflict},
-		{"POST", "/api/push/test", `{"id":"x"}`, http.StatusConflict},
+		{"POST", "/api/push/test", "", http.StatusConflict},
 		{"DELETE", "/api/push/subscriptions/x", "", http.StatusConflict},
 	} {
 		w := httptest.NewRecorder()

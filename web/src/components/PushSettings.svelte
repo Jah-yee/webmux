@@ -11,6 +11,7 @@
   import {
     advise,
     currentSubscription,
+    describeTest,
     detectSupport,
     disable,
     enable,
@@ -101,8 +102,9 @@
     busy = true;
     notice = error = "";
     try {
-      await sendTest();
-      notice = "已提交给推送服务，若数秒内未收到，请检查系统通知设置";
+      const result = describeTest(await sendTest());
+      if (result.failed) error = result.message;
+      else notice = result.message;
     } catch (cause) {
       failure(cause);
     } finally {
@@ -167,11 +169,6 @@
             </p>
           </div>
         </InlineNotice>
-      {/if}
-      {#if subscribed}
-        <Button variant="outline" disabled={busy} onclick={test}
-          >发送测试通知</Button
-        >
       {/if}
     {:else if advice}
       <InlineNotice tone="warning">
@@ -247,6 +244,14 @@
           >关闭本设备推送</Button
         >
       {/if}
+    {/if}
+
+    <!-- The test reaches every device, so this browser can trigger it for the
+         phones even when it has not turned push on itself. -->
+    {#if status && status.subscriptions > 0}
+      <Button variant="outline" disabled={busy} onclick={test}
+        >向全部 {status.subscriptions} 台设备发送测试通知</Button
+      >
     {/if}
 
     {#if error}

@@ -97,6 +97,30 @@ for (const row of cases) {
   });
 }
 
+test("any browser can send the test to every device once one is subscribed", async () => {
+  // A desktop that cannot or has not turned push on still drives the phones.
+  const button = page.getByRole("button", { name: /发送测试通知/ });
+  render(PushSettings, {
+    support: capable,
+    loadStatus: async () => ({
+      ...available,
+      available: false,
+      reason: "unsupported_origin",
+    }),
+  });
+  await expect
+    .element(page.getByText("向全部 2 台设备发送测试通知"))
+    .toBeVisible();
+  cleanup();
+
+  render(PushSettings, {
+    support: capable,
+    loadStatus: async () => ({ ...available, subscriptions: 0 }),
+  });
+  await expect.element(page.getByText("本设备未开启")).toBeVisible();
+  expect(button.elements()).toHaveLength(0);
+});
+
 test("a pending permission prompt explains where to allow notifications", async () => {
   // Chrome's quiet permission UI leaves the prompt pending until the user
   // clicks the address-bar bell; the card must not sit silently disabled.

@@ -1,10 +1,12 @@
-import { api, APIError, store, stored } from "./api";
+import { api, store, stored } from "./api";
 import {
   NoContentSchema,
   PushStatusSchema,
   PushSubscriptionResultSchema,
+  PushTestResultSchema,
   type PushReason,
   type PushStatus,
+  type PushTestResult,
 } from "./schemas";
 
 // The server-side ID of this browser's subscription, under webmux.push.subscriptionId.
@@ -178,22 +180,38 @@ export async function sync(): Promise<SyncResult> {
   return "synced";
 }
 
-// sendTest asks the server to push a test notification to this device. A 410
-// means the push service dropped the subscription.
-export async function sendTest(): Promise<void> {
+export type TestOutcome = PushTestResult & { ownRemoved: boolean };
+
+// sendTest pushes a test notification to every registered device, so one
+// device can check what the others show in the background. When the push
+// service dropped this browser's own subscription, it is forgotten here too.
+export async function sendTest(): Promise<TestOutcome> {
+  const result = await api("/push/test", PushTestResultSchema, "POST");
   const id = savedSubscriptionId();
-  if (!id) throw new APIError(410, "订阅已失效，请重新开启");
-  try {
-    await api("/push/test", NoContentSchema, "POST", { id });
-  } catch (error) {
-    if (
-      error instanceof APIError &&
-      (error.status === 410 || error.status === 404)
-    ) {
-      store(SUBSCRIPTION_KEY, "");
-      await (await currentSubscription())?.unsubscribe();
-      throw new APIError(410, "订阅已失效，请重新开启");
-    }
-    throw error;
+  const ownRemoved = !!id && result.removed.includes(id);
+  if (ownRemoved) {
+    store(SUBSCRIPTION_KEY, "");
+    await (await currentSubscription())?.unsubscribe().catch(() => undefined);
   }
+  return { ...result, ownRemoved };
+}
+
+// describeTest turns a test outcome into one line for the settings card.
+export function describeTest(outcome: TestOutcome): {
+  failed: boolean;
+  message: string;
+} {
+  const { devices, accepted, removed, errors, ownRemoved } = outcome;
+  if (devices === 0) return { failed: true, message: "还没有设备开启推送" };
+  if (accepted === devices)
+    return {
+      failed: false,
+      message: `已提交给全部 ${devices} 台设备的推送服务，若数秒内未收到，请检查各设备的系统通知设置`,
+    };
+  const parts = [`已提交给 ${accepted}/${devices} 台设备的推送服务`];
+  if (removed.length) parts.push(`${removed.length} 台订阅已失效并已删除`);
+  if (errors.length)
+    parts.push(`${errors.length} 台发送失败：${errors.join("；")}`);
+  if (ownRemoved) parts.push("本设备需要重新开启推送");
+  return { failed: errors.length > 0 || ownRemoved, message: parts.join("；") };
 }

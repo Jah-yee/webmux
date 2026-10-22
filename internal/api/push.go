@@ -132,26 +132,15 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	// The test goes to every registered device, so a desktop can check what
+	// the phones show in the background. Per-device failures are reported in
+	// the body; only an unavailable push service fails the request.
 	mux.HandleFunc("POST /api/push/test", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			ID string `json:"id"`
-		}
-		if !decode(w, r, &req) {
+		report, err := s.Push.SendTestAll(r.Context())
+		if err != nil {
+			pushConflict(w, pushUnavailableReason(err), err)
 			return
 		}
-		err := s.Push.SendTest(r.Context(), req.ID)
-		switch {
-		case err == nil:
-			w.WriteHeader(http.StatusNoContent)
-		case errors.Is(err, push.ErrDisabled) || errors.Is(err, push.ErrStorage):
-			pushConflict(w, pushUnavailableReason(err), err)
-		case errors.Is(err, push.ErrNoSuchDevice):
-			failure(w, http.StatusNotFound, err)
-		case errors.Is(err, push.ErrGone):
-			failure(w, http.StatusGone, err)
-		default:
-			// Delivery errors name only the push service host.
-			failure(w, http.StatusBadGateway, err)
-		}
+		reply(w, http.StatusOK, report)
 	})
 }

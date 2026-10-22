@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -160,15 +161,49 @@ func (s *Service) Unregister(id string) error {
 	return s.store.Remove(id)
 }
 
-// SendTest pushes a test notification to id synchronously.
-func (s *Service) SendTest(ctx context.Context, id string) error {
+// TestReport summarises one test notification sent to every device. Removed
+// lists the subscriptions the push service reported as expired, which are
+// deleted; Errors name only the push service host, never the endpoint.
+type TestReport struct {
+	Devices  int      `json:"devices"`
+	Accepted int      `json:"accepted"`
+	Removed  []string `json:"removed"`
+	Errors   []string `json:"errors"`
+}
+
+// SendTestAll pushes a test notification to every registered device at once
+// and waits for the push services to answer, so one device can check what the
+// others show in the background.
+func (s *Service) SendTestAll(ctx context.Context) (TestReport, error) {
 	if err := s.Unavailable(); err != nil {
-		return err
+		return TestReport{}, err
 	}
-	sub, ok := s.store.Get(id)
-	if !ok {
-		return ErrNoSuchDevice
+	subs := s.store.List()
+	report := TestReport{Devices: len(subs), Removed: []string{}, Errors: []string{}}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, sub := range subs {
+		wg.Go(func() {
+			err := s.sendTest(ctx, sub)
+			mu.Lock()
+			defer mu.Unlock()
+			switch {
+			case err == nil:
+				report.Accepted++
+			case errors.Is(err, ErrGone):
+				report.Removed = append(report.Removed, sub.ID)
+			default:
+				report.Errors = append(report.Errors, err.Error())
+			}
+		})
 	}
+	wg.Wait()
+	slices.Sort(report.Removed)
+	slices.Sort(report.Errors)
+	return report, nil
+}
+
+func (s *Service) sendTest(ctx context.Context, sub Subscription) error {
 	body, err := testPayload(sub.Origin)
 	if err != nil {
 		return err

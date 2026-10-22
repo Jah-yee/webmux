@@ -24,10 +24,7 @@ const MaxSubscriptions = 32
 
 const storeFile = "push.json"
 
-var (
-	ErrFull         = errors.New("已有 32 台设备开启推送，请先在其他设备关闭推送")
-	ErrNoSuchDevice = errors.New("订阅不存在")
-)
+var ErrFull = errors.New("已有 32 台设备开启推送，请先在其他设备关闭推送")
 
 // Subscription is one browser push endpoint. Origin is the page origin it was
 // registered from and anchors the notification's link.

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -170,24 +171,24 @@ func TestServiceTestDeliveryOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
-	if err := s.SendTest(ctx, ok); err != nil {
-		t.Fatalf("accepted test: %v", err)
+	report, err := s.SendTestAll(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := s.SendTest(ctx, "missing"); !errors.Is(err, ErrNoSuchDevice) {
-		t.Fatalf("unknown id: %v", err)
+	// One accepted, one expired (deleted), and redirect, 429 and unreachable
+	// failures that keep their subscriptions.
+	if report.Devices != 5 || report.Accepted != 1 || !slices.Equal(report.Removed, []string{gone}) || len(report.Errors) != 3 {
+		t.Fatalf("report %+v", report)
 	}
-	if err := s.SendTest(ctx, gone); !errors.Is(err, ErrGone) {
-		t.Fatalf("410: %v", err)
+	for _, message := range report.Errors {
+		if strings.Contains(message, "SECRET-TOKEN") {
+			t.Fatalf("error leaks the endpoint: %q", message)
+		}
 	}
 	if _, kept := s.store.Get(gone); kept || s.Subscriptions() != 4 {
 		t.Fatalf("410 subscription kept; %d remain", s.Subscriptions())
 	}
-	for name, id := range map[string]string{"redirect": moved, "429": busy, "unreachable": unreachable} {
-		err := s.SendTest(ctx, id)
-		if err == nil || errors.Is(err, ErrGone) || strings.Contains(err.Error(), "SECRET-TOKEN") {
-			t.Fatalf("%s: %v", name, err)
-		}
+	for name, id := range map[string]string{"accepted": ok, "redirect": moved, "429": busy, "unreachable": unreachable} {
 		if _, kept := s.store.Get(id); !kept {
 			t.Fatalf("%s removed the subscription", name)
 		}
@@ -256,9 +257,9 @@ func TestServiceSendTimesOutAndKeepsSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	err = s.SendTest(context.Background(), id)
-	if err == nil || errors.Is(err, ErrGone) || time.Since(start) > 5*time.Second {
-		t.Fatalf("hung push service: %v after %v", err, time.Since(start))
+	report, err := s.SendTestAll(context.Background())
+	if err != nil || report.Accepted != 0 || len(report.Errors) != 1 || len(report.Removed) != 0 || time.Since(start) > 5*time.Second {
+		t.Fatalf("hung push service: %+v, %v after %v", report, err, time.Since(start))
 	}
 	if _, kept := s.store.Get(id); !kept {
 		t.Fatal("timeout removed the subscription")

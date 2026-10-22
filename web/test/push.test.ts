@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import {
   advise,
+  describeTest,
   detectSupport,
   enable,
   sendTest,
@@ -196,17 +197,68 @@ describe("push client", () => {
     expect(b.serviceWorker.register).not.toHaveBeenCalled();
   });
 
-  it("clears the saved ID when the test push reports 410", async () => {
+  it("forgets this browser's subscription only when the test removed it", async () => {
     const b = fakeBrowser();
     b.responses["POST /push/subscriptions"] = {
       status: 200,
       body: { id: "sub1" },
     };
     await enable(b.publicKey);
-    b.responses["POST /push/test"] = { status: 410, body: { error: "gone" } };
-    await expect(sendTest()).rejects.toMatchObject({ status: 410 });
+    const report = (removed: string[]) => ({
+      status: 200,
+      body: { devices: 3, accepted: 3 - removed.length, removed, errors: [] },
+    });
+    b.responses["POST /push/test"] = report(["phone"]);
+    expect(await sendTest()).toMatchObject({ ownRemoved: false });
+    expect(b.storage.get("webmux.push.subscriptionId")).toBe("sub1");
+    expect(b.subscription()).not.toBeNull();
+
+    b.responses["POST /push/test"] = report(["sub1"]);
+    expect(await sendTest()).toMatchObject({ ownRemoved: true });
     expect(b.storage.get("webmux.push.subscriptionId")).toBe("");
     expect(b.subscription()).toBeNull();
+  });
+
+  it("describes a test as failed only when a device failed or this one expired", () => {
+    const outcome = {
+      devices: 3,
+      accepted: 3,
+      removed: [] as string[],
+      errors: [] as string[],
+      ownRemoved: false,
+    };
+    expect(describeTest(outcome)).toEqual({
+      failed: false,
+      message: expect.stringContaining("全部 3 台"),
+    });
+    expect(
+      describeTest({ ...outcome, accepted: 2, removed: ["phone"] }),
+    ).toEqual({
+      failed: false,
+      message: "已提交给 2/3 台设备的推送服务；1 台订阅已失效并已删除",
+    });
+    expect(
+      describeTest({
+        ...outcome,
+        accepted: 2,
+        errors: ["推送服务 a.example 返回 429"],
+      }),
+    ).toEqual({
+      failed: true,
+      message:
+        "已提交给 2/3 台设备的推送服务；1 台发送失败：推送服务 a.example 返回 429",
+    });
+    expect(
+      describeTest({
+        ...outcome,
+        accepted: 2,
+        removed: ["sub1"],
+        ownRemoved: true,
+      }).failed,
+    ).toBe(true);
+    expect(describeTest({ ...outcome, devices: 0, accepted: 0 }).failed).toBe(
+      true,
+    );
   });
 
   it("sync without a registration registers nothing", async () => {

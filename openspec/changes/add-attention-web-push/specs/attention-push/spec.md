@@ -168,17 +168,17 @@
 
 ### Requirement: 测试通知
 
-`POST /api/push/test` SHALL 接受 `{"id": "<订阅 ID>"}`，同步向该订阅发送一条测试通知。推送服务接受时返回 204；ID 不存在时返回 404；推送服务返回 404 或 410 时 SHALL 删除该订阅并返回 410；其他失败返回 502，错误信息 MUST NOT 含 endpoint。推送不可用时返回 409。
+`POST /api/push/test` SHALL 同时向全部已登记的订阅发送一条测试通知，等待各推送服务应答后返回 200 与 `{"devices", "accepted", "removed", "errors"}`：`devices` 为发送时的订阅数，`accepted` 为推送服务接受的数量；推送服务返回 404 或 410 的订阅 SHALL 被删除，其 ID 列入 `removed`；其他失败列入 `errors`，信息 MUST NOT 含 endpoint。单个订阅失败不影响其他订阅。推送不可用时返回 409。
 
 #### Scenario: 测试成功
 
-- **WHEN** 推送服务以 201 接受测试通知
-- **THEN** 接口返回 204，设备显示标题为“WebMux”、正文为“测试通知”的通知
+- **WHEN** 推送服务以 201 接受全部订阅的测试通知
+- **THEN** 接口返回 200，`accepted` 等于 `devices`，每台设备显示标题为“WebMux”、正文为“测试通知”的通知
 
-#### Scenario: 订阅已失效
+#### Scenario: 部分订阅已失效
 
-- **WHEN** 推送服务对测试通知返回 410
-- **THEN** 接口返回 410，订阅被删除，订阅数减 1
+- **WHEN** 两台设备中的一台的推送服务对测试通知返回 410
+- **THEN** 接口返回 200，`accepted` 为 1，`removed` 只含该订阅 ID，该订阅被删除，订阅数减 1
 
 ### Requirement: 注意力差分与去重
 
