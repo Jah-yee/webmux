@@ -1,7 +1,7 @@
 # terminal-session-cli Specification
 
 ## Purpose
-TBD - created by archiving change add-terminal-run-attach. Update Purpose after archive.
+让用户在本机或 SSH 终端中用 `webmux run|attach|ls|open` 创建、附着、列出和打开持久会话：离开时分离并把会话交给手机等其他客户端，回来后从原生终端接续同一个 PTY。
 
 ## Requirements
 
