@@ -40,7 +40,7 @@ runs:
         version: 12.11.2
     - uses: actions/setup-node@v4
       with:
-        node-version: 24
+        node-version-file: .nvmrc
     - id: pnpm-store
       shell: bash
       run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
