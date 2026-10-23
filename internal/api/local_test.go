@@ -19,7 +19,7 @@ func TestLocalEndpointsAreNotOnTCP(t *testing.T) {
 	c := config.Config{Token: "secret"}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(c, m, testWorkspace(t, m, t.TempDir()), nil, nil)
+	handler := New(c, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil)
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		for _, path := range []string{contract.PathToken, contract.PathStatus, contract.PathShutdown, contract.PathTunnel, "/local/other"} {
 			r := httptest.NewRequest(method, "http://webmux.example"+path, nil)
@@ -159,6 +159,34 @@ func TestLocalTunnelUnroutedWithoutController(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("HTTP %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestLocalConfigReportsRuntimeTunnel(t *testing.T) {
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	handler := NewLocal(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, Local{
+		Status: func() contract.StatusV1 {
+			return contract.StatusV1{Tunnel: &contract.TunnelStatus{
+				State:     contract.TunnelReady,
+				PublicURL: "https://abc-def.trycloudflare.com",
+			}}
+		},
+	})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "http://webmux/api/config", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Tunnel TunnelInfo `json:"tunnel"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	want := TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: "https://abc-def.trycloudflare.com"}
+	if response.Tunnel != want {
+		t.Fatalf("tunnel = %+v, want %+v", response.Tunnel, want)
 	}
 }
 

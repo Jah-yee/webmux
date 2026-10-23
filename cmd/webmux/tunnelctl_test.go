@@ -80,6 +80,40 @@ func (r *tunnelRun) waitTunnel(t *testing.T, state string) contract.TunnelStatus
 	return last
 }
 
+// configTunnel reads the browser-facing tunnel state from GET /api/config.
+// The response must never carry the WebMux or Cloudflare token.
+func (r *tunnelRun) configTunnel(t *testing.T) api.TunnelInfo {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, r.local+"/api/config", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tunnelTestToken)
+	client := &http.Client{Timeout: 5 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("config status %d: %s", res.StatusCode, raw)
+	}
+	if strings.Contains(string(raw), tunnelTestToken) {
+		t.Fatalf("config leaks the token: %s", raw)
+	}
+	var body struct {
+		Tunnel api.TunnelInfo `json:"tunnel"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	return body.Tunnel
+}
+
 // pids lists every fake cloudflared started so far.
 func (r *tunnelRun) pids(t *testing.T) []int {
 	t.Helper()
@@ -111,6 +145,9 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	if got := r.tunnel(t); got != (contract.TunnelStatus{State: contract.TunnelOff}) {
 		t.Fatalf("initial tunnel %+v", got)
 	}
+	if got := r.configTunnel(t); got != (api.TunnelInfo{State: contract.TunnelOff}) {
+		t.Fatalf("initial config tunnel %+v", got)
+	}
 	if got := r.status(t, publicHost); got != http.StatusForbidden {
 		t.Fatalf("public host before any tunnel: %d", got)
 	}
@@ -119,6 +156,9 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	}
 	if got := r.waitTunnel(t, contract.TunnelReady); got != (contract.TunnelStatus{State: contract.TunnelReady, PublicURL: publicOrigin}) {
 		t.Fatalf("ready tunnel %+v", got)
+	}
+	if got := r.configTunnel(t); got != (api.TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: publicOrigin}) {
+		t.Fatalf("ready config tunnel %+v", got)
 	}
 	if got := r.status(t, publicHost); got != http.StatusOK {
 		t.Fatalf("public request while ready: %d", got)
@@ -136,6 +176,9 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	}
 	if got := r.setTunnel(t, false); got.State != contract.TunnelOff {
 		t.Fatalf("stop reply %+v", got)
+	}
+	if got := r.configTunnel(t); got != (api.TunnelInfo{State: contract.TunnelOff}) {
+		t.Fatalf("stopped config tunnel %+v", got)
 	}
 	if got := r.status(t, publicHost); got != http.StatusForbidden {
 		t.Fatalf("public request after stop: %d", got)

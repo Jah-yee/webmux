@@ -89,7 +89,7 @@ func TestPushAPI(t *testing.T) {
 	if err := public.Set("https://abc.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(cfg, m, testWorkspace(t, m, t.TempDir()), public, pushes)
+	handler := New(cfg, m, testWorkspace(t, m, t.TempDir()), public, pushes, nil)
 	var bodies strings.Builder
 	call := func(method, path, origin, token, body string) (int, map[string]any) {
 		t.Helper()
@@ -173,7 +173,7 @@ func TestPushAPI(t *testing.T) {
 func TestPushAPIWhenDisabled(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil)
+	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil)
 	for _, row := range []struct {
 		method, path, body string
 		want               int

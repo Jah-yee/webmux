@@ -58,7 +58,16 @@ func NewLocal(c config.Config, m *session.Manager, workspaces *workspace.Service
 	if codes != nil {
 		shared = append(shared, codes)
 	}
-	s := newServer(c, m, workspaces, nil, pushes, shared)
+	var tunnel func() contract.TunnelStatus
+	if local.Status != nil {
+		tunnel = func() contract.TunnelStatus {
+			if status := local.Status(); status.Tunnel != nil {
+				return *status.Tunnel
+			}
+			return contract.TunnelStatus{State: contract.TunnelOff}
+		}
+	}
+	s := newServer(c, m, workspaces, nil, pushes, tunnel, shared)
 	s.local = true
 	routes := s.routes()
 	mux := http.NewServeMux()

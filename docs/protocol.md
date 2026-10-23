@@ -79,13 +79,15 @@ interface SessionInfo {
 
 ### 其他
 
-| 方法 | 路径                   | 说明                                                                                                        |
-| ---- | ---------------------- | ----------------------------------------------------------------------------------------------------------- |
-| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                   |
-| GET  | `/api/presets`         | `Preset[]`：`{name, label, cmd, allowArgs}`                                                                 |
-| GET  | `/api/config`          | `{defaultCwd, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}}`，不含 token |
-| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                            |
-| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                               |
+| 方法 | 路径                   | 说明                                                                                                                |
+| ---- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                           |
+| GET  | `/api/presets`         | `Preset[]`：`{name, label, cmd, allowArgs}`                                                                         |
+| GET  | `/api/config`          | `{defaultCwd, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel}`，不含 token |
+| GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                    |
+| POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                       |
+
+`tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。`state` 为 `off`、`starting`、`ready` 或 `failed`；`enabled` 仅在 `starting`/`ready` 时为 `true`，启动失败不会被当作可用。`named` 与 `hostname` 来自 `[tunnel]` 配置，未启用时也可用于说明配置模式；Named Tunnel 缺少 `hostname` 时为空字符串。`publicUrl` 仅在 `ready` 时出现，且不含 token。响应不包含 `[tunnel].token` 或其他 Cloudflare 凭据。
 
 ### 仓库与 worktree
 

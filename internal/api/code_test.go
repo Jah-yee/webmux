@@ -26,7 +26,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 	c.Token = "secret"
 	m := session.NewManager(c.SessionOptions())
 	codes := codeview.New(m)
-	server := httptest.NewServer(New(c, m, testWorkspace(t, m, c.DefaultCwd), nil, nil, codes))
+	server := httptest.NewServer(New(c, m, testWorkspace(t, m, c.DefaultCwd), nil, nil, nil, codes))
 	defer server.Close()
 	defer codes.Close()
 	defer func() {

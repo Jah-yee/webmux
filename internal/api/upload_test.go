@@ -35,7 +35,7 @@ func uploadAPI(t *testing.T) (http.Handler, *session.Manager, *session.Session, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(config.Config{Token: "secret"}, m, testWorkspace(t, m, cwd), nil, nil)
+	handler := New(config.Config{Token: "secret"}, m, testWorkspace(t, m, cwd), nil, nil, nil)
 	t.Setenv("TMPDIR", root)
 	return handler, m, item, root
 }

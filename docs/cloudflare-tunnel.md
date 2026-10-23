@@ -111,6 +111,7 @@ webmux config check
 - `hostname` 必须与 Cloudflare 的公共主机名完全一致。WebMux 用它做 Host / Origin 校验，不一致时公网请求会被拒绝。
 - 根 `token` 和 `[tunnel].token` 是两套凭据，见第 8 节。
 - 修改任何 `[tunnel]` 配置后都需要重启 WebMux；运行中不会重新读取配置。
+- 设置页的“公网访问（Cloudflare Tunnel）”卡片显示当前运行时状态（未启用、启动中、已就绪或异常停止）、Quick/Named 模式，以及公网地址或配置的 `hostname`。托盘开关状态变化后，刷新或重新进入设置页即可看到最新状态；卡片不读取或展示任何 token。
 - 隧道就绪后如果意外退出，WebMux 不会自动重试，公网地址立即失效；本机会话不受影响。
 
 ## 6. Windows / WSL 托盘

@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { IconCheck, IconCopy, IconExternalLink } from "@tabler/icons-svelte";
+  import { Badge, type BadgeVariant } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import * as Tabs from "$lib/components/ui/tabs";
   import InlineNotice from "./InlineNotice.svelte";
+  import { api } from "../api";
   import { copyText } from "../clipboard";
-  import { accessEntryHint } from "../accessEntry";
+  import { ConfigSchema, type TunnelInfo } from "../schemas";
 
   const docsUrl =
     "https://github.com/mzdluo123/webmux/blob/main/docs/cloudflare-tunnel.md";
@@ -15,12 +17,66 @@ enabled = true
 token = "Cloudflare 隧道 Token"
 hostname = "term.example.com"`;
 
-  const entry = accessEntryHint(location);
+  async function fetchTunnel(
+    signal?: AbortSignal,
+  ): Promise<TunnelInfo | undefined> {
+    return (await api("/config", ConfigSchema, "GET", undefined, signal))
+      .tunnel;
+  }
 
+  let {
+    loadTunnel = fetchTunnel,
+  }: {
+    loadTunnel?: (signal?: AbortSignal) => Promise<TunnelInfo | undefined>;
+  } = $props();
+
+  let tunnel = $state<TunnelInfo>();
+  let statusError = $state("");
   let mode = $state("named");
   let copied = $state<"idle" | "copied" | "failed">("idle");
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   onDestroy(() => clearTimeout(copyTimer));
+
+  const stateLabel = $derived(
+    tunnel?.state === "ready"
+      ? "已就绪"
+      : tunnel?.state === "starting"
+        ? "启动中"
+        : tunnel?.state === "failed"
+          ? "异常停止"
+          : "未启用",
+  );
+  const stateVariant = $derived<BadgeVariant>(
+    tunnel?.state === "ready"
+      ? "success"
+      : tunnel?.state === "starting"
+        ? "warning"
+        : tunnel?.state === "failed"
+          ? "destructive"
+          : "outline",
+  );
+  const modeLabel = $derived(tunnel?.named ? "Named Tunnel" : "Quick Tunnel");
+
+  async function load(signal: AbortSignal) {
+    try {
+      const info = await loadTunnel(signal);
+      if (!info) {
+        statusError = "当前服务端未提供隧道状态；请刷新页面或升级 WebMux。";
+        return;
+      }
+      tunnel = info;
+      statusError = "";
+    } catch (cause) {
+      if (signal.aborted) return;
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      statusError = `无法读取隧道状态：${detail}`;
+    }
+  }
+  onMount(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  });
 
   async function copyTemplate() {
     copied = (await copyText(template)) ? "copied" : "failed";
@@ -38,7 +94,59 @@ hostname = "term.example.com"`;
     >
   </Card.Header>
   <Card.Content class="space-y-4">
-    <p class="text-xs text-muted-foreground">{entry}</p>
+    <section aria-label="隧道状态" class="min-w-0 space-y-2">
+      {#if statusError}
+        <p role="alert" class="text-xs text-destructive">{statusError}</p>
+      {:else if tunnel}
+        <div class="flex flex-wrap items-center gap-2" role="status">
+          <Badge variant={stateVariant}>{stateLabel}</Badge>
+          {#if tunnel.state !== "off"}
+            <span class="text-sm">{modeLabel}</span>
+          {:else if tunnel.named}
+            <span class="text-sm">已配置 Named Tunnel</span>
+          {/if}
+        </div>
+        {#if tunnel.state === "ready"}
+          {#if tunnel.publicUrl}
+            <p class="min-w-0 text-sm [overflow-wrap:anywhere]">
+              公网地址：<code>{tunnel.publicUrl}</code>
+            </p>
+          {:else}
+            <p class="text-sm text-muted-foreground">
+              隧道已就绪，但服务端未报告公网地址。
+            </p>
+          {/if}
+        {:else if tunnel.state === "starting"}
+          <p class="text-sm text-muted-foreground">
+            正在启动隧道；就绪后此处显示公网地址。
+          </p>
+        {:else if tunnel.state === "failed"}
+          <p class="text-sm text-muted-foreground">
+            隧道已停止或连接断开，本机与 VPN
+            访问不受影响；请在托盘重试或查看服务日志。
+          </p>
+        {:else}
+          <p class="text-sm text-muted-foreground">
+            当前未启用公网隧道；可在托盘临时开启，或设置
+            <code>[tunnel].enabled = true</code> 后重启。
+          </p>
+        {/if}
+        {#if tunnel.named}
+          {#if tunnel.hostname}
+            <p class="min-w-0 text-sm [overflow-wrap:anywhere]">
+              公共主机名：<code>{tunnel.hostname}</code>
+            </p>
+          {:else}
+            <p class="text-sm text-warning">
+              Named Tunnel 缺少 <code>hostname</code
+              >，无法发布固定公网地址；请在配置中补充后重启。
+            </p>
+          {/if}
+        {/if}
+      {:else}
+        <p class="text-sm text-muted-foreground">正在读取隧道状态…</p>
+      {/if}
+    </section>
     <Tabs.Root bind:value={mode}>
       <Tabs.List class="w-full">
         <Tabs.Trigger value="quick">Quick Tunnel</Tabs.Trigger>

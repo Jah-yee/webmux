@@ -270,7 +270,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	tunnels := newTunnelController(c.Tunnel, local, c.Token, public, locator.Find, out, slog.Default())
 	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, pushes, cancel, tunnels)
 	server := &http.Server{
-		Handler:           api.New(c.Config, m, workspaces, public, pushes, codes),
+		Handler:           api.New(c.Config, m, workspaces, public, pushes, tunnels.Status, codes),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		IdleTimeout:       60 * time.Second,

@@ -153,11 +153,21 @@ export const WorkspaceCapabilitySchema = z.object({
   gitError: z.string(),
   registryError: z.string(),
 });
+export const TunnelInfoSchema = z.object({
+  enabled: z.boolean(),
+  state: z.enum(["off", "starting", "ready", "failed"]),
+  named: z.boolean(),
+  hostname: z.string(),
+  publicUrl: z.string().optional(),
+});
+export type TunnelInfo = z.infer<typeof TunnelInfoSchema>;
 export const ConfigSchema = z.object({
   defaultCwd: z.string(),
   // Older servers do not send this display-only field.
   hostname: z.string().default(""),
   workspace: WorkspaceCapabilitySchema,
+  // Older servers do not send the runtime tunnel state.
+  tunnel: TunnelInfoSchema.optional(),
 });
 export const WorktreeSchema = z.object({
   id: z.string(),
