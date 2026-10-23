@@ -52,6 +52,7 @@ flowchart LR
 | `internal/hub`                              | 终端 WebSocket：快照与订阅、输出合并、输入写入与取消                                            |
 | `internal/api`                              | REST 路由、认证、Origin 检查、上传、静态资源与 SPA 回退                                         |
 | `internal/workspace`                        | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
+| `internal/launch`                           | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
 | `internal/codeview`                         | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
 | `internal/wslclient`                        | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算 |
 | `internal/attach`                           | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                |
@@ -61,7 +62,7 @@ flowchart LR
 | `internal/tray/winui`, `cmd/webmux-tray`    | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
 | `web/`                                      | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
 
-`cmd/webmux` 先加载配置，再构造 `session.Manager`、workspace 与 codeview 服务，最后注入 `api.New`。各模块通过构造函数显式依赖，不使用全局状态。
+`cmd/webmux` 先加载配置，再构造 `session.Manager`、workspace、启动配置与 codeview 服务，最后注入 `api.New`。各模块通过构造函数显式依赖，不使用全局状态。
 
 ## 客户端与通讯方案
 
@@ -86,7 +87,7 @@ flowchart LR
 - **会话与连接解耦**：Session 的生命周期只由子进程决定；WebSocket 连接只是观察者，可以有零个或多个。
 - **服务端只传字节**：PTY 原始字节直接进入缓冲并转发给 xterm.js，服务端不做终端仿真；OSC 标题与屏幕预览只是旁路解析。
 - **重连优先增量续接**：输出有绝对字节 offset 与会话运行代际；客户端带着已渲染的位置重连，服务端仍保留后续字节时只补发缺失部分，否则清屏全量回放。服务端仍不做终端仿真。
-- **会话只在内存中**：无数据库；只有显式登记的仓库清单写入状态目录，Git 自己持有 worktree 与分支状态。
+- **会话只在内存中**：无数据库；只有显式登记的仓库清单与用户保存的启动配置写入状态目录，Git 自己持有 worktree 与分支状态。
 - **控制端决定尺寸**：多端同时附着时，只有控制端的 resize 生效；用户输入取得控制，控制端离开后不自动转交。终端自动回复只写入一个连接的回答。
 
 ## 会话生命周期

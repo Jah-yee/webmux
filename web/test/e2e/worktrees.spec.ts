@@ -194,6 +194,9 @@ test("failed agent start retains new worktree and retry does not create again; u
   await expect(branchInput).not.toHaveValue("");
   await branchInput.fill("retry-agent");
   await expect(branchInput).toHaveValue("retry-agent");
+  await page
+    .getByRole("button", { name: "临时命令（不保存）", exact: true })
+    .click();
   await page.getByRole("button", { name: "自定义", exact: true }).click();
   await page.getByLabel("自定义启动命令").fill("/webmux-missing-agent");
   await expect(branchInput).toHaveValue("retry-agent");

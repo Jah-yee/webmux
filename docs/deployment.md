@@ -50,14 +50,14 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 | `token`              | 空                                                         | 共享 token，空表示不认证；启用隧道且为空时每次启动随机生成，隧道模式显式 token 至少 43 字符 |
 | `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                      |
 | `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                           |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单目录                                                                                |
+| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                          |
 | `shell`              | `$SHELL` 或 `/bin/bash`                                    | Shell 预设使用的程序，以 `-l -i` 启动                                                       |
 | `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                |
 | `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                              |
 | `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件           |
 | `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                       |
 | `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                        |
-| `presets`            | shell / claude / codex / omp                               | `name`、`label`、`cmd`（argv 数组）、`allow_args`；配置后替换默认列表                       |
+| `presets`            | shell / claude / codex / omp                               | `name`、`label`、`cmd`（argv 数组）、`allow_args`；配置后替换默认列表；作为内置预设实时提供 |
 | `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                    |
 | `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                               |
 
@@ -67,10 +67,12 @@ omp 预设以 `bash -ic 'exec omp "$@"' omp` 启动，从而加载 `~/.bashrc` �
 
 ### 状态目录
 
-`state_dir` 保存仓库清单 `repositories.json` 与运行时子目录 `run/`（运行时记录 `server.json`、锁 `server.lock`、本机套接字 `webmux.sock`），不保存会话、终端内容或 token。目录权限 0700、文件 0600，通过原子替换写入。
+`state_dir` 保存仓库清单 `repositories.json`、启动配置 `launch-configs.json`（及其锁 `launch-configs.lock`）与运行时子目录 `run/`（运行时记录 `server.json`、锁 `server.lock`、本机套接字 `webmux.sock`），不保存会话、终端内容或 token。目录权限 0700、文件 0600，通过原子替换写入。
 
 - 同一状态目录只能由一个实例使用；多个实例请配置不同的 `state_dir`。第二个实例照常提供终端服务，但不写运行时记录、不创建本机套接字，并在日志中警告。
 - 清单损坏、文件锁冲突或存储不可用时，仓库管理功能被禁用，但终端服务照常运行，损坏的清单不会被覆盖。
+- 启动配置同理：文件损坏、`launch-configs.lock` 被另一实例持有或目录不可读写时，只有启动配置功能返回 503，内置预设与会话照常可用；损坏的文件不会被覆盖或改名，修复或删除后重启服务即可。启动配置的环境变量以明文保存在该 0600 文件中。
+- TOML `[[presets]]` 不会复制进 `launch-configs.json`；首次启动时启动配置为空，第一次保存时才创建文件。
 
 ## 服务管理命令
 

@@ -30,7 +30,7 @@ func TestProtocolAndSecurity(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := session.NewManager(c.SessionOptions())
-	server := httptest.NewServer(New(c, m, testWorkspace(t, m, c.DefaultCwd), nil, nil, nil))
+	server := httptest.NewServer(New(c, m, testWorkspace(t, m, c.DefaultCwd), nil, nil, nil, nil))
 	defer server.Close()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
@@ -240,7 +240,7 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	New(config.Config{}, m, testWorkspace(t, m, cwd), nil, nil, nil).ServeHTTP(recorder, httptest.NewRequest("POST", "/api/sessions", strings.NewReader(string(body))))
+	New(config.Config{}, m, testWorkspace(t, m, cwd), nil, nil, nil, nil).ServeHTTP(recorder, httptest.NewRequest("POST", "/api/sessions", strings.NewReader(string(body))))
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
 	}
@@ -296,7 +296,7 @@ func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	handler := New(config.Config{Presets: presets}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil)
+	handler := New(config.Config{Presets: presets}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil)
 	for _, body := range []string{
 		`{"preset":"custom"}`,
 		`{"preset":"custom","cmd":[]}`,

@@ -52,6 +52,34 @@ export const PresetsSchema = z.array(
 );
 export type Preset = z.infer<typeof PresetsSchema>[number];
 
+// Launch configs are server-stored launch commands. Summaries (list) carry only
+// env variable names; the full config with values is fetched per id for edits.
+const launchConfigFields = {
+  id: z.string().regex(/^[a-z2-7]{8}$/),
+  name: z.string().min(1),
+  cmd: z.array(z.string()).min(1),
+  createdAt: z.iso.datetime({ offset: true }),
+  updatedAt: z.iso.datetime({ offset: true }),
+};
+export const LaunchConfigSummarySchema = z.object({
+  ...launchConfigFields,
+  envNames: z.array(z.string()),
+});
+export type LaunchConfigSummary = z.infer<typeof LaunchConfigSummarySchema>;
+export const LaunchConfigSchema = z.object({
+  ...launchConfigFields,
+  env: z.record(z.string(), z.string()),
+});
+export type LaunchConfig = z.infer<typeof LaunchConfigSchema>;
+export const LaunchConfigsSchema = z
+  .array(LaunchConfigSummarySchema)
+  .max(100)
+  .refine(
+    (configs) =>
+      new Set(configs.map((config) => config.id)).size === configs.length,
+    "启动配置 ID 不能重复",
+  );
+
 export const SessionEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("snapshot"),

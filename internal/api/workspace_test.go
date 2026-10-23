@@ -52,7 +52,7 @@ func workspaceAPI(t *testing.T) (http.Handler, *workspace.Service, *session.Mana
 		m.Shutdown(ctx)
 	})
 	service := testWorkspace(t, m, root)
-	return New(c, m, service, nil, nil, nil), service, m, root
+	return New(c, m, service, nil, nil, nil, nil), service, m, root
 }
 func workspaceRequest(t *testing.T, handler http.Handler, method, path string, body any, want int) *httptest.ResponseRecorder {
 	t.Helper()
@@ -172,7 +172,7 @@ func TestWorkspaceAPIConfigDegradationAndTimeout(t *testing.T) {
 	}
 	service := workspace.New(state, m, cwd)
 	defer service.Close()
-	handler := New(config.Config{DefaultCwd: cwd, Token: "secret"}, m, service, nil, nil, nil)
+	handler := New(config.Config{DefaultCwd: cwd, Token: "secret"}, m, service, nil, nil, nil, nil)
 	response := workspaceRequest(t, handler, "GET", "/api/config", nil, 200)
 	var settings struct {
 		DefaultCwd string               `json:"defaultCwd"`

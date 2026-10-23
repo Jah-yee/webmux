@@ -1,15 +1,19 @@
 <script lang="ts">
   import { MediaQuery } from "svelte/reactivity";
   import { untrack } from "svelte";
+  import { IconChevronDown } from "@tabler/icons-svelte";
   import {
     api,
     APIError,
+    joinArgs,
     navigate,
     parseArgs,
     recentDirs,
     store,
     stored,
+    unstore,
   } from "../api";
+  import type { LaunchConfigsState } from "../launchConfigs";
   import {
     NoContentSchema,
     SessionInfoSchema,
@@ -24,11 +28,13 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Drawer from "$lib/components/ui/drawer";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import * as Collapsible from "$lib/components/ui/collapsible";
   import DirectoryPicker from "./DirectoryPicker.svelte";
   import WorktreeCreateFields from "./WorktreeCreateFields.svelte";
 
   let {
     presets,
+    launchConfigs,
     defaultCwd,
     repositories = [],
     initialRepositoryId = "",
@@ -39,6 +45,7 @@
     onclose,
   }: {
     presets: Preset[];
+    launchConfigs: LaunchConfigsState;
     defaultCwd: string;
     repositories?: Repository[];
     initialRepositoryId?: string;
@@ -52,15 +59,25 @@
   const recent = recentDirs();
   let open = $state(true);
   let cwd = $state(untrack(() => recent[0] || defaultCwd));
-  let preset = $state(
-    untrack(
-      () =>
-        (stored("lastPreset") === "custom"
-          ? "custom"
-          : presets.find((p) => p.name === stored("lastPreset"))?.name) ||
-        presets[0]?.name ||
-        "shell",
-    ),
+  // The last launch choice: `preset:<name>`, `config:<id>` or `custom`. Only
+  // the choice is remembered, never config contents. A legacy `lastPreset`
+  // is migrated once and then removed.
+  const fallbackLaunch = untrack(() => `preset:${presets[0]?.name ?? "shell"}`);
+  let launch = $state(
+    untrack(() => {
+      let saved = stored("lastLaunch");
+      const legacy = stored("lastPreset");
+      if (!saved && legacy) {
+        saved = legacy === "custom" ? "custom" : `preset:${legacy}`;
+        store("lastLaunch", saved);
+      }
+      if (legacy) unstore("lastPreset");
+      return saved === "custom" ||
+        saved.startsWith("config:") ||
+        presets.some((p) => `preset:${p.name}` === saved)
+        ? saved
+        : fallbackLaunch;
+    }),
   );
   let args = $state("");
   let command = $state(stored("customCommand"));
@@ -71,8 +88,25 @@
   let mkdirMounted = $state(false);
   let error = $state("");
   let busy = $state(false);
-  const chosen = $derived(presets.find((p) => p.name === preset));
-  const custom = $derived(preset === "custom");
+  const chosen = $derived(presets.find((p) => `preset:${p.name}` === launch));
+  const configs = $derived(
+    launchConfigs.status === "ready" ? launchConfigs.configs : [],
+  );
+  const chosenConfig = $derived(
+    configs.find((config) => `config:${config.id}` === launch),
+  );
+  const custom = $derived(launch === "custom");
+  let temporaryOpen = $state(untrack(() => launch === "custom"));
+  // A remembered config that was deleted, or a store that is unavailable,
+  // falls back to the first built-in preset once the summaries settle.
+  $effect(() => {
+    if (
+      launch.startsWith("config:") &&
+      launchConfigs.status !== "loading" &&
+      !chosenConfig
+    )
+      launch = fallbackLaunch;
+  });
   let mode = $state(untrack(() => initialMode));
   let repositoryId = $state(
     untrack(() => initialRepositoryId || repositories[0]?.id || ""),
@@ -131,15 +165,19 @@
         onclose();
         return;
       }
-      const payload = {
-        ...(mode === "direct"
+      const target =
+        mode === "direct"
           ? { cwd }
-          : { workspace: { repositoryId, worktreeId } }),
-        preset,
-        args: !custom && chosen?.allowArgs ? parseArgs(args) : [],
-        ...(custom ? { cmd } : {}),
-        name,
-      };
+          : { workspace: { repositoryId, worktreeId } };
+      const payload = chosenConfig
+        ? { ...target, configId: chosenConfig.id, name }
+        : {
+            ...target,
+            preset: custom ? "custom" : chosen?.name,
+            args: !custom && chosen?.allowArgs ? parseArgs(args) : [],
+            ...(custom ? { cmd } : {}),
+            name,
+          };
       if (makeDirectory)
         await api("/fs/mkdir", NoContentSchema, "POST", { path: cwd });
       const session = await api(
@@ -157,7 +195,7 @@
           ),
         ),
       );
-      store("lastPreset", preset);
+      store("lastLaunch", launch);
       if (custom) store("customCommand", command);
       navigate("/s/" + session.id);
     } catch (err) {
@@ -303,51 +341,123 @@
           {/if}
         </div>
       {/if}
-      <fieldset class="space-y-2">
+      <fieldset class="min-w-0 space-y-4">
         <legend class="mb-2 text-sm font-medium">启动命令</legend>
-        <div class="flex flex-wrap gap-2">
-          {#each presets as p (p.name)}
+        <div class="space-y-2" role="group" aria-labelledby="launch-builtin">
+          <p id="launch-builtin" class="text-xs text-muted-foreground">
+            内置预设
+          </p>
+          <div class="flex flex-wrap gap-2">
+            {#each presets as p (p.name)}
+              <Button
+                type="button"
+                variant={launch === `preset:${p.name}` ? "default" : "outline"}
+                aria-pressed={launch === `preset:${p.name}`}
+                onclick={() => {
+                  launch = `preset:${p.name}`;
+                  args = "";
+                }}>{p.label}</Button
+              >
+            {/each}
+          </div>
+        </div>
+        <div
+          class="min-w-0 space-y-2"
+          role="group"
+          aria-labelledby="launch-saved"
+          aria-busy={launchConfigs.status === "loading"}
+        >
+          <p id="launch-saved" class="text-xs text-muted-foreground">
+            我的启动配置
+          </p>
+          {#if launchConfigs.status === "loading"}
+            <p role="status" class="text-xs text-muted-foreground">
+              正在读取启动配置…
+            </p>
+          {:else if launchConfigs.status === "unavailable"}
+            <p class="text-xs text-destructive [overflow-wrap:anywhere]">
+              启动配置暂不可用：{launchConfigs.error}
+            </p>
+          {:else if !configs.length}
+            <p class="text-xs text-muted-foreground">
+              还没有启动配置。<a
+                class="text-foreground underline underline-offset-2"
+                href="/settings#launch-configs">前往设置创建启动配置</a
+              >
+            </p>
+          {:else}
+            <div class="grid max-h-60 min-w-0 gap-2 overflow-y-auto p-0.5">
+              {#each configs as config (config.id)}
+                <button
+                  type="button"
+                  class="grid min-w-0 gap-0.5 rounded-md border px-3 py-2 text-left outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:border-primary aria-pressed:bg-accent"
+                  aria-label={`启动配置 ${config.name}`}
+                  aria-pressed={launch === `config:${config.id}`}
+                  onclick={() => {
+                    launch = `config:${config.id}`;
+                    args = "";
+                  }}
+                >
+                  <span class="truncate text-sm font-medium">{config.name}</span
+                  >
+                  <span class="truncate font-mono text-xs text-muted-foreground"
+                    >{joinArgs(config.cmd)}</span
+                  >
+                  {#if config.envNames.length}<span
+                      class="text-xs text-muted-foreground"
+                      >{config.envNames.length} 个环境变量</span
+                    >{/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+        <Collapsible.Root bind:open={temporaryOpen} class="min-w-0 space-y-2">
+          <Collapsible.Trigger
+            class="group flex items-center gap-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <IconChevronDown
+              class="size-4 -rotate-90 transition-transform group-data-[state=open]:rotate-0"
+              aria-hidden="true"
+            />临时命令（不保存）
+          </Collapsible.Trigger>
+          <Collapsible.Content class="space-y-2">
             <Button
               type="button"
-              variant={preset === p.name ? "default" : "outline"}
-              aria-pressed={preset === p.name}
+              variant={custom ? "default" : "outline"}
+              aria-pressed={custom}
               onclick={() => {
-                preset = p.name;
+                launch = "custom";
                 args = "";
-              }}>{p.label}</Button
+              }}>自定义</Button
             >
-          {/each}
-          <Button
-            type="button"
-            variant={custom ? "default" : "outline"}
-            aria-pressed={custom}
-            onclick={() => {
-              preset = "custom";
-              args = "";
-            }}>自定义</Button
-          >
-        </div>
-        {#if custom}
-          <div class="space-y-2">
-            <Label for="custom-command">自定义启动命令</Label>
-            <Input
-              id="custom-command"
-              bind:value={command}
-              placeholder="omp --resume 或 bash -lc 'npm run dev'"
-              required
-              autocomplete="off"
-              autocapitalize="off"
-              autocorrect="off"
-              spellcheck={false}
-            />
-            <p class="text-xs text-muted-foreground">
-              支持引号和转义；直接执行程序，不展开 shell 变量或管道。需要 shell
-              语法时请使用 bash -lc '命令'。
-            </p>
-          </div>
-        {:else}
+            {#if custom}
+              <Label for="custom-command">自定义启动命令</Label>
+              <Input
+                id="custom-command"
+                bind:value={command}
+                placeholder="omp --resume 或 bash -lc 'npm run dev'"
+                required
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck={false}
+              />
+              <p class="text-xs text-muted-foreground">
+                支持引号和转义；直接执行程序，不展开 shell 变量或管道。需要
+                shell 语法时请使用 bash -lc
+                '命令'。只在本浏览器记住，需要长期使用请在设置中保存为启动配置。
+              </p>
+            {/if}
+          </Collapsible.Content>
+        </Collapsible.Root>
+        {#if chosen}
           <p class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
-            {chosen?.cmd.join(" ")}{args ? " " + args : ""}
+            {joinArgs(chosen.cmd)}{args ? " " + args : ""}
+          </p>
+        {:else if chosenConfig}
+          <p class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
+            {joinArgs(chosenConfig.cmd)}
           </p>
         {/if}
       </fieldset>
@@ -388,7 +498,9 @@
           >{/if}
         <Button
           type="submit"
-          disabled={busy || !targetReady || (!chosen && !custom)}
+          disabled={busy ||
+            !targetReady ||
+            (!chosen && !custom && !chosenConfig)}
           >{busy ? "正在启动…" : "创建并进入 →"}</Button
         >
       </div>

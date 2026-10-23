@@ -14,6 +14,7 @@
   import { toggleTheme } from "../theme";
   import { api } from "../api";
   import {
+    LaunchConfigsSchema,
     PresetsSchema,
     ConfigSchema,
     SessionEventSchema,
@@ -24,6 +25,7 @@
     type Repository,
     type Worktree,
   } from "../schemas";
+  import type { LaunchConfigsState } from "../launchConfigs";
   import { connect, type Connection } from "../ws";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -53,6 +55,8 @@
   let sessions = $state<SessionInfo[]>([]);
   let repositories = $state<Repository[]>([]);
   let presets = $state<Preset[]>([]);
+  // Loaded independently of presets: a failure only disables that group.
+  let launchConfigs = $state<LaunchConfigsState>({ status: "loading" });
   let cwd = $state("~");
   let hostname = $state("");
   let setupSettled = $state(false);
@@ -196,6 +200,21 @@
     worktreeId = "",
   ) {
     creating = { mode, repositoryId, worktreeId };
+    // Pick up configs changed on other devices since the page loaded.
+    if (launchConfigs.status !== "ready") launchConfigs = { status: "loading" };
+    void loadLaunchConfigs();
+  }
+  async function loadLaunchConfigs() {
+    try {
+      const configs = await api("/launch-configs", LaunchConfigsSchema);
+      if (!disposed) launchConfigs = { status: "ready", configs };
+    } catch (err) {
+      if (!disposed)
+        launchConfigs = {
+          status: "unavailable",
+          error: (err as Error).message,
+        };
+    }
   }
   function counts(items: SessionInfo[]) {
     return `运行 ${items.filter((s) => s.status === "running" || s.status === "idle").length} · 等待 ${items.filter((s) => s.status === "waiting").length} · 退出 ${items.filter((s) => s.status === "exited").length}`;
@@ -313,6 +332,7 @@
     const startup = new AbortController();
     const startupTimeout = setTimeout(() => startup.abort(), 1000);
     startupRefresh = refresh(startup.signal);
+    void loadLaunchConfigs();
     void Promise.allSettled([loadSetup(startup.signal), startupRefresh]).then(
       () => {
         clearTimeout(startupTimeout);
@@ -751,6 +771,7 @@
 </div>
 {#if creating}<NewSessionSheet
     {presets}
+    {launchConfigs}
     {repositories}
     defaultCwd={cwd}
     initialMode={creating.mode}

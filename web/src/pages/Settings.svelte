@@ -5,6 +5,7 @@
     IconArrowUp,
     IconBolt,
     IconPlus,
+    IconRocket,
     IconTrash,
   } from "@tabler/icons-svelte";
   import { Badge } from "$lib/components/ui/badge";
@@ -15,8 +16,15 @@
   import * as Card from "$lib/components/ui/card";
   import * as Empty from "$lib/components/ui/empty";
   import * as Item from "$lib/components/ui/item";
-  import { navigate } from "../api";
-  import { PreviewSettingsSchema, type QuickCommand } from "../schemas";
+  import { api, joinArgs, navigate } from "../api";
+  import {
+    LaunchConfigsSchema,
+    NoContentSchema,
+    PreviewSettingsSchema,
+    type LaunchConfigSummary,
+    type QuickCommand,
+  } from "../schemas";
+  import { LAUNCH_CONFIGS_LIMIT } from "../launchConfigs";
   import {
     defaultPreviewSettings,
     previewSettings,
@@ -30,6 +38,8 @@
   } from "../quickCommands";
   import { quickCommands, saveQuickCommands } from "../quickCommands.svelte";
   import QuickCommandDialog from "../components/QuickCommandDialog.svelte";
+  import LaunchConfigDialog from "../components/LaunchConfigDialog.svelte";
+  import InlineNotice from "../components/InlineNotice.svelte";
   import TunnelSettings from "../components/TunnelSettings.svelte";
   import PushSettings from "../components/PushSettings.svelte";
   import { Switch } from "$lib/components/ui/switch";
@@ -66,6 +76,50 @@
     [list[index], list[index + offset]] = [list[index + offset], list[index]];
     saveQuickCommands(list);
   }
+  // Launch configs live on the server; a load failure (for example 503 when
+  // the state file is corrupt or locked) only disables this card.
+  let launchConfigs = $state<LaunchConfigSummary[]>([]);
+  let launchState = $state<"loading" | "ready" | "unavailable">("loading");
+  let launchError = $state("");
+  let launchDialogOpen = $state(false);
+  let launchEditing = $state<string>();
+  let launchDeleting = $state<LaunchConfigSummary>();
+  let launchDeleteOpen = $state(false);
+  let launchDeleteBusy = $state(false);
+  let launchDeleteError = $state("");
+  const launchFull = $derived(launchConfigs.length >= LAUNCH_CONFIGS_LIMIT);
+  async function loadLaunchConfigs() {
+    try {
+      launchConfigs = await api("/launch-configs", LaunchConfigsSchema);
+      launchError = "";
+      launchState = "ready";
+    } catch (err) {
+      launchError = (err as Error).message;
+      launchState = "unavailable";
+    }
+  }
+  function editLaunchConfig(id?: string) {
+    launchEditing = id;
+    launchDialogOpen = true;
+  }
+  async function deleteLaunchConfig() {
+    if (!launchDeleting) return;
+    launchDeleteBusy = true;
+    launchDeleteError = "";
+    try {
+      await api(
+        `/launch-configs/${launchDeleting.id}`,
+        NoContentSchema,
+        "DELETE",
+      );
+      launchDeleteOpen = false;
+      await loadLaunchConfigs();
+    } catch (err) {
+      launchDeleteError = (err as Error).message;
+    } finally {
+      launchDeleteBusy = false;
+    }
+  }
   const draftStorage = browserDraftStorage();
   let keepDrafts = $state(draftStorage.enabled);
   let savedDrafts = $state(draftStorage.count());
@@ -88,6 +142,7 @@
     document.title = "WebMux · 设置";
     const target = location.hash.slice(1);
     if (target) document.getElementById(target)?.scrollIntoView();
+    void loadLaunchConfigs();
   });
 </script>
 
@@ -110,7 +165,7 @@
     <div>
       <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">设置</h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        快捷指令、草稿和预览只保存在当前浏览器。公网访问与通知推送涉及服务端能力，本页提供说明或当前设备操作；修改服务端配置需要编辑配置文件并重启。
+        快捷指令、草稿和预览只保存在当前浏览器；启动配置保存在服务端，在所有设备间共享。公网访问与通知推送涉及服务端能力，本页提供说明或当前设备操作；修改服务端配置需要编辑配置文件并重启。
       </p>
     </div>
     <Card.Root id="quick-commands" class="scroll-mt-4">
@@ -198,6 +253,114 @@
             >
             {#if full}<span class="text-xs text-muted-foreground"
                 >最多 {QUICK_COMMANDS_LIMIT} 条</span
+              >{/if}
+          </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+    <Card.Root
+      role="region"
+      id="launch-configs"
+      class="scroll-mt-4"
+      aria-labelledby="launch-configs-title"
+    >
+      <Card.Header>
+        <Card.Title id="launch-configs-title">启动配置</Card.Title>
+        <Card.Description
+          >保存“名称 + 完整命令 +
+          环境变量”，在新建会话时选用；保存在服务端，所有设备共享。内置预设来自服务端配置文件的
+          <code class="font-mono">[[presets]]</code
+          >，需编辑配置文件并重启服务才会变化，不在这里管理。启动配置保存的是创建时的命令副本，之后修改或删除内置预设不会影响它。</Card.Description
+        >
+      </Card.Header>
+      <Card.Content class="space-y-4">
+        {#if launchState === "loading"}
+          <!-- Same shape as the empty state, the usual first result, so the
+               cards below do not shift when the list arrives. -->
+          <Empty.Root class="border border-dashed" aria-busy="true">
+            <Empty.Header>
+              <Empty.Media variant="icon"><IconRocket /></Empty.Media>
+              <Empty.Title role="status">正在读取启动配置…</Empty.Title>
+              <Empty.Description
+                >把常用命令、参数和环境变量存起来，在新建会话时一键选用。</Empty.Description
+              >
+            </Empty.Header>
+            <Empty.Content>
+              <Button disabled
+                ><IconPlus aria-hidden="true" />新建启动配置</Button
+              >
+            </Empty.Content>
+          </Empty.Root>
+        {:else if launchState === "unavailable"}
+          <InlineNotice tone="danger">
+            <p>启动配置暂不可用，新建、编辑与删除已停用：</p>
+            <p class="mt-1 font-mono text-xs">{launchError}</p>
+          </InlineNotice>
+          <Button variant="outline" onclick={() => loadLaunchConfigs()}
+            >重新读取</Button
+          >
+        {:else if launchConfigs.length === 0}
+          <Empty.Root class="border border-dashed">
+            <Empty.Header>
+              <Empty.Media variant="icon"><IconRocket /></Empty.Media>
+              <Empty.Title>还没有启动配置</Empty.Title>
+              <Empty.Description
+                >把常用命令、参数和环境变量存起来，在新建会话时一键选用。</Empty.Description
+              >
+            </Empty.Header>
+            <Empty.Content>
+              <Button onclick={() => editLaunchConfig()}
+                ><IconPlus aria-hidden="true" />新建启动配置</Button
+              >
+            </Empty.Content>
+          </Empty.Root>
+        {:else}
+          <Item.Group class="gap-2" aria-label="启动配置列表">
+            {#each launchConfigs as config (config.id)}
+              <Item.Root variant="outline" size="sm">
+                <button
+                  type="button"
+                  class="flex min-w-0 flex-1 flex-col gap-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  aria-label={`编辑 ${config.name}`}
+                  onclick={() => editLaunchConfig(config.id)}
+                >
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span class="truncate text-xs font-medium"
+                      >{config.name}</span
+                    >
+                    {#if config.envNames.length}<Badge variant="secondary"
+                        >{config.envNames.length} 个环境变量</Badge
+                      >{/if}
+                  </span>
+                  <span class="truncate font-mono text-xs text-muted-foreground"
+                    >{joinArgs(config.cmd)}</span
+                  >
+                </button>
+                <Item.Actions class="gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`删除 ${config.name}`}
+                    title="删除"
+                    onclick={() => {
+                      launchDeleting = config;
+                      launchDeleteError = "";
+                      launchDeleteOpen = true;
+                    }}><IconTrash aria-hidden="true" /></Button
+                  >
+                </Item.Actions>
+              </Item.Root>
+            {/each}
+          </Item.Group>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              disabled={launchFull}
+              onclick={() => editLaunchConfig()}
+              ><IconPlus aria-hidden="true" />新建启动配置</Button
+            >
+            {#if launchFull}<span class="text-xs text-muted-foreground"
+                >最多 {LAUNCH_CONFIGS_LIMIT} 条，请先删除一条</span
               >{/if}
           </div>
         {/if}
@@ -320,6 +483,37 @@
 </div>
 
 <QuickCommandDialog bind:open={dialogOpen} initial={editing} save={upsert} />
+<LaunchConfigDialog
+  bind:open={launchDialogOpen}
+  configId={launchEditing}
+  onsaved={() => void loadLaunchConfigs()}
+/>
+<AlertDialog.Root bind:open={launchDeleteOpen}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>删除启动配置？</AlertDialog.Title>
+      <AlertDialog.Description
+        >将删除“{launchDeleting?.name}”，此操作不能撤销；已运行的会话不受影响。</AlertDialog.Description
+      >
+    </AlertDialog.Header>
+    {#if launchDeleting}<p
+        class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs"
+      >
+        {joinArgs(launchDeleting.cmd)}
+      </p>{/if}
+    {#if launchDeleteError}<InlineNotice tone="danger"
+        >{launchDeleteError}</InlineNotice
+      >{/if}
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel disabled={launchDeleteBusy}>取消</AlertDialog.Cancel>
+      <Button
+        variant="destructive"
+        disabled={launchDeleteBusy}
+        onclick={deleteLaunchConfig}>删除</Button
+      >
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
 <AlertDialog.Root bind:open={deleteOpen}>
   <AlertDialog.Content>
     <AlertDialog.Header>

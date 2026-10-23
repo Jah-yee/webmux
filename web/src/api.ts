@@ -33,6 +33,13 @@ export function store(key: string, value: string) {
     /* private-mode storage is optional */
   }
 }
+export function unstore(key: string) {
+  try {
+    localStorage.removeItem("webmux." + key);
+  } catch {
+    /* private-mode storage is optional */
+  }
+}
 const tokenFragment = "#token=";
 
 // Adopts a `#token=` link: fragments never reach the server, and the token is
@@ -222,4 +229,17 @@ export function parseArgs(input: string): string[] {
   if (escaped || quote) throw new Error("参数引号或反斜杠未闭合");
   if (started) result.push(token);
   return result;
+}
+// Characters that need quoting for parseArgs (whitespace, quotes, backslash)
+// plus shell metacharacters, so the text also reads unambiguously as argv.
+const plainArg = /^[^\s'"\\$`;&|<>()*?![\]{}#~]+$/u;
+// Renders one argument so parseArgs reads it back unchanged.
+export function quoteArg(arg: string): string {
+  if (plainArg.test(arg)) return arg;
+  if (!arg.includes("'")) return `'${arg}'`;
+  return `"${arg.replace(/["\\$`]/g, "\\$&")}"`;
+}
+// Inverse of parseArgs: parseArgs(joinArgs(argv)) equals argv.
+export function joinArgs(argv: readonly string[]): string {
+  return argv.map(quoteArg).join(" ");
 }

@@ -24,18 +24,22 @@
 | GET    | `/api/sessions/{id}/buffer`   | 下载完整原始缓冲（`application/octet-stream`）   |
 | POST   | `/api/sessions/{id}/upload`   | 上传文件，见下文                                 |
 
-创建请求有两种互斥形式：
+创建请求有三种互斥形式：
 
 ```jsonc
 // 预设
 { "cwd": "/home/u/proj", "preset": "claude", "args": ["--resume"], "name": "可选" }
 // 自定义命令
 { "cwd": "/home/u/proj", "preset": "custom", "cmd": ["bash", "-lc", "make dev"], "name": "可选" }
+// 已保存的启动配置
+{ "cwd": "/home/u/proj", "configId": "k3m9q2x7", "name": "可选" }
 ```
 
 自定义命令必须包含非空可执行程序，且不能同时传非空 `args`；预设形式不能传 `cmd`。可附加 `workspace: {repositoryId, worktreeId}`：省略 `cwd` 时使用工作树根目录，提供时必须位于该工作树内。
 
-两种形式都可附加可选的 `env: {"NAME": "value"}`：只为该会话在服务环境之上追加或覆盖显式列出的变量（名称须匹配 `[A-Za-z_][A-Za-z0-9_]*`，值不含 NUL，`WEBMUX_SESSION_ID` 保留），不复制调用方的环境，也不出现在 `SessionInfo` 中。不认识该字段的旧版服务端以 400 拒绝请求。
+预设与自定义命令形式都可附加可选的 `env: {"NAME": "value"}`：只为该会话在服务环境之上追加或覆盖显式列出的变量（名称须匹配 `[A-Za-z_][A-Za-z0-9_]*`，值不含 NUL，`WEBMUX_SESSION_ID` 保留），不复制调用方的环境，也不出现在 `SessionInfo` 中。不认识该字段的旧版服务端以 400 拒绝请求。
+
+`configId` 形式按已保存配置的完整 argv 与环境变量启动，会话记录为 `preset: "custom"`。此时 `preset` 须为空、`cmd`/`args` 须为空数组或省略、`env` 须省略或为 `{}`，否则 400；空字符串 `configId` 400，未知 ID 404，启动配置存储不可用 503。这些检查都在目录与 Git 操作之前完成。之后修改或删除该配置不影响已启动的会话。
 
 **上传**：`multipart/form-data`，恰好一个文件字段 `file`。成功返回 201 `{"path": "<服务器绝对路径>"}`。单文件上限 100 MiB（超限 413），读期限 5 分钟（超时 408）；无效请求 400，会话不存在 404，会话已退出 409。
 
@@ -88,6 +92,20 @@ interface SessionInfo {
 | POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                       |
 
 `tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。`state` 为 `off`、`starting`、`ready` 或 `failed`；`enabled` 仅在 `starting`/`ready` 时为 `true`，启动失败不会被当作可用。`named` 与 `hostname` 来自 `[tunnel]` 配置，未启用时也可用于说明配置模式；Named Tunnel 缺少 `hostname` 时为空字符串。`publicUrl` 仅在 `ready` 时出现，且不含 token。响应不包含 `[tunnel].token` 或其他 Cloudflare 凭据。
+
+### 启动配置
+
+启动配置保存在服务端 `<state_dir>/launch-configs.json`，在所有已认证设备间共享。TOML `[[presets]]` 仍由 `/api/presets` 提供，不复制进启动配置。
+
+| 方法   | 路径                       | 说明                                                                      |
+| ------ | -------------------------- | ------------------------------------------------------------------------- |
+| GET    | `/api/launch-configs`      | 摘要数组（按创建顺序）：`{id, name, cmd, envNames, createdAt, updatedAt}` |
+| GET    | `/api/launch-configs/{id}` | 完整配置：`{id, name, cmd, env, createdAt, updatedAt}`                    |
+| POST   | `/api/launch-configs`      | `{name, cmd, env?}`，201 返回完整配置                                     |
+| PUT    | `/api/launch-configs/{id}` | `{name, cmd, env?}` 整体替换，省略的 `env` 被清空，200 返回完整配置       |
+| DELETE | `/api/launch-configs/{id}` | 204                                                                       |
+
+列表只含环境变量名（字典序），值只由单条读取与创建/更新响应返回。限制：名称去首尾空白后 1–64 个字符且唯一（重名 409）；`cmd` 1–128 项、首项非空、单项不超过 8 KiB；`env` 最多 64 项，名称规则与会话 `env` 相同，值不超过 8 KiB；最多 100 条。校验失败 400，未知 ID 404，落盘失败 500（内存回滚）。文件损坏、目录不可读写或状态目录已被另一实例占用时返回 503，错误信息包含原因与文件路径。
 
 ### 仓库与 worktree
 

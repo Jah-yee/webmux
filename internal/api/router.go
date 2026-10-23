@@ -11,6 +11,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/hub"
+	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -32,6 +33,9 @@ type Server struct {
 	Public    *PublicOrigin
 	// Push is nil when [push] enabled = false.
 	Push *push.Service
+	// Launch is nil when the launch config store was not opened; its
+	// endpoints then answer 503.
+	Launch *launch.Service
 	// Tunnel reports the runtime tunnel state; nil leaves GET /api/config
 	// describing only the configured mode.
 	Tunnel func() contract.TunnelStatus
@@ -40,11 +44,11 @@ type Server struct {
 }
 
 // New builds the TCP handler. public is the runtime tunnel origin; nil means
-// no tunnel. pushes is nil when push is disabled. tunnel reports the runtime
-// tunnel state; nil describes the configured mode only. Local-only endpoints
-// are not found here.
-func New(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, pushes *push.Service, tunnel func() contract.TunnelStatus, codes ...*codeview.Service) http.Handler {
-	s := newServer(c, m, workspaces, public, pushes, tunnel, codes)
+// no tunnel. pushes is nil when push is disabled; launches is nil when no
+// launch config store exists. tunnel reports the runtime tunnel state; nil
+// describes the configured mode only. Local-only endpoints are not found here.
+func New(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, pushes *push.Service, launches *launch.Service, tunnel func() contract.TunnelStatus, codes ...*codeview.Service) http.Handler {
+	s := newServer(c, m, workspaces, public, pushes, launches, tunnel, codes)
 	mux := s.routes()
 	return s.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/local/") {
@@ -55,8 +59,8 @@ func New(c config.Config, m *session.Manager, workspaces *workspace.Service, pub
 	}))
 }
 
-func newServer(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, pushes *push.Service, tunnel func() contract.TunnelStatus, codes []*codeview.Service) *Server {
-	s := &Server{Config: c, Manager: m, Workspace: workspaces, Public: public, Push: pushes, Tunnel: tunnel}
+func newServer(c config.Config, m *session.Manager, workspaces *workspace.Service, public *PublicOrigin, pushes *push.Service, launches *launch.Service, tunnel func() contract.TunnelStatus, codes []*codeview.Service) *Server {
+	s := &Server{Config: c, Manager: m, Workspace: workspaces, Public: public, Push: pushes, Launch: launches, Tunnel: tunnel}
 	if len(codes) > 0 {
 		s.Code = codes[0]
 	} else {
@@ -88,6 +92,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/fs/mkdir", s.mkdir)
 	s.workspaceRoutes(mux)
 	s.pushRoutes(mux)
+	s.launchRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
@@ -236,16 +241,35 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 		Name      string               `json:"name"`
 		Workspace *workspace.Reference `json:"workspace"`
 		Env       map[string]string    `json:"env"`
+		ConfigID  *string              `json:"configId"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	// Rejected before any filesystem or Git work.
-	if err := session.ValidateEnv(req.Env); err != nil {
+	// Everything below up to CreateSession runs before any filesystem or Git
+	// work.
+	preset, cmd, args, env := req.Preset, req.Cmd, req.Args, req.Env
+	if req.ConfigID != nil {
+		if *req.ConfigID == "" {
+			failure(w, http.StatusBadRequest, errors.New("configId must not be empty"))
+			return
+		}
+		if req.Preset != "" || len(req.Cmd) > 0 || len(req.Args) > 0 || len(req.Env) > 0 {
+			failure(w, http.StatusBadRequest, errors.New("configId cannot be combined with preset, cmd, args or env"))
+			return
+		}
+		saved, err := s.Launch.Get(*req.ConfigID)
+		if err != nil {
+			launchFailure(w, err)
+			return
+		}
+		preset, cmd, args, env = "custom", saved.Cmd, nil, saved.Env
+	}
+	if err := session.ValidateEnv(env); err != nil {
 		failure(w, http.StatusBadRequest, err)
 		return
 	}
-	item, err := s.Workspace.CreateSession(r.Context(), req.Cwd, req.Preset, req.Cmd, req.Args, req.Name, req.Workspace, req.Env)
+	item, err := s.Workspace.CreateSession(r.Context(), req.Cwd, preset, cmd, args, req.Name, req.Workspace, env)
 	if err != nil {
 		failure(w, workspace.Status(err), err)
 		return

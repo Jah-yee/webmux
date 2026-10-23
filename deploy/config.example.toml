@@ -44,6 +44,9 @@ bell_attention = true
 # kinds = ["question", "permission", "error", "done", "notify"]  # also "bell"
 # include_title = true                                # false: title "WebMux"
 
+# Built-in presets shown in the new-session form. Changes apply after a
+# restart. Saved launch configs (Settings → 启动配置) live separately in
+# <state_dir>/launch-configs.json and never copy or follow these presets.
 [[presets]]
 name = "shell"
 label = "Shell"

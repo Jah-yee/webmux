@@ -43,6 +43,16 @@ async function cleanRepositories(request: APIRequestContext) {
   }
 }
 
+async function cleanLaunchConfigs(request: APIRequestContext) {
+  const response = await request.get("/api/launch-configs");
+  expect(response.ok()).toBeTruthy();
+  for (const config of await response.json()) {
+    expect(
+      (await request.delete(`/api/launch-configs/${config.id}`)).status(),
+    ).toBe(204);
+  }
+}
+
 export const test = base.extend<
   { workDir: string; _isolation: void },
   { server: E2EServer }
@@ -74,6 +84,7 @@ export const test = base.extend<
     async ({ request, page, server }, use, testInfo) => {
       await cleanSessions(request);
       await cleanRepositories(request);
+      await cleanLaunchConfigs(request);
       const browserLogs: string[] = [];
       page.on("console", (message) =>
         browserLogs.push(`[${message.type()}] ${message.text()}`),
@@ -117,6 +128,7 @@ export const test = base.extend<
         } finally {
           await cleanSessions(request);
           await cleanRepositories(request);
+          await cleanLaunchConfigs(request);
         }
       }
     },

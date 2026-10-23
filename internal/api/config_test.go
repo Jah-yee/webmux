@@ -84,7 +84,7 @@ func TestConfigTunnelStatus(t *testing.T) {
 		t.Run(row.name, func(t *testing.T) {
 			m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 			defer m.Shutdown(context.Background())
-			handler := New(row.cfg, m, testWorkspace(t, m, t.TempDir()), nil, nil, row.load)
+			handler := New(row.cfg, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, row.load)
 			req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 			req.Header.Set("Authorization", "Bearer "+loginToken)
 			recorder := httptest.NewRecorder()
