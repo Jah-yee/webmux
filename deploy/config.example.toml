@@ -20,14 +20,18 @@ bell_attention = true
 # Cloudflare Tunnel: `webmux --tunnel` or enabled = true. Without a token a
 # random 256-bit one is generated per start; tunnel mode prints it in links.
 # A configured webmux token must be at least 43 characters in tunnel mode.
+# The root `token` above is the WebMux login token; `[tunnel].token` below is
+# the Cloudflare tunnel credential from the dashboard. They are different.
 # [tunnel]
 # enabled = false
 # Empty = Quick Tunnel (random *.trycloudflare.com); set for a Named Tunnel.
+# Named Tunnel also requires a hostname (the public hostname in Cloudflare).
 # token = ""
-# hostname = ""        # Named Tunnel public hostname; ASCII/punycode, no wildcard
+# hostname = ""        # Named public hostname; bare ASCII/punycode, no wildcard
 # cloudflared = ""     # explicit binary; default PATH, then a verified download
 # Mirror prefixes tried after GitHub; [] = GitHub only.
 # download_mirrors = ["https://ghfast.top", "https://gh-proxy.com"]
+# Guide: docs/cloudflare-tunnel.md
 
 # Web Push attention alerts (question, approval, turn done, error, notify).
 # Phones subscribe only from the Named Tunnel origin https://<tunnel.hostname>

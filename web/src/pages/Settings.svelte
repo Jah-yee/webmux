@@ -30,6 +30,7 @@
   } from "../quickCommands";
   import { quickCommands, saveQuickCommands } from "../quickCommands.svelte";
   import QuickCommandDialog from "../components/QuickCommandDialog.svelte";
+  import TunnelSettings from "../components/TunnelSettings.svelte";
   import PushSettings from "../components/PushSettings.svelte";
   import { Switch } from "$lib/components/ui/switch";
   import { browserDraftStorage } from "../draftStorage";
@@ -85,8 +86,8 @@
   });
   onMount(() => {
     document.title = "WebMux · 设置";
-    if (location.hash === "#quick-commands" || location.hash === "#push")
-      document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    const target = location.hash.slice(1);
+    if (target) document.getElementById(target)?.scrollIntoView();
   });
 </script>
 
@@ -109,7 +110,7 @@
     <div>
       <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">设置</h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        设置仅保存在当前浏览器，修改后自动保存。不会改变终端内容或其他设备的显示。
+        快捷指令、草稿和预览只保存在当前浏览器。公网访问与通知推送涉及服务端能力，本页提供说明或当前设备操作；修改服务端配置需要编辑配置文件并重启。
       </p>
     </div>
     <Card.Root id="quick-commands" class="scroll-mt-4">
@@ -239,6 +240,7 @@
         </div>
       </Card.Content>
     </Card.Root>
+    <TunnelSettings />
     <PushSettings />
     <Card.Root>
       <Card.Header>

@@ -18,6 +18,7 @@ WebMux 以启动服务的系统用户身份执行任意命令，**等同于把�
 - 公网主机名只接受 Cloudflare 转发的 Host 与该主机的 `https://` Origin，其他 Host 与 `http://` Origin 会被拒绝；cloudflared 退出后立即撤销授权。
 - Token 不进入请求 URL（HTTP 使用 Bearer 头，WebSocket 使用 `webmux.token.*` 子协议），也不写入 Cookie（Cookie 不按端口隔离，同一主机其他端口的页面可以读取）；但 Bearer、子协议头与终端输入输出仍会经过 Cloudflare 边缘。
 - 不再需要公网访问时，立即关闭隧道（Windows 托盘的“公网隧道”开关或本机 API `POST /local/v1/tunnel`）、停止 webmux 或移除 `--tunnel`。运行中开启隧道同样要求至少 43 个字符的 Token，且只接受同一用户、会话之外的本机进程的请求。
+- Named Tunnel 的控制台步骤、两个 token 的区别与排错见 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md)。
 
 内置的防护措施：
 

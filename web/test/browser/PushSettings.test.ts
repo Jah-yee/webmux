@@ -41,19 +41,19 @@ const cases: {
   {
     name: "quick tunnel",
     status: { available: false, reason: "quick_tunnel", publicKey: undefined },
-    shows: ["Quick Tunnel 无法持续接收推送", "tunnel.token", "tunnel.hostname"],
+    shows: ["Quick Tunnel 无法持续接收推送", "查看公网访问配置"],
     toggle: false,
   },
   {
     name: "unsupported origin",
     status: { available: false, reason: "unsupported_origin" },
-    shows: ["当前地址不支持推送", "Named Tunnel"],
+    shows: ["当前地址不支持推送", "查看公网访问配置"],
     toggle: false,
   },
   {
     name: "insecure context",
     support: { secure: false, serviceWorker: false, pushManager: false },
-    shows: ["推送需要 HTTPS 安全上下文", "复制公网链接"],
+    shows: ["推送需要 HTTPS 安全上下文", "查看公网访问配置"],
     toggle: false,
   },
   {

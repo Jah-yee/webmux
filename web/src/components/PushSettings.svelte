@@ -174,14 +174,14 @@
       <InlineNotice tone="warning">
         {#if advice === "insecure"}
           <p class="font-medium">推送需要 HTTPS 安全上下文</p>
-          <p>当前地址既不是 HTTPS 也不是本机回环地址，浏览器不提供推送功能。</p>
-          <ol class="mt-1 list-decimal pl-5">
-            <li>
-              用 Cloudflare Named Tunnel 的公网链接打开 WebMux：Windows
-              托盘“复制公网链接”，或服务启动时打印的二维码；
-            </li>
-            <li>在新地址的 设置 → 通知推送 中开启。</li>
-          </ol>
+          <p>
+            当前地址既不是 HTTPS
+            也不是本机回环地址，浏览器不提供推送功能。请改用 Cloudflare Named
+            Tunnel 的公网链接打开 WebMux。
+          </p>
+          <a class="underline underline-offset-2" href="#access"
+            >查看公网访问配置</a
+          >
         {:else if advice === "ios-home-screen"}
           <p class="font-medium">iOS 需要从主屏幕打开</p>
           <p>需要 iOS / iPadOS 16.4 或更高版本。</p>
@@ -203,21 +203,11 @@
           <p class="font-medium">Quick Tunnel 无法持续接收推送</p>
           <p>
             Quick Tunnel 每次启动都会更换地址，旧订阅点开即失效。请改用 Named
-            Tunnel：
+            Tunnel。
           </p>
-          <ol class="mt-1 list-decimal pl-5">
-            <li>
-              在 Cloudflare 控制台创建 Tunnel，把公共主机名指向 WebMux
-              本地地址；
-            </li>
-            <li>
-              在 WebMux 配置的 <code>[tunnel]</code> 中写入
-              <code>token</code>（<code>tunnel.token</code>）与
-              <code>hostname</code>（<code>tunnel.hostname</code>）；
-            </li>
-            <li>重启 WebMux 并开启公网隧道；</li>
-            <li>用新的公网链接打开 WebMux 并开启推送。</li>
-          </ol>
+          <a class="underline underline-offset-2" href="#access"
+            >查看公网访问配置</a
+          >
         {:else if advice === "unsupported_origin"}
           <p class="font-medium">当前地址不支持推送</p>
           <p>
@@ -225,6 +215,9 @@
             公网地址与本机回环地址（127.0.0.1、localhost）。请改用 Named Tunnel
             公网链接打开 WebMux 后再开启。
           </p>
+          <a class="underline underline-offset-2" href="#access"
+            >查看公网访问配置</a
+          >
         {:else if advice === "disabled"}
           <p class="font-medium">推送已在配置中停用</p>
           <p>

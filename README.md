@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows%20%28WSL%29-lightgrey)
 [![License](https://img.shields.io/github/license/mzdluo123/webmux)](LICENSE)
 
-[设计理念](#设计理念) · [快速开始](#快速开始) · [使用指南](docs/usage.md) · [部署](docs/deployment.md) · [架构](docs/architecture.md) · [协议](docs/protocol.md) · [参与贡献](CONTRIBUTING.md)
+[设计理念](#设计理念) · [快速开始](#快速开始) · [使用指南](docs/usage.md) · [部署](docs/deployment.md) · [公网隧道](docs/cloudflare-tunnel.md) · [架构](docs/architecture.md) · [协议](docs/protocol.md) · [参与贡献](CONTRIBUTING.md)
 
 </div>
 
@@ -61,7 +61,7 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 > 截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟）。
 
 > [!WARNING]
-> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认只监听 `127.0.0.1:7681`；远程访问请绑定 Tailscale / WireGuard 等可信 VPN 地址，并设置共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)。
+> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认只监听 `127.0.0.1:7681`；远程访问请绑定 Tailscale / WireGuard 等可信 VPN 地址，并设置共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)；需要固定公网入口时按 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md) 操作。
 
 ## 特性
 
@@ -175,16 +175,17 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 ## 文档
 
-| 文档                                    | 内容                                                             |
-| --------------------------------------- | ---------------------------------------------------------------- |
-| [User Stories](docs/user-stories.md)    | 各项功能的用户目的、验收要点与功能覆盖索引                       |
-| [使用指南](docs/usage.md)               | 会话、终端、草稿模式、代码工作区、worktree、移动端               |
-| [部署指南](docs/deployment.md)          | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异 |
-| [架构设计](docs/architecture.md)        | 会话模型、缓冲与回放、状态探测、并发与资源                       |
-| [API 与协议](docs/protocol.md)          | REST API、WebSocket 帧格式、错误码                               |
-| [参与贡献](CONTRIBUTING.md)             | 开发环境、测试、代码规范、OpenSpec 工作流                        |
-| [安全策略](SECURITY.md)                 | 安全模型与漏洞报告                                               |
-| [产品能力 baseline](baseline/README.md) | 可复现评测、统计口径与首次量化结果                               |
+| 文档                                             | 内容                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| [User Stories](docs/user-stories.md)             | 各项功能的用户目的、验收要点与功能覆盖索引                       |
+| [使用指南](docs/usage.md)                        | 会话、终端、草稿模式、代码工作区、worktree、移动端               |
+| [部署指南](docs/deployment.md)                   | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异 |
+| [Cloudflare 公网隧道](docs/cloudflare-tunnel.md) | Named Tunnel 的创建、token、公共主机名、验证与排错               |
+| [架构设计](docs/architecture.md)                 | 会话模型、缓冲与回放、状态探测、并发与资源                       |
+| [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码                               |
+| [参与贡献](CONTRIBUTING.md)                      | 开发环境、测试、代码规范、OpenSpec 工作流                        |
+| [安全策略](SECURITY.md)                          | 安全模型与漏洞报告                                               |
+| [产品能力 baseline](baseline/README.md)          | 可复现评测、统计口径与首次量化结果                               |
 
 ## 常见问题
 
