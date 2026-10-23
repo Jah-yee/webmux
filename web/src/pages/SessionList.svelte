@@ -58,7 +58,6 @@
   let setupSettled = $state(false);
   let loading = $state(true);
   let initializing = $state(true);
-  let footerReady = $state(false);
   let refreshing = $state(false);
   let repositoryError = $state("");
   let capabilityError = $state("");
@@ -98,15 +97,6 @@
   let startupRefresh: Promise<void> | undefined;
   let refreshGeneration = 0;
   let disposed = false;
-  $effect(() => {
-    if (loading || initializing) return;
-    // Disclosure content measures itself after mount. Reveal the footer once
-    // that first layout has settled instead of painting it at a temporary Y.
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => (footerReady = true));
-    });
-    return () => cancelAnimationFrame(frame);
-  });
   const list = $derived(
     [...sessions].sort(
       // Background output must not move the card under the user's pointer.
@@ -757,14 +747,6 @@
         {/if}
       </div>
     {/if}
-    <footer
-      class:invisible={!footerReady}
-      class="mt-10 flex flex-wrap justify-between gap-2 border-t pt-5 text-xs text-muted-foreground"
-    >
-      <span>WebMux · 仓库清单持久保存</span><span
-        >仅在可信内网使用 · 服务重启会结束所有会话</span
-      >
-    </footer>
   </main>
 </div>
 {#if creating}<NewSessionSheet
