@@ -1,11 +1,34 @@
-import type { DraftStorage } from "./draftStorage";
-import type { SubmissionProgress } from "./schemas";
+import {
+  scratchEntriesLimit,
+  scratchEntryLimit,
+  scratchStorageLimit,
+  type DraftStorage,
+} from "./draftStorage";
+import type { ScratchEntry, SubmissionProgress } from "./schemas";
 
 export interface DraftSubmission {
   readonly id: string;
   state: SubmissionProgress;
   readonly at: number;
 }
+
+export type ScratchAddResult =
+  | "added"
+  | "empty"
+  | "full"
+  | "too-long"
+  | "over-total"
+  | "locked"
+  | "invalid";
+export type ScratchTakeMode = "append" | "replace";
+export type ScratchTakeResult =
+  | "taken"
+  | "empty"
+  | "locked"
+  | "invalid"
+  | "full"
+  | "too-long"
+  | "over-total";
 
 export interface TerminalDraft {
   readonly sessionId: string;
@@ -25,6 +48,14 @@ export interface TerminalDraft {
   restoredAt: number | null;
   // False when the text could not be kept on this device.
   persisted: boolean;
+  // Separate notes the user keeps for this session. Taking one moves it into
+  // `text`; nothing here is ever sent without the explicit send action.
+  scratch: ScratchEntry[];
+  // False when the scratch list could not be kept on this device.
+  scratchPersisted: boolean;
+  // The run generation the saved scratch list was written for.
+  scratchGeneration: string | null;
+  scratchUpdatedWhileHidden: boolean;
 }
 
 export interface DraftOperation {
@@ -68,10 +99,50 @@ export function createTerminalDrafts(
       },
     });
   }
+  function persistScratch(entry: TerminalDraft) {
+    if (!storage || !valid(entry)) return;
+    entry.scratchPersisted = storage.saveScratch({
+      v: 1,
+      sessionId: entry.sessionId,
+      generation: entry.generation,
+      entries: entry.scratch.map((item) => ({ ...item })),
+      savedAt: now(),
+    });
+    if (entry.scratchPersisted) entry.scratchGeneration = entry.generation;
+  }
+  function scratchTotal(entry: TerminalDraft) {
+    return entry.scratch.reduce((total, item) => total + item.text.length, 0);
+  }
+  // IDs avoid randomUUID, which browsers withhold outside a secure context.
+  function scratchId() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(12)), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+  }
+  function insertScratch(
+    entry: TerminalDraft,
+    text: string,
+    index = entry.scratch.length,
+  ): ScratchAddResult {
+    if (!text) return "empty";
+    if (entry.scratch.length >= scratchEntriesLimit) return "full";
+    if (text.length > scratchEntryLimit) return "too-long";
+    if (scratchTotal(entry) + text.length > scratchStorageLimit)
+      return "over-total";
+    const at = now();
+    entry.scratch.splice(index, 0, {
+      id: scratchId(),
+      text,
+      createdAt: at,
+      updatedAt: at,
+    });
+    return "added";
+  }
   function get(sessionId: string): TerminalDraft {
     let entry = entries.get(sessionId);
     if (!entry) {
       const saved = storage?.load(sessionId) ?? null;
+      const savedScratch = storage?.loadScratch(sessionId) ?? null;
       const created = $state<TerminalDraft>({
         sessionId,
         identity: Symbol(sessionId),
@@ -90,6 +161,10 @@ export function createTerminalDrafts(
             : null,
         restoredAt: saved?.text ? saved.savedAt : null,
         persisted: true,
+        scratch: savedScratch?.entries ?? [],
+        scratchPersisted: true,
+        scratchGeneration: savedScratch?.generation ?? null,
+        scratchUpdatedWhileHidden: false,
       });
       entry = created;
       entries.set(sessionId, entry);
@@ -174,11 +249,110 @@ export function createTerminalDrafts(
     select,
     edit,
     insert,
+    addScratch(entry: TerminalDraft, text: string): ScratchAddResult {
+      if (!valid(entry)) return "invalid";
+      const added = insertScratch(entry, text);
+      if (added !== "added") return added;
+      if (!entry.enabled) entry.scratchUpdatedWhileHidden = true;
+      persistScratch(entry);
+      return "added";
+    },
+    editScratch(entry: TerminalDraft, id: string, text: string): boolean {
+      if (!valid(entry)) return false;
+      const item = entry.scratch.find((candidate) => candidate.id === id);
+      if (!item) return false;
+      if (text.length > scratchEntryLimit) return false;
+      if (
+        scratchTotal(entry) - item.text.length + text.length >
+        scratchStorageLimit
+      )
+        return false;
+      item.text = text;
+      item.updatedAt = now();
+      if (!entry.enabled) entry.scratchUpdatedWhileHidden = true;
+      persistScratch(entry);
+      return true;
+    },
+    removeScratch(entry: TerminalDraft, id: string) {
+      if (!valid(entry)) return;
+      const index = entry.scratch.findIndex((item) => item.id === id);
+      if (index < 0) return;
+      entry.scratch.splice(index, 1);
+      persistScratch(entry);
+    },
+    moveScratch(entry: TerminalDraft, id: string, delta: -1 | 1): boolean {
+      if (!valid(entry)) return false;
+      const index = entry.scratch.findIndex((item) => item.id === id);
+      const target = index + delta;
+      if (index < 0 || target < 0 || target >= entry.scratch.length)
+        return false;
+      const [item] = entry.scratch.splice(index, 1);
+      entry.scratch.splice(target, 0, item);
+      persistScratch(entry);
+      return true;
+    },
+    stash(entry: TerminalDraft): ScratchAddResult {
+      if (!valid(entry)) return "invalid";
+      if (entry.submission) return "locked";
+      if (!entry.text) return "empty";
+      const added = insertScratch(entry, entry.text);
+      if (added !== "added") return added;
+      entry.text = "";
+      select(entry, 0, 0);
+      entry.restoredAt = null;
+      if (!entry.enabled) entry.scratchUpdatedWhileHidden = true;
+      persistScratch(entry);
+      persist(entry);
+      return "added";
+    },
+    takeScratch(
+      entry: TerminalDraft,
+      id: string,
+      mode: ScratchTakeMode,
+    ): ScratchTakeResult {
+      if (!valid(entry)) return "invalid";
+      if (entry.submission) return "locked";
+      const index = entry.scratch.findIndex((item) => item.id === id);
+      if (index < 0) return "invalid";
+      const target = entry.scratch[index];
+      if (!target.text) return "empty";
+      if (mode === "replace" && entry.text) {
+        // Keep the displaced body as a note before replacing it.
+        entry.scratch.splice(index, 1);
+        const stashed = insertScratch(entry, entry.text, index);
+        if (stashed !== "added") {
+          entry.scratch.splice(index, 0, target);
+          return stashed;
+        }
+      } else entry.scratch.splice(index, 1);
+      if (mode === "append" && entry.text) {
+        entry.text += `${entry.text.endsWith("\n") ? "" : "\n"}${target.text}`;
+      } else entry.text = target.text;
+      if (!entry.enabled) {
+        entry.enabled = true;
+        entry.draftEpoch++;
+        entry.updatedWhileHidden = false;
+      }
+      entry.scratchUpdatedWhileHidden = false;
+      entry.restoredAt = null;
+      select(entry, entry.text.length, entry.text.length);
+      persistScratch(entry);
+      persist(entry);
+      return "taken";
+    },
+    clearScratch(entry: TerminalDraft) {
+      if (!valid(entry) || !entry.scratch.length) return;
+      entry.scratch = [];
+      persistScratch(entry);
+    },
     setEnabled(entry: TerminalDraft, enabled: boolean) {
       if (!valid(entry)) return;
       if (enabled && !entry.enabled) entry.draftEpoch++;
       entry.enabled = enabled;
-      if (enabled) entry.updatedWhileHidden = false;
+      if (enabled) {
+        entry.updatedWhileHidden = false;
+        entry.scratchUpdatedWhileHidden = false;
+      }
     },
     clear(entry: TerminalDraft) {
       if (!valid(entry)) return;
@@ -248,6 +422,10 @@ export function createTerminalDrafts(
       entry.selectionStart = entry.selectionEnd = null;
       entry.enabled = false;
       entry.updatedWhileHidden = false;
+      entry.scratch = [];
+      entry.scratchPersisted = true;
+      entry.scratchGeneration = null;
+      entry.scratchUpdatedWhileHidden = false;
     }
     entries.delete(sessionId);
   }
@@ -274,6 +452,17 @@ export interface TerminalDrafts {
     operation?: DraftOperation,
     submit?: (text: string) => boolean,
   ): TextInsertion;
+  addScratch(entry: TerminalDraft, text: string): ScratchAddResult;
+  editScratch(entry: TerminalDraft, id: string, text: string): boolean;
+  removeScratch(entry: TerminalDraft, id: string): void;
+  moveScratch(entry: TerminalDraft, id: string, delta: -1 | 1): boolean;
+  stash(entry: TerminalDraft): ScratchAddResult;
+  takeScratch(
+    entry: TerminalDraft,
+    id: string,
+    mode: ScratchTakeMode,
+  ): ScratchTakeResult;
+  clearScratch(entry: TerminalDraft): void;
   setEnabled(entry: TerminalDraft, enabled: boolean): void;
   clear(entry: TerminalDraft): void;
   remove(sessionId: string): void;

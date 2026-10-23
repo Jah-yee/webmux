@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { IconInbox, IconTrash } from "@tabler/icons-svelte";
   import { tick } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
@@ -11,6 +12,7 @@
     unavailable,
     saved,
     target,
+    openScratch,
     send,
     resend,
     release,
@@ -24,6 +26,7 @@
     saved: string;
     // The session the draft will be sent to.
     target: string;
+    openScratch: () => void;
     send: () => void;
     // Repeats an unconfirmed submission under its original ID.
     resend: () => void;
@@ -196,45 +199,67 @@
   />
   <div class="flex shrink-0 flex-wrap items-center gap-2">
     <span
-      class="min-w-0 flex-[1_1_12rem] [overflow-wrap:anywhere] text-xs text-muted-foreground"
+      class="min-w-0 flex-[1_1_100%] [overflow-wrap:anywhere] sm:flex-[1_1_12rem] text-xs text-muted-foreground"
       role="status"
       aria-label="草稿提交状态"
       >{draft.submission
         ? submissionText[draft.submission.state]
         : unavailable || `草稿模式 · ${saved}`}</span
     >
-    {#if draft.submission?.state === "unknown"}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!!unavailable}
-        title="服务端若已收到原提交，不会重复写入"
-        onclick={resend}>按原提交重发</Button
-      >
-    {/if}
-    {#if draft.submission?.state === "unknown" || draft.submission?.state === "partial"}
-      <Button
-        variant="outline"
-        size="sm"
-        title="停止跟踪这次提交，把正文作为普通草稿继续编辑"
-        onclick={release}>转为草稿</Button
-      >
-    {/if}
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={!draft.text || composing}
-      onclick={() => (clearOpen = true)}>清空草稿</Button
+    <div
+      class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2"
     >
-    {#if !draft.submission}
+      {#if draft.submission?.state === "unknown"}
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!!unavailable}
+          title="服务端若已收到原提交，不会重复写入"
+          onclick={resend}>按原提交重发</Button
+        >
+      {/if}
+      {#if draft.submission?.state === "unknown" || draft.submission?.state === "partial"}
+        <Button
+          variant="outline"
+          size="sm"
+          title="停止跟踪这次提交，把正文作为普通草稿继续编辑"
+          onclick={release}>转为草稿</Button
+        >
+      {/if}
       <Button
+        variant="ghost"
         size="sm"
-        disabled={!draft.text || !!unavailable || composing}
-        onclick={() => {
-          if (!composing) send();
-        }}>发送</Button
+        title="打开暂存"
+        disabled={composing}
+        aria-label={draft.scratch.length
+          ? `打开暂存，共 ${draft.scratch.length} 条`
+          : "打开暂存"}
+        onclick={openScratch}
+        ><IconInbox aria-hidden="true" /><span class="sr-only">暂存</span
+        >{#if draft.scratch.length}<span
+            class="rounded-sm bg-muted px-1.5 text-xs tabular-nums"
+            aria-hidden="true">{draft.scratch.length}</span
+          >{/if}</Button
       >
-    {/if}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="清空草稿"
+        aria-label="清空草稿"
+        disabled={!draft.text || composing}
+        onclick={() => (clearOpen = true)}
+        ><IconTrash aria-hidden="true" /></Button
+      >
+      {#if !draft.submission}
+        <Button
+          size="sm"
+          disabled={!draft.text || !!unavailable || composing}
+          onclick={() => {
+            if (!composing) send();
+          }}>发送</Button
+        >
+      {/if}
+    </div>
   </div>
 </section>
 

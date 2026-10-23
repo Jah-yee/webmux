@@ -172,10 +172,15 @@ test("split/unified, wrap and line ranges preserve the actual selected source", 
   await page.elementLocator(oldRow).click();
   // Same-side range through unchanged lines in the split view.
   await page.getByRole("button", { name: "并排视图", exact: true }).click();
-  const end = shadow()!.querySelector(
-    '[data-deletions] [data-column-number="52"]',
-  )!;
-  await page.elementLocator(end).click({ modifiers: ["Shift"] });
+  const endSelector = '[data-deletions] [data-column-number="52"]';
+  await expect
+    .poll(() => Boolean(shadow()?.querySelector(endSelector)), {
+      timeout: 10000,
+    })
+    .toBe(true);
+  await page
+    .elementLocator(shadow()!.querySelector(endSelector)!)
+    .click({ modifiers: ["Shift"] });
   await send();
   await expect
     .element(inserted())

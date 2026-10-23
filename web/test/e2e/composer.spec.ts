@@ -3,8 +3,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { test, expect, createShell, quote, recordInput } from "./fixtures";
 
-const mode = (page: Page) =>
-  page.getByRole("button", { name: "草稿模式", exact: true });
+const mode = (page: Page) => page.getByRole("button", { name: /^草稿模式/ });
 const draft = (page: Page) =>
   page.getByRole("textbox", {
     name: "草稿内容",
@@ -13,6 +12,9 @@ const draft = (page: Page) =>
   });
 const send = (page: Page) =>
   page.getByRole("button", { name: "发送", exact: true });
+const scratch = (page: Page) => page.getByRole("button", { name: /打开暂存/ });
+const scratchEntry = (page: Page, index: number) =>
+  page.getByRole("textbox", { name: `暂存第 ${index} 条`, exact: true });
 
 for (const bracketed of [true, false]) {
   test(`draft holds editable text until explicit send, bracketed=${bracketed}`, async ({
@@ -244,13 +246,69 @@ test("drafts survive navigation and reload, remain session-local and stop persis
   await expect(page.getByText(/已恢复本机草稿.*目标：Draft A/)).toBeVisible();
   await expect(send(page)).toBeEnabled();
   await page.goto("/settings");
-  await expect(page.getByText("本机保存了 2 份草稿")).toBeVisible();
+  await expect(
+    page.getByText("本机保存了 2 个会话的草稿，0 条暂存"),
+  ).toBeVisible();
   await page.getByRole("switch", { name: "在本机保存草稿" }).click();
-  await expect(page.getByText("本机保存了 0 份草稿")).toBeVisible();
+  await expect(
+    page.getByText("本机保存了 0 个会话的草稿，0 条暂存"),
+  ).toBeVisible();
   await page.goto(`/s/${a}`);
   await expect(mode(page)).toHaveAttribute("aria-pressed", "false");
   await mode(page).click();
   await expect(draft(page)).toHaveValue("");
+});
+
+test("scratch notes persist and move into the draft only on take", async ({
+  page,
+  workDir,
+}) => {
+  const id = await createShell(page, "Scratch notes", workDir);
+  const received = await recordInput(page, workDir);
+  await mode(page).click();
+  await scratch(page).click();
+  await page.getByLabel("新建暂存", { exact: true }).fill("First note");
+  await page.getByRole("button", { name: "添加暂存", exact: true }).click();
+  await page.getByLabel("新建暂存", { exact: true }).fill("Second note");
+  await page.getByRole("button", { name: "添加暂存", exact: true }).click();
+  await expect(scratchEntry(page, 1)).toHaveValue("First note");
+  await expect(scratchEntry(page, 2)).toHaveValue("Second note");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "暂存" })).toBeHidden();
+  await mode(page).click();
+  // The closed draft button still exposes the scratch count.
+  await expect(mode(page)).toContainText("2");
+  expect(await readFile(received, "utf8")).toBe("");
+
+  // The terminal menu reaches scratch without opening the draft; an update is
+  // announced visibly but does not open the draft or send anything.
+  await page.getByRole("button", { name: "终端菜单", exact: true }).click();
+  await page.getByRole("menuitem", { name: "暂存 (2)", exact: true }).click();
+  await page.getByLabel("新建暂存", { exact: true }).fill("Third note");
+  await page.getByRole("button", { name: "添加暂存", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByText(/暂存已更新 · 共 3 条，不会自动发送/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "知道了", exact: true }).click();
+  await expect(page.getByText(/暂存已更新 · 共 3 条/)).toBeHidden();
+  expect(await readFile(received, "utf8")).toBe("");
+
+  await page.goto("/settings");
+  await expect(
+    page.getByText("本机保存了 0 个会话的草稿，3 条暂存"),
+  ).toBeVisible();
+  await page.goto(`/s/${id}`);
+  await mode(page).click();
+  await scratch(page).click();
+  await expect(scratchEntry(page, 1)).toHaveValue("First note");
+  await expect(scratchEntry(page, 2)).toHaveValue("Second note");
+  await page
+    .getByRole("button", { name: "取用暂存第 1 条", exact: true })
+    .click();
+  await expect(page.getByRole("dialog", { name: "暂存" })).toBeHidden();
+  await expect(draft(page)).toHaveValue("First note");
+  expect(await readFile(received, "utf8")).toBe("");
 });
 
 for (const initialDraft of [true, false]) {

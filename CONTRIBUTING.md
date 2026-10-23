@@ -86,6 +86,7 @@ CI 将各套件拆成并行 job：格式检查与前端构建、Go race、Vitest
 - 不要在持有会话 / 管理器锁时执行阻塞的网络或 PTY 操作。
 - 不在日志中记录终端输入输出，也不在配置响应中暴露 token。
 - 基础 UI 控件使用 `web/src/lib/components/ui/` 中的 shadcn-svelte 组件，新增组件请使用 `pnpm --dir web exec shadcn-svelte add <组件名>`。
+- 新增或调整 UI 图标统一使用 Iconify，优先 `tabler` 图标集；图标数据随应用本地打包，纯图标按钮需有可访问名称和提示。详细约定见 [图标规范](docs/design-system.md#icons)。
 
 更完整的约定见 [AGENTS.md](AGENTS.md)，设计背景见 [架构设计](docs/architecture.md)。
 

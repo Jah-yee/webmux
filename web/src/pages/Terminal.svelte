@@ -30,6 +30,7 @@
   import { newSubmissionId } from "../terminalProtocol";
   import { browserDraftStorage } from "../draftStorage";
   import CloseSessionDialog from "../components/CloseSessionDialog.svelte";
+  import ScratchPanel from "../components/ScratchPanel.svelte";
   import TerminalInputComposer from "../components/TerminalInputComposer.svelte";
   import type {
     DraftOperation,
@@ -62,6 +63,7 @@
   let copyOpen = $state(false);
   let copyText = $state("");
   let settingsOpen = $state(false);
+  let scratchOpen = $state(false);
   let forceSoftKeys = $state(false);
   let fullscreen = $state(false);
   let fullscreenBusy = $state(false);
@@ -243,6 +245,17 @@
         ? "草稿过大，仅保存在当前页面"
         : "仅当前页面，刷新后丢失",
   );
+  const scratchSaved = $derived(
+    draft.scratchPersisted && draftStorage.enabled
+      ? "已保存在本机"
+      : draftStorage.enabled
+        ? "暂存超出本机保存限制，仅当前页面"
+        : "仅当前页面，刷新后丢失",
+  );
+  function showScratch() {
+    draft.scratchUpdatedWhileHidden = false;
+    scratchOpen = true;
+  }
   const uploads = useUpload(
     () => container,
     untrack(() => id),
@@ -523,16 +536,22 @@
     <Button
       variant={draft.enabled ? "default" : "outline"}
       size="sm"
-      aria-label="草稿模式"
+      aria-label={draft.scratch.length
+        ? `草稿模式，${draft.scratch.length} 条暂存`
+        : "草稿模式"}
       aria-pressed={draft.enabled}
       disabled={t.connection === "missing"}
       title={draft.enabled
         ? "关闭只隐藏草稿，不发送或清空"
-        : draft.updatedWhileHidden
-          ? `隐藏草稿已更新，开启查看；${draftSaved}`
-          : draft.text
-            ? `开启查看保留的草稿；${draftSaved}`
-            : "开启草稿模式"}
+        : draft.scratchUpdatedWhileHidden
+          ? `暂存已更新，开启查看；${scratchSaved}`
+          : draft.scratch.length
+            ? `开启查看草稿与 ${draft.scratch.length} 条暂存；${scratchSaved}`
+            : draft.updatedWhileHidden
+              ? `隐藏草稿已更新，开启查看；${draftSaved}`
+              : draft.text
+                ? `开启查看保留的草稿；${draftSaved}`
+                : "开启草稿模式"}
       onclick={() => {
         drafts.setEnabled(draft, !draft.enabled);
         t.resetModifiers();
@@ -540,7 +559,9 @@
           void tick().then(() => composer?.focus());
         }
       }}
-      >草稿{#if !draft.enabled && (draft.text || draft.updatedWhileHidden)}
+      >草稿{#if !draft.enabled && draft.scratch.length}
+        ·{draft.scratch
+          .length}{:else if !draft.enabled && (draft.text || draft.updatedWhileHidden)}
         ·{/if}</Button
     >
     <Button
@@ -573,6 +594,11 @@
             void paste();
           }}>粘贴</DropdownMenu.Item
         >
+        <DropdownMenu.Item onSelect={showScratch}
+          >暂存{draft.scratch.length
+            ? ` (${draft.scratch.length})`
+            : ""}</DropdownMenu.Item
+        >
         <DropdownMenu.Item onSelect={() => t.clear()}>清屏</DropdownMenu.Item>
         <DropdownMenu.Item onSelect={() => t.resync()}
           >重新同步</DropdownMenu.Item
@@ -596,10 +622,31 @@
       </DropdownMenu.Content>
     </DropdownMenu.Root>
   </header>
-  {#if !draft.enabled && (draft.text || draft.updatedWhileHidden)}
+  {#if !draft.enabled && !draft.scratchUpdatedWhileHidden && (draft.text || draft.updatedWhileHidden || draft.scratch.length)}
     <p class="sr-only" role="status">
-      {draft.updatedWhileHidden ? "隐藏草稿已更新" : "有保留的隐藏草稿"} · 开启草稿模式查看；{draftSaved}
+      {#if draft.updatedWhileHidden}隐藏草稿已更新{:else if draft.text}有保留的隐藏草稿{/if}
+      {#if draft.scratch.length}
+        · 共 {draft.scratch.length} 条暂存{/if}
+      · 开启草稿模式查看；{draftSaved}
     </p>
+  {/if}
+  {#if !draft.enabled && draft.scratchUpdatedWhileHidden}
+    <div
+      class="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted px-4 py-1.5 text-sm"
+      role="status"
+    >
+      <span class="min-w-0 flex-1"
+        >{#if draft.updatedWhileHidden}隐藏草稿已更新 ·
+        {/if}暂存已更新 · 共 {draft.scratch.length} 条，不会自动发送</span
+      >
+      <Button variant="outline" size="sm" onclick={showScratch}>查看暂存</Button
+      >
+      <Button
+        variant="ghost"
+        size="sm"
+        onclick={() => (draft.scratchUpdatedWhileHidden = false)}>知道了</Button
+      >
+    </div>
   {/if}
   {#if uploads.progress}
     <div
@@ -778,6 +825,7 @@
                   unavailable={sendUnavailable}
                   saved={draftSaved}
                   target={t.info?.title || id}
+                  openScratch={showScratch}
                   send={() => sendDraft()}
                   resend={() => sendDraft(true)}
                   release={releaseDraftSubmission}
@@ -895,3 +943,4 @@
       navigate("/");
     }}
   />{/if}
+<ScratchPanel bind:open={scratchOpen} {draft} {drafts} saved={scratchSaved} />

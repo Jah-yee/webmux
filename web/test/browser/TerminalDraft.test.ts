@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 import { createTerminalDrafts } from "../../src/terminal-draft.svelte";
-import { createDraftStorage } from "../../src/draftStorage";
+import {
+  createDraftStorage,
+  scratchEntriesLimit,
+  scratchEntryLimit,
+  scratchStorageLimit,
+} from "../../src/draftStorage";
 
 test("draft edits preserve Unicode, selections and session isolation across mode switches", () => {
   const drafts = createTerminalDrafts();
@@ -172,6 +177,198 @@ test("an unconfirmed submission locks its text until the server settles it", () 
   expect(restored.enabled).toBe(false);
   expect(restored.submission).toBeNull();
   expect(saved.data.size).toBe(0);
+});
+
+test("scratch stays separate from the draft and survives editing, reordering and removal", () => {
+  const saved = memoryDrafts();
+  const drafts = createTerminalDrafts({
+    storage: saved.storage(),
+    now: () => 5000,
+  });
+  const entry = drafts.get("aaaaaaaa");
+  drafts.setEnabled(entry, true);
+  drafts.edit(entry, "current");
+  expect(drafts.addScratch(entry, "first")).toBe("added");
+  expect(drafts.addScratch(entry, "second")).toBe("added");
+  expect(drafts.addScratch(entry, "")).toBe("empty");
+  expect(entry.text).toBe("current");
+  expect(entry.scratch.map((item) => item.text)).toEqual(["first", "second"]);
+  const [first, second] = entry.scratch;
+  expect(drafts.editScratch(entry, second.id, "second edited")).toBe(true);
+  expect(drafts.editScratch(entry, "missing-id", "text")).toBe(false);
+  expect(drafts.moveScratch(entry, second.id, -1)).toBe(true);
+  expect(drafts.moveScratch(entry, second.id, -1)).toBe(false);
+  expect(entry.scratch.map((item) => item.text)).toEqual([
+    "second edited",
+    "first",
+  ]);
+  expect(entry.scratch[0].id).toBe(second.id);
+  drafts.removeScratch(entry, first.id);
+  expect(entry.scratch.map((item) => item.text)).toEqual(["second edited"]);
+  expect(entry.text).toBe("current");
+
+  const reloaded = createTerminalDrafts({ storage: saved.storage() });
+  const restored = reloaded.get("aaaaaaaa");
+  expect(restored.scratch.map((item) => item.text)).toEqual(["second edited"]);
+  expect(restored.text).toBe("current");
+});
+
+test("taking scratch appends or replaces while preserving the displaced draft", () => {
+  const drafts = createTerminalDrafts();
+  const entry = drafts.get("a");
+  drafts.setEnabled(entry, true);
+  drafts.edit(entry, "current");
+  drafts.addScratch(entry, "next");
+  const appended = entry.scratch[0];
+  expect(drafts.takeScratch(entry, appended.id, "append")).toBe("taken");
+  expect(entry.text).toBe("current\nnext");
+  expect(entry.scratch).toHaveLength(0);
+
+  drafts.edit(entry, "current2");
+  drafts.addScratch(entry, "next2");
+  const replaced = entry.scratch[0];
+  expect(drafts.takeScratch(entry, replaced.id, "replace")).toBe("taken");
+  expect(entry.text).toBe("next2");
+  expect(entry.scratch.map((item) => item.text)).toEqual(["current2"]);
+  expect(entry.enabled).toBe(true);
+  expect(entry.selectionStart).toBe("next2".length);
+});
+
+test("appending scratch does not add a second newline", () => {
+  const drafts = createTerminalDrafts();
+  const entry = drafts.get("a");
+  drafts.setEnabled(entry, true);
+  drafts.edit(entry, "current\n");
+  drafts.addScratch(entry, "next");
+  const target = entry.scratch[0];
+  expect(drafts.takeScratch(entry, target.id, "append")).toBe("taken");
+  expect(entry.text).toBe("current\nnext");
+});
+
+test("a failed replace keeps the target note and the current draft", () => {
+  const drafts = createTerminalDrafts();
+  const entry = drafts.get("a");
+  drafts.setEnabled(entry, true);
+  const large = "x".repeat(scratchEntryLimit + 1);
+  drafts.edit(entry, large);
+  drafts.addScratch(entry, "next");
+  const target = entry.scratch[0];
+  expect(drafts.takeScratch(entry, target.id, "replace")).toBe("too-long");
+  expect(entry.text).toBe(large);
+  expect(entry.scratch.map((item) => item.text)).toEqual(["next"]);
+  expect(drafts.takeScratch(entry, target.id, "append")).toBe("taken");
+  expect(entry.text).toBe(`${large}\nnext`);
+});
+
+test("stashing moves the draft into scratch and clears only the draft", () => {
+  const drafts = createTerminalDrafts();
+  const entry = drafts.get("a");
+  drafts.setEnabled(entry, true);
+  drafts.edit(entry, "current");
+  expect(drafts.stash(entry)).toBe("added");
+  expect(entry.text).toBe("");
+  expect(entry.scratch.map((item) => item.text)).toEqual(["current"]);
+  expect(drafts.stash(entry)).toBe("empty");
+});
+
+test("an unconfirmed submission blocks stashing and taking scratch", () => {
+  const drafts = createTerminalDrafts();
+  const entry = drafts.get("a");
+  drafts.setEnabled(entry, true);
+  drafts.edit(entry, "pending");
+  drafts.addScratch(entry, "later");
+  const later = entry.scratch[0];
+  expect(drafts.beginSubmission(entry, "s-00000001")).toBe(true);
+  expect(drafts.stash(entry)).toBe("locked");
+  expect(drafts.takeScratch(entry, later.id, "replace")).toBe("locked");
+  expect(entry.text).toBe("pending");
+  expect(entry.scratch).toHaveLength(1);
+  drafts.releaseSubmission(entry);
+  expect(drafts.takeScratch(entry, later.id, "replace")).toBe("taken");
+  expect(entry.text).toBe("later");
+});
+
+test("scratch updates while hidden are signalled and survive authentication reset", () => {
+  const saved = memoryDrafts();
+  const drafts = createTerminalDrafts({
+    storage: saved.storage(),
+    now: () => 5000,
+  });
+  const entry = drafts.get("aaaaaaaa");
+  expect(drafts.addScratch(entry, "hidden")).toBe("added");
+  expect(entry.scratchUpdatedWhileHidden).toBe(true);
+  drafts.setEnabled(entry, true);
+  expect(entry.scratchUpdatedWhileHidden).toBe(false);
+  drafts.setEnabled(entry, false);
+  expect(drafts.editScratch(entry, entry.scratch[0].id, "hidden edited")).toBe(
+    true,
+  );
+  expect(entry.scratchUpdatedWhileHidden).toBe(true);
+  drafts.clearAll();
+  const restored = drafts.get("aaaaaaaa");
+  expect(restored.scratch.map((item) => item.text)).toEqual(["hidden edited"]);
+  expect(restored.scratchUpdatedWhileHidden).toBe(false);
+  expect(restored.text).toBe("");
+});
+
+test("scratch enforces entry, size and total limits in the model", () => {
+  const drafts = createTerminalDrafts();
+  const many = drafts.get("many");
+  for (let index = 0; index < scratchEntriesLimit; index++)
+    expect(drafts.addScratch(many, String(index))).toBe("added");
+  expect(drafts.addScratch(many, "overflow")).toBe("full");
+
+  const long = drafts.get("long");
+  expect(drafts.addScratch(long, "x".repeat(scratchEntryLimit + 1))).toBe(
+    "too-long",
+  );
+
+  const total = drafts.get("total");
+  const chunk = "x".repeat(scratchEntryLimit);
+  for (let index = 0; index < scratchStorageLimit / scratchEntryLimit; index++)
+    expect(drafts.addScratch(total, chunk)).toBe("added");
+  expect(drafts.addScratch(total, "x")).toBe("over-total");
+  expect(drafts.editScratch(total, total.scratch[0].id, chunk + "x")).toBe(
+    false,
+  );
+});
+
+test("taking scratch never writes another session or the terminal", () => {
+  const drafts = createTerminalDrafts();
+  const a = drafts.get("a");
+  const b = drafts.get("b");
+  drafts.setEnabled(a, true);
+  drafts.addScratch(a, "a note");
+  drafts.insert(a, "uploaded");
+  expect(a.text).toBe("uploaded");
+  expect(a.scratch.map((item) => item.text)).toEqual(["a note"]);
+  expect(b.scratch).toHaveLength(0);
+  expect(b.text).toBe("");
+
+  drafts.remove("a");
+  expect(drafts.get("a").scratch).toHaveLength(0);
+  expect(b.scratch).toHaveLength(0);
+});
+
+test("scratch saved for an earlier run is kept and marked by generation", () => {
+  const saved = memoryDrafts();
+  const drafts = createTerminalDrafts({
+    storage: saved.storage(),
+    now: () => 5000,
+  });
+  const entry = drafts.get("aaaaaaaa");
+  drafts.bindGeneration(entry, "0123456789abcdef");
+  drafts.addScratch(entry, "old run");
+  expect(entry.scratchGeneration).toBe("0123456789abcdef");
+  drafts.clearAll();
+
+  const reloaded = createTerminalDrafts({ storage: saved.storage() });
+  const restored = reloaded.get("aaaaaaaa");
+  expect(restored.scratchGeneration).toBe("0123456789abcdef");
+  reloaded.bindGeneration(restored, "fedcba9876543210");
+  expect(restored.scratchGeneration).toBe("0123456789abcdef");
+  expect(restored.scratch.map((item) => item.text)).toEqual(["old run"]);
+  expect(restored.submission).toBeNull();
 });
 
 test("a draft written for another run keeps its text but forgets its submission", () => {

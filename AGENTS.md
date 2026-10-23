@@ -30,18 +30,18 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 
 Run from the repository root:
 
-| Command                                    | Purpose                                                                   |
-| ------------------------------------------ | ------------------------------------------------------------------------- |
-| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                     |
-| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`. |
-| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.       |
-| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                  |
-| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                              |
-| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                      |
-| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                 |
+| Command                                    | Purpose                                                                     |
+| ------------------------------------------ | --------------------------------------------------------------------------- |
+| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                       |
+| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`.   |
+| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.         |
+| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                    |
+| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                |
+| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                        |
+| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                   |
 | `make check`                               | Build frontend, check formatting, run Oxlint, `go vet` and `golangci-lint`. |
-| `pnpm --dir web lint`                      | Run Oxlint on frontend code.                                            |
-| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                        |
+| `pnpm --dir web lint`                      | Run Oxlint on frontend code.                                                |
+| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                          |
 
 Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its development TOML; otherwise browser write requests are rejected. Configuration defaults to `~/.config/webmux/config.toml`; `-config`, `-listen`, and `-token` override startup settings.
 
@@ -49,6 +49,7 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 
 - Go uses gofmt. Frontend files use Oxfmt with an 80-column print width, two spaces, semicolons, trailing commas, and Svelte formatting enabled. Oxlint checks JS/TS and Svelte script blocks; keep `svelte-check` for Svelte template and type diagnostics. TypeScript is strict; `$lib` aliases `web/src/lib`.
 - Follow existing names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune-bearing hooks, Go `*_test.go`, and Playwright `*.spec.ts`.
+- Use Iconify for new or changed UI icons, preferring the `tabler` collection for visual consistency. Bundle the required icon data locally so icons work without a public icon API. Migrate existing direct icon-library imports when updating the related UI. Icon-only controls must have an accessible name and a visible tooltip; decorative icons use `aria-hidden="true"`. See [Icons](docs/design-system.md#icons).
 - Use Svelte 5 `$state`/`$derived` for local reactive state and lifecycle cleanup for sockets, xterm, listeners, and observers. Reuse `api.ts` and `ws.ts`; do not add parallel request or reconnect conventions.
 - Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. PTY data stays binary, not JSON or decoded text.
 - Return contextual Go errors and API JSON errors with meaningful HTTP statuses. Frontend failures use `APIError`; HTTP 401 triggers `webmux:auth`. Preserve cancellation/deadlines for PTY writes and join spawned connection goroutines.

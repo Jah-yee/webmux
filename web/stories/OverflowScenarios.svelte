@@ -4,6 +4,7 @@
   import QuickCommandDialog from "../src/components/QuickCommandDialog.svelte";
   import CloseSessionDialog from "../src/components/CloseSessionDialog.svelte";
   import TerminalInputComposer from "../src/components/TerminalInputComposer.svelte";
+  import ScratchPanel from "../src/components/ScratchPanel.svelte";
   import CodeChangesList from "../src/components/CodeChangesList.svelte";
   import WorkspaceDialog from "../src/components/WorkspaceDialog.svelte";
   import { Button } from "../src/lib/components/ui/button";
@@ -33,15 +34,19 @@
     saveError?: string;
   } = $props();
   let open = $state(true);
+  let scratchOpen = $state(false);
   let notice = $state("");
   const drafts = createTerminalDrafts();
   const draft = drafts.get("storybook-draft");
+  drafts.setEnabled(draft, true);
   drafts.edit(
     draft,
     Array.from({ length: 30 }, (_, i) => `第 ${i + 1} 行 ${longPath}`).join(
       "\n",
     ),
   );
+  drafts.addScratch(draft, "稍后检查测试结果并把失败原因整理成摘要。");
+  drafts.addScratch(draft, `补充 ${longPath} 的变更说明，并确认没有遗漏。`);
 </script>
 
 <main
@@ -97,6 +102,7 @@
         unavailable={`连接暂不可用，请保留草稿：${longToken}`}
         saved="已保存在本机"
         target={session.title}
+        openScratch={() => (scratchOpen = true)}
         send={() => (notice = "发送操作仅作演示")}
         resend={() => (notice = "重发操作仅作演示")}
         release={() => (notice = "转为草稿仅作演示")}
@@ -104,6 +110,12 @@
         controlNotice={() => (notice = "控制键仅作演示")}
       />
     </div>
+    <ScratchPanel
+      bind:open={scratchOpen}
+      {draft}
+      {drafts}
+      saved="已保存在本机"
+    />
   {:else if scenario === "changes"}
     <section
       class="flex h-[min(32rem,80dvh)] min-h-0 min-w-0 flex-col border"

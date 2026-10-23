@@ -121,6 +121,28 @@ export const StoredDraftSchema = z.object({
     .nullable(),
 });
 export type StoredDraft = z.infer<typeof StoredDraftSchema>;
+export const ScratchEntrySchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+  text: z.string(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+});
+export type ScratchEntry = z.infer<typeof ScratchEntrySchema>;
+export const StoredScratchSchema = z
+  .object({
+    v: z.literal(1),
+    sessionId: SessionInfoSchema.shape.id,
+    generation: SessionInfoSchema.shape.generation.nullable(),
+    entries: z.array(ScratchEntrySchema),
+    savedAt: z.number().int().nonnegative(),
+  })
+  .refine(
+    (scratch) =>
+      new Set(scratch.entries.map((entry) => entry.id)).size ===
+      scratch.entries.length,
+    "暂存 ID 不能重复",
+  );
+export type StoredScratch = z.infer<typeof StoredScratchSchema>;
 export const HealthSchema = z.object({
   ok: z.literal(true),
   sessions: z.number().int().nonnegative(),

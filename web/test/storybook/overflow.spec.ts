@@ -132,3 +132,52 @@ for (const { name, viewport, theme, textScale } of layouts) {
     }
   });
 }
+
+for (const { name, viewport, theme, textScale } of layouts) {
+  test.describe(`scratch ${name}`, () => {
+    test.use({ viewport, colorScheme: theme });
+
+    test("keeps a full scratch list and its composer reachable", async ({
+      page,
+    }) => {
+      await page.goto(
+        `/iframe.html?id=workspace-scratch-notes--full&viewMode=story&globals=theme:${theme}`,
+      );
+      const dialog = page.getByRole("dialog", { name: "暂存", exact: true });
+      await expect(dialog).toBeVisible();
+      await page.evaluate(async (scale) => {
+        document.documentElement.style.fontSize = `${scale * 100}%`;
+        await document.fonts.ready;
+      }, textScale);
+      await expect.poll(() => overflowViolations(page)).toEqual([]);
+      const add = page.getByRole("button", { name: "添加暂存", exact: true });
+      await add.scrollIntoViewIfNeeded();
+      await expect(add).toBeInViewport();
+      await expect(add).toBeDisabled();
+      await expect(page.getByText(/已达 20 条上限/)).toBeVisible();
+      const last = page.getByRole("textbox", {
+        name: "暂存第 20 条",
+        exact: true,
+      });
+      await last.scrollIntoViewIfNeeded();
+      await expect(last).toBeInViewport();
+      await expect(add).toBeInViewport();
+      await page
+        .getByRole("button", { name: "暂存第 20 条的更多操作", exact: true })
+        .click();
+      await expect(
+        page.getByRole("menuitem", { name: "下移暂存第 20 条", exact: true }),
+      ).toBeDisabled();
+      await page
+        .getByRole("menuitem", { name: "删除暂存第 20 条", exact: true })
+        .click();
+      await page
+        .getByRole("textbox", { name: "新建暂存", exact: true })
+        .fill("稍后检查移动端");
+      await expect(add).toBeEnabled();
+      await add.click();
+      await expect(last).toHaveValue("稍后检查移动端");
+      await expect.poll(() => overflowViolations(page)).toEqual([]);
+    });
+  });
+}

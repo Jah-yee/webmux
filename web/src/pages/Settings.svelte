@@ -68,6 +68,7 @@
   const draftStorage = browserDraftStorage();
   let keepDrafts = $state(draftStorage.enabled);
   let savedDrafts = $state(draftStorage.count());
+  let savedScratch = $state(draftStorage.scratchCount());
   let clearDraftsOpen = $state(false);
   let lines = $state<number | undefined>(previewSettings.lines);
   let skip = $state<number | undefined>(previewSettings.skip);
@@ -203,9 +204,9 @@
     </Card.Root>
     <Card.Root id="drafts" class="scroll-mt-4">
       <Card.Header>
-        <Card.Title>草稿</Card.Title>
+        <Card.Title>草稿与暂存</Card.Title>
         <Card.Description
-          >草稿正文与未确认的提交按会话保存在当前浏览器，刷新、关闭页面或认证失效后可恢复；7
+          >草稿正文、暂存与未确认的提交按会话保存在当前浏览器，刷新、关闭页面或认证失效后可恢复；7
           天未修改或会话已不存在时自动清理。恢复后仍需点击发送才会提交。</Card.Description
         >
       </Card.Header>
@@ -219,19 +220,20 @@
               draftStorage.setEnabled(checked);
               keepDrafts = draftStorage.enabled;
               savedDrafts = draftStorage.count();
+              savedScratch = draftStorage.scratchCount();
             }}
           />
         </div>
         <p class="text-xs text-muted-foreground">
-          关闭后立即删除本机已保存的草稿，之后草稿只保留在当前页面内存中。
+          关闭后立即删除本机已保存的草稿和暂存，之后内容只保留在当前页面内存中。
         </p>
         <div class="flex flex-wrap items-center gap-3">
           <span class="text-sm" role="status"
-            >本机保存了 {savedDrafts} 份草稿</span
+            >本机保存了 {savedDrafts} 个会话的草稿，{savedScratch} 条暂存</span
           >
           <Button
             variant="outline"
-            disabled={!savedDrafts}
+            disabled={!savedDrafts && !savedScratch}
             onclick={() => (clearDraftsOpen = true)}>清除本机草稿</Button
           >
         </div>
@@ -345,7 +347,7 @@
     <AlertDialog.Header>
       <AlertDialog.Title>清除本机草稿？</AlertDialog.Title>
       <AlertDialog.Description
-        >删除当前浏览器保存的全部草稿和未确认提交记录，不影响终端。已打开的终端页面在刷新前仍保留其草稿。此操作无法撤销。</AlertDialog.Description
+        >删除当前浏览器保存的全部草稿、暂存和未确认提交记录，不影响终端。已打开的终端页面在刷新前仍保留其内容。此操作无法撤销。</AlertDialog.Description
       >
     </AlertDialog.Header>
     <AlertDialog.Footer>
@@ -355,6 +357,7 @@
         onclick={() => {
           draftStorage.clear();
           savedDrafts = draftStorage.count();
+          savedScratch = draftStorage.scratchCount();
           clearDraftsOpen = false;
         }}>确认清除</AlertDialog.Action
       >
