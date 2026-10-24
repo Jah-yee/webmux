@@ -6,6 +6,8 @@ import {
   createShell,
   runCommand,
   expectTerminalLine,
+  headerAction,
+  expectConnected,
 } from "./fixtures";
 
 for (const initialization of ["connected", "font-pending"] as const) {
@@ -56,9 +58,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
     });
     await expect(back).toBeVisible();
     if (initialization === "connected") {
-      await expect(
-        page.locator(".terminal-header").getByRole("status"),
-      ).toHaveText("已连接");
+      await expectConnected(page);
       await expect(page.locator(".restore-overlay")).toBeHidden();
     } else {
       await expect(page.locator(".xterm-helper-textarea")).toHaveCount(0);
@@ -120,9 +120,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
 
     // Re-enter the same PTY, execute a real command, then exercise teardown again.
     await session.click();
-    await expect(
-      page.locator(".terminal-header").getByRole("status"),
-    ).toHaveText("已连接");
+    await expectConnected(page);
     await expect(page.locator(".restore-overlay")).toBeHidden();
     await runCommand(page, "printf '\\n%s%s\\n' 'back-navigation-' 'alive'");
     await expectTerminalLine(page, "back-navigation-alive");
@@ -160,9 +158,7 @@ test("real shell output survives reload, then closes and is removed", async ({
 
   await page.reload();
   await expect(page).toHaveURL(sessionURL);
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expectTerminalLine(page, marker);
   const restored = await request.get("/api/sessions");
@@ -216,12 +212,15 @@ test("replay and the header action return to latest output without typing", asyn
   );
   await expectTerminalLine(page, marker);
   await expectTerminalLine(page, "webmux-e2e$");
-  const latest = page.getByRole("button", {
-    name: "滚动到最新位置",
-    exact: true,
-  });
+  const narrow = info.project.use.isMobile;
+  // Wide headers show the button; narrow ones keep it in the terminal menu.
+  const latestEnabled = async () => {
+    await expect(await headerAction(page, "滚动到最新位置")).toBeEnabled();
+    if (narrow) await page.keyboard.press("Escape");
+  };
+  const floating = page.getByRole("button", { name: "回到最新", exact: true });
   const scrollBack = async () => {
-    await expect(latest).toBeEnabled();
+    await expect(page.locator(".restore-overlay")).toBeHidden();
     // A fit after a layout change (the exit banner, a reload) resets xterm's
     // viewport scrollTop and ignores the pending scroll event, discarding a
     // gesture that lands in that window. Repeat the gesture until it sticks.
@@ -256,13 +255,18 @@ test("replay and the header action return to latest output without typing", asyn
         timeout: 1000,
       });
     }).toPass();
+    if (narrow) await expect(floating).toBeVisible();
+    else await expect(floating).toBeHidden();
   };
   await scrollBack();
   await page
     .locator(".xterm-helper-textarea")
     .evaluate((element) => element.blur());
   const before = await (await request.get(`/api/sessions/${id}/buffer`)).text();
-  await latest.click();
+  if (narrow) {
+    await floating.click();
+    await expect(floating).toBeHidden();
+  } else await (await headerAction(page, "滚动到最新位置")).click();
   await expectTerminalLine(page, marker);
   await expect(page.locator(".xterm-helper-textarea")).not.toBeFocused();
   expect(await (await request.get(`/api/sessions/${id}/buffer`)).text()).toBe(
@@ -311,7 +315,7 @@ test("replay and the header action return to latest output without typing", asyn
   expect(JSON.parse(position.subarray(1).toString())).toMatchObject({
     mode: "append",
   });
-  await expect(latest).toBeEnabled();
+  await latestEnabled();
   if (info.project.use.isMobile)
     await page
       .locator(".terminal-header")
@@ -325,7 +329,8 @@ test("replay and the header action return to latest output without typing", asyn
       .locator(".terminal-header")
       .getByRole("button", { name: "代码", exact: true })
       .click();
-    await latest.tap();
+    // From the narrow code view, the menu entry switches back to the terminal.
+    await (await headerAction(page, "滚动到最新位置")).click();
     await expect(page.locator(".terminal-host")).toBeVisible();
     await expectTerminalLine(page, marker);
   }
@@ -337,7 +342,7 @@ test("replay and the header action return to latest output without typing", asyn
   await page.getByRole("button", { name: "终端菜单", exact: true }).click();
   await page.getByRole("menuitem", { name: "重新同步", exact: true }).click();
   await expectTerminalLine(page, marker);
-  await expect(latest).toBeEnabled();
+  await latestEnabled();
 });
 
 test("shell exit reports its real code and remains removable", async ({

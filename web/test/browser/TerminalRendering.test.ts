@@ -1002,6 +1002,65 @@ test("an observer sizes to the controller's grid before parsing cursor-addressed
   expect(socket.sent.filter((frame) => frame[0] === 1)).toEqual([]);
 });
 
+test("viewing history is reported until the terminal returns to the latest output", async () => {
+  observeGlyphPixels(true);
+  const { socket } = await openTerminal();
+  await populateHistory(socket);
+  const position = page.getByRole("status", { name: "Terminal position" });
+  await expect.element(position).toHaveTextContent("latest");
+  await swipe(socket, 4.25);
+  await expect.element(position).toHaveTextContent("history");
+  // Output arriving while reading history does not pull the reader down.
+  socket.receive(0, "\r\nlater output");
+  await expect.element(position).toHaveTextContent("history");
+  await page.getByRole("button", { name: "Scroll to latest" }).click();
+  await expect.element(position).toHaveTextContent("latest");
+  await expectDomText("later output");
+  socket.receive(0, "\r\nnewest output");
+  await expectDomText("newest output");
+  await expect.element(position).toHaveTextContent("latest");
+});
+
+test("an observer panning above the controller's newest rows is viewing history", async () => {
+  observeGlyphPixels(true);
+  await render(Harness);
+  await expect.poll(() => sockets.length, { timeout: 5000 }).toBe(1);
+  const socket = sockets[0];
+  socket.open();
+  // Sixty rows are taller than the 750 px host, so the observer pans it.
+  socket.receive(
+    6,
+    JSON.stringify({
+      controller: {
+        clientId: "another-client",
+        label: "desk",
+        since: new Date().toISOString(),
+      },
+      cols: 40,
+      rows: 60,
+      colorSchemeReports: false,
+    }),
+  );
+  socket.receive(1, "\x1b[60;1Hbottom-row");
+  await expect.poll(() => host().classList.contains("observing")).toBe(true);
+  await expect
+    .poll(() => host().scrollHeight)
+    .toBeGreaterThan(host().clientHeight);
+  // Restoration ends by scrolling to the newest rows; pan only after it.
+  await expect
+    .element(page.getByRole("status", { name: "Terminal restoration" }))
+    .toHaveTextContent("ready");
+  const position = page.getByRole("status", { name: "Terminal position" });
+  await expect.element(position).toHaveTextContent("latest");
+  host().scrollTop = 0;
+  await expect.element(position).toHaveTextContent("history");
+  await page.getByRole("button", { name: "Scroll to latest" }).click();
+  await expect.element(position).toHaveTextContent("latest");
+  expect(host().scrollTop + host().clientHeight).toBeGreaterThanOrEqual(
+    host().scrollHeight - 1,
+  );
+});
+
 test("automatic replies to device queries are sent apart from user input, even when the bytes match a key", async () => {
   const { socket } = await openTerminal();
   const frames = (kind: number) =>

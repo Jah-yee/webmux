@@ -6,6 +6,7 @@
 
 import { mount, unmount } from "svelte";
 import PopoutEventRoot from "./components/PopoutEventRoot.svelte";
+import { isStandalone, popoutOffered } from "./capabilities";
 
 type DocumentPictureInPicture = {
   requestWindow(options?: { width?: number; height?: number }): Promise<Window>;
@@ -18,10 +19,13 @@ function documentPictureInPicture(): DocumentPictureInPicture | undefined {
   const api = window.documentPictureInPicture as DocumentPictureInPicture;
   return api;
 }
-// Mobile browsers open popups as tabs, which would hide the terminal the
-// panel belongs to; without Picture-in-Picture, offer it only with a mouse.
 export function popoutAvailable() {
-  return !!documentPictureInPicture() || matchMedia("(pointer: fine)").matches;
+  return popoutOffered({
+    documentPictureInPicture: !!documentPictureInPicture(),
+    finePointer: matchMedia("(pointer: fine)").matches,
+    touch: matchMedia("(any-pointer: coarse)").matches,
+    standalone: isStandalone(),
+  });
 }
 async function openWindow(width: number, height: number) {
   const api = documentPictureInPicture();

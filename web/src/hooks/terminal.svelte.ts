@@ -84,6 +84,9 @@ export function useTerminal(
   let modifiers = $state<Modifiers>({ ctrl: false, alt: false });
   let error = $state("");
   let selection = $state("");
+  // Whether the newest output is in view: the xterm viewport sits at the
+  // buffer end and, for an observer panning a larger grid, the host does too.
+  let atBottom = $state(true);
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const identity = clientIdentity();
@@ -121,9 +124,20 @@ export function useTerminal(
       } else fit?.fit();
       if (scrollOnFit && terminal) {
         terminal.scrollToBottom();
+        if (observing()) parent.scrollTop = parent.scrollHeight;
         scrollOnFit = false;
       }
+      updateBottom();
     }
+  }
+  function updateBottom() {
+    const parent = getContainer();
+    if (!terminal || !parent) return;
+    const buffer = terminal.buffer.active;
+    atBottom =
+      buffer.viewportY >= buffer.baseY &&
+      (!parent.classList.contains("observing") ||
+        parent.scrollTop + parent.clientHeight >= parent.scrollHeight - 1);
   }
   function scrollToBottom() {
     scrollOnFit = true;
@@ -539,6 +553,9 @@ export function useTerminal(
         },
       );
       const resize = term.onResize(sendSize);
+      const scrolled = term.onScroll(updateBottom);
+      const parsed = term.onWriteParsed(updateBottom);
+      parent.addEventListener("scroll", updateBottom, { passive: true });
       let timer: number | undefined;
       const observer = new ResizeObserver(([entry]) => {
         if (disposed) return;
@@ -737,6 +754,9 @@ export function useTerminal(
         input.dispose();
         provenance?.dispose();
         resize.dispose();
+        scrolled.dispose();
+        parsed.dispose();
+        parent.removeEventListener("scroll", updateBottom);
         selected.dispose();
         oscClipboard.dispose();
         schemeQuery.dispose();
@@ -762,6 +782,7 @@ export function useTerminal(
         socket = undefined;
         synced = false;
         parent.classList.remove("observing");
+        atBottom = true;
         fit = undefined;
         restoreBuffer = undefined;
         scrollOnFit = false;
@@ -806,6 +827,9 @@ export function useTerminal(
     },
     get selection() {
       return selection;
+    },
+    get atBottom() {
+      return atBottom;
     },
     get historyTruncated() {
       return historyTruncated;

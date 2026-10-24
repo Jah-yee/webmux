@@ -8,6 +8,7 @@ import {
   createShell,
   runCommand,
   expectTerminalLine,
+  expectConnected,
 } from "../e2e/fixtures";
 import { observePerformance, performanceReport, settled } from "./performance";
 
@@ -156,9 +157,7 @@ test("4x CPU: create, type, replay, switch, filter and open dialogs remain usabl
   await performanceReport(page, testInfo, "create-and-type");
 
   await page.reload();
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expectTerminalLine(page, "cpu-four-ready");
   await settled(page);
@@ -168,9 +167,7 @@ test("4x CPU: create, type, replay, switch, filter and open dialogs remain usabl
   await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
     "重连中",
   );
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await runCommand(page, "printf '\\n%s%s\\n' 'reconnected-' 'ready'");
   await expectTerminalLine(page, "reconnected-ready");

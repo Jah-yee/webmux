@@ -33,6 +33,7 @@
     lineAction,
     restoreLine = 1,
     draftEnabled = false,
+    hint = $bindable(""),
   }: {
     text: string;
     path: string;
@@ -40,6 +41,8 @@
     lineAction?: Snippet<[row: number]>;
     restoreLine?: number;
     draftEnabled?: boolean;
+    // Selection guidance, rendered by the document's action bar.
+    hint?: string;
   } = $props();
   let host: HTMLDivElement;
   let view: EditorView | undefined;
@@ -282,6 +285,16 @@
       view = undefined;
     };
   });
+  $effect(() => {
+    hint = coarse
+      ? `点击代码行，再点右侧 ＋ 发送位置到${draftEnabled ? "草稿" : "终端"}`
+      : showGutter
+        ? "点击行号；Shift 点击选择终点"
+        : "显示行号后可点击行号选择";
+    return () => {
+      hint = "";
+    };
+  });
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -310,13 +323,6 @@
       aria-pressed={showGutter}
       onclick={toggleGutter}><IconNumber aria-hidden="true" /></Button
     >
-    <span class="min-w-0 truncate text-xs text-muted-foreground">
-      {coarse
-        ? `点击代码行，再点右侧 ＋ 发送位置到${draftEnabled ? "草稿" : "终端"}`
-        : showGutter
-          ? "点击行号；Shift 点击选择终点"
-          : "显示行号后可点击行号选择"}
-    </span>
   </div>
   <div class="relative min-h-0 flex-1 overflow-hidden">
     <div

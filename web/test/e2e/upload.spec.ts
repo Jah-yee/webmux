@@ -1,5 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { test, expect, createShell, expectTerminalLine } from "./fixtures";
+import {
+  test,
+  expect,
+  createShell,
+  expectTerminalLine,
+  expectConnected,
+  headerAction,
+} from "./fixtures";
 
 test("file chooser shows progress, survives foreground replay, and pastes a shell-safe path without Enter", async ({
   page,
@@ -29,7 +36,7 @@ test("file chooser shows progress, survives foreground replay, and pastes a shel
       response.url().endsWith(`/api/sessions/${id}/upload`),
     );
     const chooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "上传文件", exact: true }).click();
+    await (await headerAction(page, "上传文件")).click();
     if (info.project.use.isMobile) {
       await page.evaluate(() => {
         Object.defineProperty(document, "hidden", {
@@ -51,9 +58,9 @@ test("file chooser shows progress, survives foreground replay, and pastes a shel
     await expect(
       page.getByRole("progressbar", { name: "文件上传进度" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "上传文件", exact: true }),
-    ).toBeDisabled();
+    // Narrow screens reach upload from the terminal menu, disabled alike.
+    await expect(await headerAction(page, "上传文件")).toBeDisabled();
+    if (info.project.use.isMobile) await page.keyboard.press("Escape");
     uploadGate.resolve();
     const uploaded = await response;
     expect(uploaded.status()).toBe(201);
@@ -101,7 +108,7 @@ test("cancelling an uploaded path during replay never pastes it after reconnect"
   });
   try {
     const chooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "上传文件", exact: true }).click();
+    await (await headerAction(page, "上传文件")).click();
     await page.evaluate(() => {
       Object.defineProperty(document, "hidden", {
         configurable: true,
@@ -131,9 +138,7 @@ test("cancelling an uploaded path during replay never pastes it after reconnect"
     await expect(page.getByRole("alert")).toContainText(path);
     await expect(page.getByRole("alert")).toContainText("操作已取消");
     replayGate.resolve();
-    await expect(
-      page.locator(".terminal-header").getByRole("status"),
-    ).toHaveText("已连接");
+    await expectConnected(page);
     await expect(page.locator(".restore-overlay")).toBeHidden();
     expect(
       await (await request.get(`/api/sessions/${id}/buffer`)).text(),

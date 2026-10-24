@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, test } from "./fixtures";
+import { expect, expectConnected, test } from "./fixtures";
 
 // A stand-in agent: it reports a question over the Warp cli-agent protocol,
 // then keeps redrawing a spinner exactly like omp does while it waits.
@@ -93,9 +93,7 @@ test("opening a session does not clear attention through terminal replies", asyn
 
   for (const visit of [1, 2]) {
     await page.goto(`/s/${id}`);
-    await expect(
-      page.locator(".terminal-header").getByRole("status"),
-    ).toHaveText("已连接");
+    await expectConnected(page);
     await expect(page.locator(".restore-overlay")).toBeHidden();
     // Give the replayed queries' replies time to reach the PTY.
     await expect

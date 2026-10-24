@@ -41,6 +41,17 @@ async function nav(page: import("@playwright/test").Page) {
   const button = page.getByRole("button", { name: "文件导航", exact: true });
   if (await button.isVisible()) await button.click();
 }
+// Below 640px the document bar's controls live in the code menu.
+const narrow = (page: Page) => page.viewportSize()!.width < 640;
+async function codeMenu(page: Page) {
+  await page.getByRole("button", { name: "代码菜单", exact: true }).click();
+}
+async function openFullFile(page: Page, name: RegExp) {
+  if (narrow(page)) await codeMenu(page);
+  else
+    await page.getByRole("button", { name: "完整文件", exact: true }).click();
+  await page.getByRole("menuitem", { name }).click();
+}
 
 test("read ordinary files, independent tabs, updates and insert a line without Enter", async ({
   page,
@@ -314,8 +325,7 @@ test("frozen Git diff, ignored navigation and complete source documents", async 
       await route.fulfill({ response });
     },
   );
-  await page.getByRole("button", { name: "完整文件", exact: true }).click();
-  await page.getByRole("menuitem", { name: /修改前的文件/ }).click();
+  await openFullFile(page, /修改前的文件/);
   await expect(
     page.getByRole("tab", { name: /^code\.txt · index(?: ●)?$/ }),
   ).toHaveAttribute("aria-selected", "true");
@@ -334,9 +344,14 @@ test("frozen Git diff, ignored navigation and complete source documents", async 
     .getByRole("button", { name: "修改 code.txt", exact: true })
     .last()
     .click();
+  // The index snapshot also shows "indexed line 50"; wait for the staged Diff
+  // itself, or the narrow code menu opens on the previous document.
+  await expect(
+    page.getByRole("tab", { name: /^code\.txt · staged(?: ●)?$/ }),
+  ).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => visibleCode(page)).toContain("ordinary line 50");
   await expect.poll(() => visibleCode(page)).toContain("indexed line 50");
-  await page.getByRole("button", { name: "完整文件", exact: true }).click();
-  await page.getByRole("menuitem", { name: /修改前的文件/ }).click();
+  await openFullFile(page, /修改前的文件/);
   await expect(
     page.getByRole("tab", { name: /^code\.txt · head(?: ●)?$/ }),
   ).toHaveAttribute("aria-selected", "true");
@@ -421,7 +436,13 @@ test("large change lists remain browsable and late files can compare, update and
     .getByRole("button", { name: /^bulk\/file-1204\.txt(?: \?\?)?$/ })
     .click();
   await expect.poll(() => visibleCode(page)).toContain("content 1204");
-  await page.getByRole("button", { name: "查看 Diff", exact: true }).click();
+  if (narrow(page)) {
+    await codeMenu(page);
+    await page
+      .getByRole("menuitem", { name: "查看 Diff", exact: true })
+      .click();
+  } else
+    await page.getByRole("button", { name: "查看 Diff", exact: true }).click();
   await expect(
     page.locator(".code-diff-reader:visible [data-gutter]").first(),
   ).toBeVisible();
@@ -606,10 +627,16 @@ test("images preview, download byte-identical, isolate SVG and compare Git sides
 
   await open("evil.svg");
   await expect(info).toContainText("SVG · 40 × 20");
-  await page
-    .getByRole("group", { name: "SVG 显示方式" })
-    .getByRole("button", { name: "源码", exact: true })
-    .click();
+  if (narrow(page)) {
+    await codeMenu(page);
+    await page
+      .getByRole("menuitemradio", { name: "源码", exact: true })
+      .click();
+  } else
+    await page
+      .getByRole("group", { name: "SVG 显示方式" })
+      .getByRole("button", { name: "源码", exact: true })
+      .click();
   await expect.poll(() => visibleCode(page)).toContain("<script>");
   expect(leaks).toEqual([]);
 
@@ -626,8 +653,20 @@ test("images preview, download byte-identical, isolate SVG and compare Git sides
     page.getByLabel("大小变化").filter({ visible: true }),
   ).toHaveText(`${committed.length} B → ${working.length} B`);
   await expect(info).toContainText("PNG · 32 × 32");
-  const source = page.getByLabel("预览来源").filter({ visible: true });
-  await source.selectOption("old");
+  const previewSide = async (which: "old" | "new") => {
+    if (!narrow(page))
+      return page
+        .getByLabel("预览来源")
+        .filter({ visible: true })
+        .selectOption(which);
+    await codeMenu(page);
+    await page
+      .getByRole("menuitemradio", {
+        name: which === "old" ? /^修改前/ : /^修改后/,
+      })
+      .click();
+  };
+  await previewSide("old");
   await expect(info).toContainText("PNG · 64 × 48");
   const old = page.waitForEvent("download");
   await page
@@ -637,7 +676,7 @@ test("images preview, download byte-identical, isolate SVG and compare Git sides
   expect(sha256(await readFile((await (await old).path())!))).toBe(
     sha256(committed),
   );
-  await source.selectOption("new");
+  await previewSide("new");
   await expect(info).toContainText("PNG · 32 × 32");
   expect(git(workDir, "status", "--porcelain")).toContain(" M pic.png");
   expect(leaks).toEqual([]);

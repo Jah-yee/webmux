@@ -15,7 +15,6 @@
   import { Button } from "$lib/components/ui/button";
   import CodeSearchPanel, { type SearchSpec } from "./CodeSearchPanel.svelte";
   import CodeGotoLine from "./CodeGotoLine.svelte";
-  import IconArrowsHorizontal from "~icons/tabler/arrows-horizontal";
   import IconSearch from "~icons/tabler/search";
   import IconTextWrap from "~icons/tabler/text-wrap";
 
@@ -26,6 +25,7 @@
     draftEnabled,
     onselect,
     lineAction,
+    hint = $bindable(""),
   }: {
     fileDiff: FileDiffMetadata;
     side: "old" | "new";
@@ -33,6 +33,8 @@
     draftEnabled: boolean;
     onselect: (range: SelectedLineRange | null) => void;
     lineAction?: Snippet<[line: number]>;
+    // Selection guidance, rendered by the document's action bar.
+    hint?: string;
   } = $props();
 
   const OverflowSchema = z.enum(["scroll", "wrap"]);
@@ -388,6 +390,16 @@
     void side;
     matchIndex = -1;
   });
+  $effect(() => {
+    hint = !hasChanges
+      ? "当前可引用整个文件"
+      : coarse
+        ? `点击代码行，点 ＋ 发送到${draftEnabled ? "草稿" : "终端"}`
+        : "点击行号选择；Shift 点击选择范围";
+    return () => {
+      hint = "";
+    };
+  });
 </script>
 
 <div
@@ -489,18 +501,6 @@
         {@render lineAction(selected.start)}
       </div>
     {/if}
-  </div>
-  <div
-    class="flex shrink-0 items-center gap-1.5 border-t px-2 py-1 text-[11px] text-muted-foreground"
-  >
-    <IconArrowsHorizontal class="size-3.5 shrink-0" aria-hidden="true" />
-    <span
-      >{!hasChanges
-        ? "当前可引用整个文件"
-        : coarse
-          ? `点击代码行，点 ＋ 发送到${draftEnabled ? "草稿" : "终端"}`
-          : "点击行号选择；Shift 点击选择范围"}</span
-    >
   </div>
 </div>
 
