@@ -188,7 +188,7 @@ test("read ordinary files, independent tabs, updates and insert a line without E
     .toBe(true);
 });
 
-test("touch line actions use the clicked Git side and clear when the source changes", async ({
+test("touch line actions infer the reference source from the clicked line", async ({
   page,
   request,
   workDir,
@@ -216,9 +216,6 @@ test("touch line actions use the clicked Git side and clear when the source chan
     page.getByRole("button", { name: "发送第 3 行位置到终端", exact: true }),
   ).toBeVisible();
   await lines.filter({ hasText: /^removed$/ }).tap();
-  await expect(
-    page.getByLabel("引用来源").filter({ visible: true }),
-  ).toHaveValue("old");
   await page
     .getByRole("button", { name: "发送第 2 行位置到终端", exact: true })
     .tap();
@@ -230,13 +227,6 @@ test("touch line actions use the clicked Git side and clear when the source chan
     .toContain(`old:${join(workDir, "code.txt")}:2（索引版本）\r\n`);
   await page.keyboard.type("printf 'new:%s\\n' ");
   await showCode(page);
-  await page
-    .getByLabel("引用来源")
-    .filter({ visible: true })
-    .selectOption("new");
-  await expect(
-    page.getByRole("button", { name: /^发送第 \d+ 行位置到终端$/ }),
-  ).toHaveCount(0);
   await lines.filter({ hasText: /^added two$/ }).tap();
   await page
     .getByRole("button", { name: "发送第 3 行位置到终端", exact: true })
@@ -324,7 +314,8 @@ test("frozen Git diff, ignored navigation and complete source documents", async 
       await route.fulfill({ response });
     },
   );
-  await page.getByRole("button", { name: "旧侧完整文件" }).click();
+  await page.getByRole("button", { name: "完整文件", exact: true }).click();
+  await page.getByRole("menuitem", { name: /修改前的文件/ }).click();
   await expect(
     page.getByRole("tab", { name: /^code\.txt · index(?: ●)?$/ }),
   ).toHaveAttribute("aria-selected", "true");
@@ -344,7 +335,8 @@ test("frozen Git diff, ignored navigation and complete source documents", async 
     .last()
     .click();
   await expect.poll(() => visibleCode(page)).toContain("indexed line 50");
-  await page.getByRole("button", { name: "旧侧完整文件" }).click();
+  await page.getByRole("button", { name: "完整文件", exact: true }).click();
+  await page.getByRole("menuitem", { name: /修改前的文件/ }).click();
   await expect(
     page.getByRole("tab", { name: /^code\.txt · head(?: ●)?$/ }),
   ).toHaveAttribute("aria-selected", "true");

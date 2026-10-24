@@ -15,15 +15,9 @@
   import { Button } from "$lib/components/ui/button";
   import CodeSearchPanel, { type SearchSpec } from "./CodeSearchPanel.svelte";
   import CodeGotoLine from "./CodeGotoLine.svelte";
-  import {
-    IconArrowsHorizontal,
-    IconColumns2,
-    IconLayoutList,
-    IconListNumbers,
-    IconNumber,
-    IconSearch,
-    IconTextWrap,
-  } from "@tabler/icons-svelte";
+  import IconArrowsHorizontal from "~icons/tabler/arrows-horizontal";
+  import IconSearch from "~icons/tabler/search";
+  import IconTextWrap from "~icons/tabler/text-wrap";
 
   let {
     fileDiff,
@@ -41,15 +35,10 @@
     lineAction?: Snippet<[line: number]>;
   } = $props();
 
-  const StyleSchema = z.enum(["auto", "split", "unified"]);
   const OverflowSchema = z.enum(["scroll", "wrap"]);
-  let style = $state(
-    StyleSchema.catch("auto").parse(stored("codeDiffStyle", "auto")),
-  );
   let overflow = $state(
     OverflowSchema.catch("scroll").parse(stored("codeDiffOverflow", "scroll")),
   );
-  let numbers = $state(stored("codeLineNumbers", "show") !== "hide");
   let width = $state(0);
   let dark = $state(false);
   let coarse = $state(false);
@@ -67,9 +56,7 @@
   });
   let matchIndex = $state(-1);
   const id = "diff";
-  const diffStyle = $derived(
-    style === "auto" ? (width >= 760 ? "split" : "unified") : style,
-  );
+  const diffStyle = $derived(width >= 760 ? "split" : "unified");
   const hasChanges = $derived(fileDiff.hunks.length > 0);
   const totals = $derived(
     fileDiff.hunks.reduce(
@@ -186,7 +173,6 @@
       maxLineDiffLength: 4096,
       tokenizeMaxLineLength: 4096,
       disableFileHeader: true,
-      disableLineNumbers: !numbers,
       enableLineSelection: true,
       lineHoverHighlight: "number",
       expansionLineCount: 30,
@@ -411,36 +397,9 @@
   <div
     class="flex min-w-0 shrink-0 flex-wrap items-center gap-1 border-b px-2 py-1"
   >
-    <div
-      class="flex items-center rounded-md bg-muted p-0.5"
-      role="group"
-      aria-label="Diff 布局"
-    >
-      <Button
-        variant={diffStyle === "unified" ? "secondary" : "ghost"}
-        size="icon-sm"
-        aria-label="统一视图"
-        aria-pressed={diffStyle === "unified"}
-        title="统一视图"
-        onclick={() => {
-          style = "unified";
-          store("codeDiffStyle", style);
-        }}><IconLayoutList aria-hidden="true" /></Button
-      >
-      <Button
-        variant={diffStyle === "split" ? "secondary" : "ghost"}
-        size="icon-sm"
-        aria-label="并排视图"
-        aria-pressed={diffStyle === "split"}
-        title="并排视图"
-        onclick={() => {
-          style = "split";
-          store("codeDiffStyle", style);
-        }}><IconColumns2 aria-hidden="true" /></Button
-      >
-    </div>
     <span
-      class="mr-auto flex gap-2 px-2 font-mono text-xs tabular-nums"
+      class="mr-auto flex gap-2 font-mono text-xs tabular-nums"
+      role="img"
       aria-label={`新增 ${totals.additions} 行，删除 ${totals.deletions} 行`}
       ><span class="text-success">+{totals.additions}</span><span
         class="text-destructive">−{totals.deletions}</span
@@ -450,30 +409,12 @@
       variant={panel === "search" ? "secondary" : "ghost"}
       size="icon-sm"
       aria-label="文件内查找"
-      title="文件内查找"
+      aria-expanded={panel === "search"}
+      aria-keyshortcuts="Control+f Meta+f"
+      title="文件内查找（Ctrl / ⌘ F）"
       disabled={!hasChanges}
       onclick={() => void openPanel("search")}
       ><IconSearch aria-hidden="true" /></Button
-    >
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="跳转行"
-      title="跳转行"
-      disabled={!hasChanges}
-      onclick={() => void openPanel("goto")}
-      ><IconListNumbers aria-hidden="true" /></Button
-    >
-    <Button
-      variant={numbers ? "secondary" : "ghost"}
-      size="icon-sm"
-      aria-label="显示行号"
-      title="显示行号"
-      aria-pressed={numbers}
-      onclick={() => {
-        numbers = !numbers;
-        store("codeLineNumbers", numbers ? "show" : "hide");
-      }}><IconNumber aria-hidden="true" /></Button
     >
     <Button
       variant={overflow === "wrap" ? "secondary" : "ghost"}
@@ -502,7 +443,7 @@
         }}
       />
       <p class="px-2 pb-1 text-xs text-muted-foreground" role="status">
-        {side === "old" ? "旧侧" : "新侧"} · {matches.length
+        {side === "old" ? "修改前" : "修改后"} · {matches.length
           ? `${matchIndex + 1} / ${matches.length}${matches.length === 5000 ? "+" : ""}`
           : "无匹配"}
       </p>
@@ -523,8 +464,8 @@
     <div
       class="grid shrink-0 grid-cols-2 border-b bg-muted/40 font-mono text-[11px] text-muted-foreground"
     >
-      <span class="truncate border-r px-3 py-1">旧版本</span><span
-        class="truncate px-3 py-1">新版本</span
+      <span class="truncate border-r px-3 py-1">修改前</span><span
+        class="truncate px-3 py-1">修改后</span
       >
     </div>
   {/if}
@@ -540,7 +481,7 @@
         class="absolute inset-x-0 top-8 text-center text-sm text-muted-foreground"
         role="status"
       >
-        文件内容没有变化；可通过“旧侧完整文件”或“新侧完整文件”查看内容
+        文件内容没有变化；可通过“完整文件”查看内容
       </p>
     {/if}
     {#if coarse && selected && selected.start === selected.end && (!selected.endSide || selected.side === selected.endSide) && lineAction}
@@ -558,9 +499,7 @@
         ? "当前可引用整个文件"
         : coarse
           ? `点击代码行，点 ＋ 发送到${draftEnabled ? "草稿" : "终端"}`
-          : numbers
-            ? "点击行号选择；Shift 点击选择范围"
-            : "显示行号后可点击行号选择"}</span
+          : "点击行号选择；Shift 点击选择范围"}</span
     >
   </div>
 </div>
