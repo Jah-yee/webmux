@@ -13,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 // Mode is how WebMux runs inside WSL.
@@ -127,17 +129,5 @@ func SaveSettings(path string, s Settings) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".tray-*.json")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	_, err = f.Write(append(data, '\n'))
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return statefile.Write(path, append(data, '\n'), statefile.Options{TempPattern: ".tray-*.json"})
 }

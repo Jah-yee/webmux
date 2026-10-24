@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 // MaxSubscriptions bounds the devices one instance alerts.
@@ -239,36 +241,7 @@ func (s *Store) saveLocked() error {
 	if f.Subscriptions == nil {
 		f.Subscriptions = []Subscription{}
 	}
-	data, err := json.MarshalIndent(f, "", "  ")
-	if err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(s.dir, ".push-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	defer func() { _ = tmp.Close() }()
-	if err := tmp.Chmod(0600); err != nil {
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp.Name(), filepath.Join(s.dir, storeFile)); err != nil {
-		return err
-	}
-	if d, err := os.Open(s.dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
+	return statefile.WriteJSON(filepath.Join(s.dir, storeFile), f, statefile.Options{TempPattern: ".push-*"})
 }
 
 func newID() string {

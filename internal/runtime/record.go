@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 // RecordVersion is the only record format this build reads and writes.
@@ -80,24 +81,7 @@ func Write(dir string, r Record) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, ".server-*.json")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	if err = f.Chmod(0600); err == nil {
-		_, err = f.Write(append(data, '\n'))
-	}
-	if err == nil {
-		err = f.Sync()
-	}
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), RecordPath(dir))
+	return statefile.Write(RecordPath(dir), append(data, '\n'), statefile.Options{TempPattern: ".server-*.json"})
 }
 
 // Read returns ErrNoRecord, ErrUnsupportedVersion or ErrCorrupt for records

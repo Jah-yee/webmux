@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 type commandRunner func(context.Context, string, []string, io.Writer, io.Writer) error
@@ -180,25 +181,10 @@ func writeDefinition(path string, body []byte, force bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".webmux-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, writeErr := f.Write(body)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return writeErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if force {
-		return os.Rename(f.Name(), path)
-	}
-	// Link provides atomic, exclusive publication without overwriting a file
-	// installed by another invocation between the existence check and write.
-	return os.Link(f.Name(), path)
+	// Without force, Exclusive links the file into place: atomic publication
+	// that never overwrites a definition installed by another invocation
+	// between the existence check and the write.
+	return statefile.Write(path, body, statefile.Options{TempPattern: ".webmux-*", Exclusive: !force})
 }
 
 func (m *Manager) Control(ctx context.Context, action string, follow bool) error {
