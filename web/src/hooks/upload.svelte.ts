@@ -22,6 +22,14 @@ export interface UploadInput {
   insert(text: string, operation: DraftOperation): TextInsertion;
 }
 
+export interface UploadProgress {
+  name: string;
+  percent: number;
+  index: number;
+  total: number;
+  waiting: boolean;
+}
+
 // All upload sources share the same operation identity and quoted-path insertion.
 export function useUpload(
   getHost: () => HTMLElement,
@@ -30,13 +38,7 @@ export function useUpload(
   setError: (message: string) => void,
   input: UploadInput,
 ) {
-  let progress = $state<{
-    name: string;
-    percent: number;
-    index: number;
-    total: number;
-    waiting: boolean;
-  } | null>(null);
+  let progress = $state<UploadProgress | null>(null);
   let dragging = $state(false);
   let foreground = $state(!document.hidden);
   let controller: AbortController | undefined;
