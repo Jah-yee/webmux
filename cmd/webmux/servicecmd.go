@@ -11,10 +11,10 @@ import (
 	"syscall"
 
 	"github.com/rainchan/webmux/deploy"
-	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/service"
+	"github.com/rainchan/webmux/internal/session"
 )
 
 func serviceCommand(args []string, out, stderr io.Writer) int {
@@ -53,7 +53,7 @@ func serviceCommand(args []string, out, stderr io.Writer) int {
 		return contract.ExitUsage
 	}
 	if action == "install" {
-		expanded, err := client.ExpandHome(path)
+		expanded, err := session.ExpandPath(path)
 		if err != nil {
 			fmt.Fprintln(stderr, "webmux service:", err)
 			return contract.ExitUsage

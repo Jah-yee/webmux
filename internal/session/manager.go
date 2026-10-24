@@ -81,6 +81,8 @@ func NewManager(o Options) *Manager {
 	go m.updates()
 	return m
 }
+
+// ExpandPath expands a leading "~/" and makes the path absolute.
 func ExpandPath(path string) (string, error) {
 	if path == "~" || strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()

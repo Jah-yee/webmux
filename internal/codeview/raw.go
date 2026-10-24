@@ -48,71 +48,64 @@ func (s *Service) Raw(ctx context.Context, id, sid, side string) (*Transfer, err
 	return t, nil
 }
 func (s *Service) openRaw(ctx context.Context, id, sid, side string) (*Transfer, error) {
-	release, e := s.acquire(ctx)
-	if e != nil {
-		return nil, e
-	}
-	defer release()
-	b, e := s.bind(ctx, id)
-	if e != nil {
-		return nil, e
-	}
-	v, e := s.get(id, sid)
-	if e != nil {
-		return nil, e
-	}
-	var d Document
-	if v.file != nil {
-		d = v.file.Document
-	} else if side == "old" {
-		d = v.diff.Old
-	} else if side == "new" {
-		d = v.diff.New
-	} else {
-		return nil, problem(400, "请选择 old/new 来源")
-	}
-	if d.Source == "empty" {
-		return nil, problem(404, "此侧内容不存在")
-	}
-	if d.Size > MaxDownloadBytes {
-		return nil, problem(413, "超过 100 MiB 下载上限")
-	}
-	if !d.Downloadable {
-		return nil, problem(404, "此来源不是可下载的常规文件")
-	}
-	t := &Transfer{Name: path.Base(d.rawPath), MediaType: d.MediaType, Size: d.Size, binding: b, path: d.rawPath}
-	if d.Source == "worktree" {
-		if d.identity == nil {
-			return nil, problem(409, "内容已变化，请刷新")
-		}
-		f, e := b.open(d.rawPath)
+	return withBinding(ctx, s, id, func(b *binding) (*Transfer, error) {
+		v, e := s.get(id, sid)
 		if e != nil {
-			if errors.Is(e, os.ErrNotExist) {
-				return nil, problem(409, "内容已变化，请刷新")
-			}
 			return nil, e
 		}
-		info, e := f.Stat()
-		if e != nil || !info.Mode().IsRegular() || *fileIdentity(info) != *d.identity {
-			f.Close()
+		var d Document
+		if v.file != nil {
+			d = v.file.Document
+		} else if side == "old" {
+			d = v.diff.Old
+		} else if side == "new" {
+			d = v.diff.New
+		} else {
+			return nil, problem(400, "请选择 old/new 来源")
+		}
+		if d.Source == "empty" {
+			return nil, problem(404, "此侧内容不存在")
+		}
+		if d.Size > MaxDownloadBytes {
+			return nil, problem(413, "超过 100 MiB 下载上限")
+		}
+		if !d.Downloadable {
+			return nil, problem(404, "此来源不是可下载的常规文件")
+		}
+		t := &Transfer{Name: path.Base(d.rawPath), MediaType: d.MediaType, Size: d.Size, binding: b, path: d.rawPath}
+		if d.Source == "worktree" {
+			if d.identity == nil {
+				return nil, problem(409, "内容已变化，请刷新")
+			}
+			f, e := b.open(d.rawPath)
+			if e != nil {
+				if errors.Is(e, os.ErrNotExist) {
+					return nil, problem(409, "内容已变化，请刷新")
+				}
+				return nil, e
+			}
+			info, e := f.Stat()
+			if e != nil || !info.Mode().IsRegular() || *fileIdentity(info) != *d.identity {
+				f.Close()
+				return nil, problem(409, "内容已变化，请刷新")
+			}
+			t.file, t.identity = f, d.identity
+			return t, nil
+		}
+		if d.Source != "index" && d.Source != "head" {
+			return nil, problem(400, "无效文件来源")
+		}
+		raw, e := git(ctx, b.Root, "cat-file", "-s", d.OID)
+		if e != nil {
+			return nil, fmt.Errorf("读取对象大小: %w", e)
+		}
+		size, e := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
+		if e != nil || size != d.Size {
 			return nil, problem(409, "内容已变化，请刷新")
 		}
-		t.file, t.identity = f, d.identity
+		t.oid = d.OID
 		return t, nil
-	}
-	if d.Source != "index" && d.Source != "head" {
-		return nil, problem(400, "无效文件来源")
-	}
-	raw, e := git(ctx, b.Root, "cat-file", "-s", d.OID)
-	if e != nil {
-		return nil, fmt.Errorf("读取对象大小: %w", e)
-	}
-	size, e := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
-	if e != nil || size != d.Size {
-		return nil, problem(409, "内容已变化，请刷新")
-	}
-	t.oid = d.OID
-	return t, nil
+	})
 }
 
 // Close releases the opened file and the transfer slot; safe to call twice.

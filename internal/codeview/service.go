@@ -247,23 +247,36 @@ func (s *Service) validate(ctx context.Context, b *binding) error {
 	return nil
 }
 func (s *Service) Context(ctx context.Context, id string) (Context, error) {
-	release, e := s.acquire(ctx)
-	if e != nil {
-		return Context{}, e
+	return withBinding(ctx, s, id, func(b *binding) (Context, error) { return b.Context, nil })
+}
+
+// withBinding holds a service slot while fn uses session id's validated
+// binding. Failing to acquire the slot or bind returns T's zero value.
+func withBinding[T any](ctx context.Context, s *Service, id string, fn func(*binding) (T, error)) (T, error) {
+	release, err := s.acquire(ctx)
+	if err != nil {
+		var zero T
+		return zero, err
 	}
 	defer release()
-	b, e := s.bind(ctx, id)
-	if e != nil {
-		return Context{}, e
+	b, err := s.bind(ctx, id)
+	if err != nil {
+		var zero T
+		return zero, err
 	}
-	return b.Context, nil
+	return fn(b)
 }
-func (s *Service) root(ctx context.Context, id, cid string) (*binding, error) {
-	b, e := s.bind(ctx, id)
-	if e == nil && b.ID != cid {
-		e = problem(409, "浏览上下文已改变")
-	}
-	return b, e
+
+// withRoot is withBinding for requests made against browsing context cid; it
+// rejects them once the session's context has been replaced.
+func withRoot[T any](ctx context.Context, s *Service, id, cid string, fn func(*binding) (T, error)) (T, error) {
+	return withBinding(ctx, s, id, func(b *binding) (T, error) {
+		if b.ID != cid {
+			var zero T
+			return zero, problem(409, "浏览上下文已改变")
+		}
+		return fn(b)
+	})
 }
 
 // Open each segment relative to an already opened directory. O_NOFOLLOW and
@@ -478,50 +491,37 @@ func (s *Service) File(ctx context.Context, id, cid, nid string) (File, error) {
 	return s.FileSource(ctx, id, cid, nid, "worktree")
 }
 func (s *Service) FileSource(ctx context.Context, id, cid, nid, source string) (File, error) {
-	release, e := s.acquire(ctx)
-	if e != nil {
-		return File{}, e
-	}
-	defer release()
-	b, e := s.root(ctx, id, cid)
-	if e != nil {
-		return File{}, e
-	}
-	p, e := nodePath(nid)
-	if e != nil {
-		return File{}, e
-	}
-	d, e := b.sourceFile(ctx, p, source)
-	if e != nil {
-		return File{}, e
-	}
-	f := File{Document: d, Checked: time.Now().UTC()}
-	f.Snapshot = s.put(&snapshot{session: id, context: cid, file: &f, size: documentSize(d) + 512})
-	return f, nil
+	return withRoot(ctx, s, id, cid, func(b *binding) (File, error) {
+		p, e := nodePath(nid)
+		if e != nil {
+			return File{}, e
+		}
+		d, e := b.sourceFile(ctx, p, source)
+		if e != nil {
+			return File{}, e
+		}
+		f := File{Document: d, Checked: time.Now().UTC()}
+		f.Snapshot = s.put(&snapshot{session: id, context: cid, file: &f, size: documentSize(d) + 512})
+		return f, nil
+	})
 }
 func (s *Service) SnapshotFile(ctx context.Context, id, sid, side string) (File, error) {
-	release, e := s.acquire(ctx)
-	if e != nil {
-		return File{}, e
-	}
-	defer release()
-	if _, e := s.bind(ctx, id); e != nil {
-		return File{}, e
-	}
-	v, e := s.get(id, sid)
-	if e != nil {
-		return File{}, e
-	}
-	if v.file != nil {
-		return *v.file, nil
-	}
-	d := v.diff.New
-	if side == "old" {
-		d = v.diff.Old
-	} else if side != "new" {
-		return File{}, problem(400, "请选择 old/new 来源")
-	}
-	return File{Snapshot: sid, Document: d, Checked: v.diff.Checked}, nil
+	return withBinding(ctx, s, id, func(*binding) (File, error) {
+		v, e := s.get(id, sid)
+		if e != nil {
+			return File{}, e
+		}
+		if v.file != nil {
+			return *v.file, nil
+		}
+		d := v.diff.New
+		if side == "old" {
+			d = v.diff.Old
+		} else if side != "new" {
+			return File{}, problem(400, "请选择 old/new 来源")
+		}
+		return File{Snapshot: sid, Document: d, Checked: v.diff.Checked}, nil
+	})
 }
 func documentSize(d Document) int {
 	return len(d.Text) + len(d.Path) + len(d.Absolute) + len(d.NodeID) + len(d.OID) + len(d.Reason) + 256

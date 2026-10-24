@@ -2,7 +2,6 @@ package tray
 
 import (
 	"net"
-	"net/netip"
 	"sort"
 	"strings"
 
@@ -25,8 +24,6 @@ type Candidate struct {
 	Kind string
 }
 
-var tailscaleRange = netip.MustParsePrefix("100.64.0.0/10")
-
 // WindowsCandidates lists enabled IPv4 addresses, excluding loopback,
 // link-local and the WSL virtual switch, with Tailscale first.
 func WindowsCandidates(list []WinInterface) []Candidate {
@@ -36,15 +33,11 @@ func WindowsCandidates(list []WinInterface) []Candidate {
 			continue
 		}
 		for _, ip := range iface.Addrs {
-			v4 := ip.To4()
-			if v4 == nil || v4.IsLoopback() || v4.IsLinkLocalUnicast() || v4.IsUnspecified() {
+			v4, ok := contract.RemoteIPv4(ip)
+			if !ok {
 				continue
 			}
-			kind := "lan"
-			if addr, ok := netip.AddrFromSlice(v4); ok && tailscaleRange.Contains(addr) {
-				kind = "tailscale"
-			}
-			out = append(out, Candidate{Address: v4.String(), Interface: iface.Name, Kind: kind})
+			out = append(out, Candidate{Address: v4.String(), Interface: iface.Name, Kind: contract.AddressKind(v4)})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Kind == "tailscale" && out[j].Kind != "tailscale" })

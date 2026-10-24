@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/api"
-	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
@@ -156,11 +155,11 @@ func loadConfig(args []string) (serverRun, error) {
 	flags.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
 	run := serverRun{ConfigExplicit: explicit["config"]}
 	var err error
-	if run.ConfigPath, err = client.ExpandHome(*path); err != nil {
+	if run.ConfigPath, err = session.ExpandPath(*path); err != nil {
 		return run, err
 	}
 	if *logFile != "" {
-		if run.LogFile, err = client.ExpandHome(*logFile); err != nil {
+		if run.LogFile, err = session.ExpandPath(*logFile); err != nil {
 			return run, err
 		}
 	}
