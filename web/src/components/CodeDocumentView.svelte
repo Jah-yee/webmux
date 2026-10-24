@@ -14,7 +14,16 @@
   import { codeReference, nodeId } from "../code-reference";
   import CodeReader from "./CodeReader.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { IconPlus } from "@tabler/icons-svelte";
+  import IconPlus from "~icons/tabler/plus";
+  import CodeImageView from "./CodeImageView.svelte";
+  import CodeDownloadButton from "./CodeDownloadButton.svelte";
+  import {
+    basename,
+    codeRawPath,
+    formatBytes,
+    imageFormat,
+    isImageType,
+  } from "../code-image";
   import type { TextInsertion } from "../terminal-draft.svelte";
   let {
     id,
@@ -86,6 +95,40 @@
         : shownDiff.new
       : file?.document,
   );
+  const snapshotId = $derived(shownDiff?.snapshotId ?? file?.snapshotId ?? "");
+  // Diff snapshots need the side; file snapshots ignore it.
+  const rawSide = $derived(shownDiff ? side : undefined);
+  // SVG is a text document: preview by default, source on request or failure.
+  let svgView = $state<"preview" | "source">("preview");
+  let svgNotice = $state("");
+  const svgFile = $derived(
+    !shownDiff && doc?.kind === "text" && doc.mediaType === "image/svg+xml",
+  );
+  const imagePreview = $derived(
+    !!doc &&
+      doc.source !== "empty" &&
+      (shownDiff
+        ? shownDiff.kind === "image" &&
+          (doc.kind === "image" ||
+            (doc.kind === "text" && doc.mediaType === "image/svg+xml"))
+        : doc.kind === "image" || (svgFile && svgView === "preview")),
+  );
+  // Image documents, over-limit images and either side of an image Diff.
+  const imageDocument = $derived(
+    !!doc &&
+      (shownDiff ? shownDiff.kind === "image" : isImageType(doc.mediaType)),
+  );
+  const imageChange = $derived(
+    shownDiff?.kind !== "image"
+      ? ""
+      : shownDiff.old.source === "empty"
+        ? "图片已新增"
+        : shownDiff.new.source === "empty"
+          ? "图片已删除"
+          : "图片已修改",
+  );
+  const sideSize = (value: CodeDiff["old"]) =>
+    value.source === "empty" ? "不存在" : formatBytes(value.size);
   let preview = $derived.by(() => {
     if (
       invalidSelection ||
@@ -111,6 +154,7 @@
         end = undefined;
         invalidSelection = false;
         error = "";
+        svgNotice = "";
         generation++;
       }
     });
@@ -120,6 +164,12 @@
     untrack(() => {
       anchor = reader?.line() ?? 1;
       generation++;
+      // A deleted or added image has nothing to preview on one side.
+      if (
+        current?.kind === "image" &&
+        (side === "new" ? current.new : current.old).source === "empty"
+      )
+        side = side === "new" ? "old" : "new";
     });
   });
   $effect(() => {
@@ -267,6 +317,31 @@
     error =
       paste(reference) !== "failed" ? "" : "输入目标未就绪，位置未插入；请重试";
   }
+  function clearSelection() {
+    start = undefined;
+    end = undefined;
+    invalidSelection = false;
+    error = "";
+    reader?.clearLineAction();
+    diffReader?.clearLineAction();
+  }
+  function showSvg(view: "preview" | "source") {
+    if (view === svgView) return;
+    clearSelection();
+    svgNotice = "";
+    svgView = view;
+  }
+  function previewFailed(message: string) {
+    if (!svgFile || svgView !== "preview") return;
+    clearSelection();
+    svgView = "source";
+    svgNotice = `SVG 预览不可用，已切换到源码：${message}`;
+  }
+  function downloadFailed(message: string, code: number) {
+    error = message;
+    if (code === 410) onState("expired");
+    else if (code === 409) onState("updated");
+  }
   async function full(which: "old" | "new") {
     if (!shownDiff) return;
     const sid = shownDiff.snapshotId;
@@ -318,24 +393,37 @@
           onclick={() => void compare()}>查看 Diff</Button
         >
       </div>{/if}
+    {#if svgFile}<div class="flex gap-1" role="group" aria-label="SVG 显示方式">
+        <Button
+          variant={svgView === "preview" ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={svgView === "preview"}
+          onclick={() => showSvg("preview")}>预览</Button
+        ><Button
+          variant={svgView === "source" ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={svgView === "source"}
+          onclick={() => showSvg("source")}>源码</Button
+        >
+      </div>{/if}
     {#if shownDiff}
       {#if shownDiff.change.oldPath !== shownDiff.change.newPath}
         <p class="basis-full break-all">
           {shownDiff.change.oldPath} → {shownDiff.change.newPath}
         </p>
       {/if}
+      {#if imageChange}<p class="basis-full">
+          <span class="font-medium">{imageChange}</span> ·
+          <span aria-label="大小变化"
+            >{sideSize(shownDiff.old)} → {sideSize(shownDiff.new)}</span
+          >
+        </p>{/if}
       <label class="flex items-center gap-1"
-        >引用来源 <select
-          aria-label="引用来源"
+        >{imageChange ? "预览来源" : "引用来源"}
+        <select
+          aria-label={imageChange ? "预览来源" : "引用来源"}
           bind:value={side}
-          onchange={() => {
-            start = undefined;
-            end = undefined;
-            invalidSelection = false;
-            error = "";
-            reader?.clearLineAction();
-            diffReader?.clearLineAction();
-          }}
+          onchange={clearSelection}
           class="h-7 rounded border bg-background px-1"
           ><option value="new">新侧 ({shownDiff.new.source})</option><option
             value="old">旧侧 ({shownDiff.old.source})</option
@@ -364,11 +452,12 @@
           onclick={refresh}>刷新文档</Button
         >
       </p>{/if}
-    {#if shownDiff?.kind === "metadata" || doc?.kind !== "text"}<p
+    {#if shownDiff?.kind === "metadata" || (doc?.kind !== "text" && doc?.kind !== "image")}<p
         class="basis-full"
       >
         {shownDiff?.reason || doc?.reason}
       </p>{/if}
+    {#if svgNotice}<p role="status" class="basis-full">{svgNotice}</p>{/if}
   </div>
   {#if shownDiff?.kind === "text" && !diffReady}
     <p class="p-2 text-sm" role="status">
@@ -405,6 +494,14 @@
         {/snippet}
       </CodeDiffReader>
     {/key}
+  {:else if imagePreview && doc}
+    {#key `${snapshotId}:${rawSide ?? ""}`}<CodeImageView
+        {id}
+        {snapshotId}
+        side={rawSide}
+        document={doc}
+        onerror={previewFailed}
+      />{/key}
   {:else if doc?.kind === "text" && !shownDiff}
     {#key `${lastVersion}:${generation}`}<CodeReader
         bind:this={reader}
@@ -429,21 +526,25 @@
           {/if}
         {/snippet}
       </CodeReader>{/key}
+  {:else if imageDocument && doc}
+    <div class="space-y-1 p-2 text-sm">
+      {#if doc.source === "empty"}<p role="status">
+          {side === "old" ? "旧侧" : "新侧"}不存在
+        </p>
+      {:else}<p aria-label="图片信息">
+          {imageFormat(doc.mediaType)} · {formatBytes(doc.size)}
+        </p>
+        {#if doc.downloadable}<p class="text-muted-foreground">
+            不加载预览，可下载原始文件查看。
+          </p>{/if}
+      {/if}
+    </div>
   {/if}
   <div class="mt-auto shrink-0 space-y-1 border-t p-2">
     {#if error}<p class="text-sm text-destructive" role="alert">{error}</p>{/if}
     <div class="flex flex-wrap gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onclick={() => {
-          start = undefined;
-          end = undefined;
-          invalidSelection = false;
-          error = "";
-          reader?.clearLineAction();
-          diffReader?.clearLineAction();
-        }}>引用整个文件</Button
+      <Button variant="outline" size="sm" onclick={clearSelection}
+        >引用整个文件</Button
       >
       <Button
         size="sm"
@@ -456,6 +557,16 @@
             ? `-${end}`
             : ""} 行）{/if}</Button
       >
+      {#if imageDocument && doc && doc.source !== "empty"}<CodeDownloadButton
+          path={codeRawPath(id, snapshotId, rawSide)}
+          filename={basename(doc.path)}
+          disabled={!doc.downloadable}
+          onerror={downloadFailed}
+        />{#if !doc.downloadable}<p
+            class="self-center text-xs text-muted-foreground"
+          >
+            超过 100 MiB 下载上限，不可下载
+          </p>{/if}{/if}
     </div>
   </div>
 </div>

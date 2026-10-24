@@ -13,6 +13,9 @@ const doc = CodeDocumentSchema.parse({
   lineCount: 20,
   referenceable: true,
   reason: "",
+  mediaType: "",
+  size: 5,
+  downloadable: true,
 });
 describe("code references", () => {
   it("keeps shell metacharacters literal when a user submits a reference", () => {

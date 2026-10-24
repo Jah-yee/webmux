@@ -338,6 +338,7 @@ export const CodeNodeSchema = z.object({
   gitStatus: z.string(),
   ignored: z.boolean(),
   referenceable: z.boolean(),
+  mediaType: z.string(),
   linkTarget: z.string().optional(),
 });
 export const CodeListingSchema = z.object({
@@ -360,11 +361,21 @@ export const CodeDocumentSchema = z.object({
   source: CodeSourceSchema,
   oid: z.string(),
   contentVersion: z.string(),
-  kind: z.enum(["text", "binary", "unsupported", "too-large", "symlink"]),
+  kind: z.enum([
+    "text",
+    "binary",
+    "unsupported",
+    "too-large",
+    "symlink",
+    "image",
+  ]),
   text: z.string(),
   lineCount: z.number().int().nonnegative().max(20000),
   referenceable: z.boolean(),
   reason: z.string(),
+  mediaType: z.string(),
+  size: z.number().int().nonnegative(),
+  downloadable: z.boolean(),
 });
 export const CodeFileSchema = z.object({
   snapshotId: z.string(),
@@ -394,7 +405,7 @@ export const CodeDiffSchema = z.object({
   snapshotId: z.string(),
   old: CodeDocumentSchema,
   new: CodeDocumentSchema,
-  kind: z.enum(["text", "metadata"]),
+  kind: z.enum(["text", "metadata", "image"]),
   reason: z.string(),
   checkedAt: z.string(),
   change: CodeChangeSchema,

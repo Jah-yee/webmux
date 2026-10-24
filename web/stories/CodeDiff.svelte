@@ -41,6 +41,9 @@ export async function startSession(options: SessionOptions) {
     lineCount: oldText.split("\n").length - 1,
     referenceable: true,
     reason: "",
+    mediaType: "",
+    size: new TextEncoder().encode(oldText).length,
+    downloadable: true,
   };
   const diff: CodeDiff = {
     snapshotId: "diff-story",
@@ -66,6 +69,7 @@ export async function startSession(options: SessionOptions) {
       text: newText,
       contentVersion: "after",
       lineCount: newText.split("\n").length - 1,
+      size: new TextEncoder().encode(newText).length,
     },
   };
 </script>

@@ -49,6 +49,9 @@
         lineCount: deleted ? 20000 : 120,
         referenceable: true,
         reason: "",
+        mediaType: "",
+        size: original.length,
+        downloadable: true,
       },
       new: {
         nodeId: "Y29kZS50eHQ",
@@ -71,6 +74,9 @@
         lineCount: deleted ? 0 : 120,
         referenceable: !deleted,
         reason: "",
+        mediaType: "",
+        size: deleted ? 0 : original.length,
+        downloadable: !deleted,
       },
     }),
   );

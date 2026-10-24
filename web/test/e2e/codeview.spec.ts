@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
+import type { Page } from "@playwright/test";
 import {
   test,
   expect,
@@ -511,4 +513,140 @@ test("large change lists remain browsable and late files can compare, update and
     cursor = page.nextCursor;
   } while (cursor);
   expect(paths.size).toBe(total);
+});
+
+async function canvasImage(
+  page: Page,
+  type: string,
+  width: number,
+  height: number,
+  color: string,
+) {
+  const bytes = await page.evaluate(
+    async ({ type, width, height, color }) => {
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = color;
+      context.fillRect(0, 0, width, height);
+      const blob = await canvas.convertToBlob({ type });
+      return [...new Uint8Array(await blob.arrayBuffer())];
+    },
+    { type, width, height, color },
+  );
+  return Buffer.from(bytes);
+}
+const sha256 = (bytes: Buffer) =>
+  createHash("sha256").update(bytes).digest("hex");
+
+test("images preview, download byte-identical, isolate SVG and compare Git sides", async ({
+  page,
+  workDir,
+}) => {
+  const committed = await canvasImage(page, "image/png", 64, 48, "#d33");
+  const working = await canvasImage(page, "image/png", 32, 32, "#33d");
+  const jpeg = await canvasImage(page, "image/jpeg", 40, 30, "#3a3");
+  const webp = await canvasImage(page, "image/webp", 24, 12, "#aa3");
+  const gif = Buffer.from(
+    "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==",
+    "base64",
+  );
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" onload="fetch(\'http://svg-leak.invalid/onload\')">\n' +
+    "<script>fetch('http://svg-leak.invalid/script')</script>\n" +
+    '<image href="http://svg-leak.invalid/image.png" width="10" height="10"/>\n' +
+    '<rect width="40" height="20" fill="teal"/>\n' +
+    "</svg>\n";
+  git(workDir, "init", "-q");
+  await writeFile(join(workDir, "pic.png"), committed);
+  git(workDir, "add", ".");
+  git(workDir, "commit", "-qm", "image");
+  await writeFile(join(workDir, "pic.png"), working);
+  await writeFile(join(workDir, "photo.jpg"), jpeg);
+  await writeFile(join(workDir, "tiny.webp"), webp);
+  await writeFile(join(workDir, "dot.gif"), gif);
+  await writeFile(join(workDir, "evil.svg"), svg);
+  await writeFile(join(workDir, "archive.zip"), Buffer.from("PK\x03\x04\0\0"));
+  const leaks: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("svg-leak.invalid")) leaks.push(request.url());
+  });
+  await createShell(page, "Image code", workDir);
+  await showCode(page);
+  const info = page.getByLabel("图片信息").filter({ visible: true });
+  // File buttons append the Git status ("pic.png M", "photo.jpg ??").
+  const file = (name: string) =>
+    page.getByRole("button", {
+      name: new RegExp(`^${name.replace(".", "\\.")}(?: |$)`),
+    });
+  const open = async (name: string) => {
+    await nav(page);
+    await file(name).click();
+  };
+
+  await file("pic.png").click();
+  await expect(info).toContainText("PNG · 32 × 32");
+  await expect(
+    page.getByRole("group", { name: "图片预览" }).filter({ visible: true }),
+  ).toBeVisible();
+  const downloading = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "下载", exact: true })
+    .filter({ visible: true })
+    .click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("pic.png");
+  expect(sha256(await readFile((await download.path())!))).toBe(
+    sha256(working),
+  );
+
+  for (const [name, text] of [
+    ["photo.jpg", "JPEG · 40 × 30"],
+    ["tiny.webp", "WebP · 24 × 12"],
+    ["dot.gif", "GIF · 1 × 1"],
+  ]) {
+    await open(name);
+    await expect(info).toContainText(text);
+  }
+  await open("archive.zip");
+  await expect(
+    page.getByText("二进制内容").filter({ visible: true }),
+  ).toBeVisible();
+
+  await open("evil.svg");
+  await expect(info).toContainText("SVG · 40 × 20");
+  await page
+    .getByRole("group", { name: "SVG 显示方式" })
+    .getByRole("button", { name: "源码", exact: true })
+    .click();
+  await expect.poll(() => visibleCode(page)).toContain("<script>");
+  expect(leaks).toEqual([]);
+
+  await nav(page);
+  await page.getByRole("tab", { name: "修改", exact: true }).click();
+  await page
+    .getByRole("button", { name: "修改 pic.png", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByText("图片已修改").filter({ visible: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("大小变化").filter({ visible: true }),
+  ).toHaveText(`${committed.length} B → ${working.length} B`);
+  await expect(info).toContainText("PNG · 32 × 32");
+  const source = page.getByLabel("预览来源").filter({ visible: true });
+  await source.selectOption("old");
+  await expect(info).toContainText("PNG · 64 × 48");
+  const old = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "下载", exact: true })
+    .filter({ visible: true })
+    .click();
+  expect(sha256(await readFile((await (await old).path())!))).toBe(
+    sha256(committed),
+  );
+  await source.selectOption("new");
+  await expect(info).toContainText("PNG · 32 × 32");
+  expect(git(workDir, "status", "--porcelain")).toContain(" M pic.png");
+  expect(leaks).toEqual([]);
 });

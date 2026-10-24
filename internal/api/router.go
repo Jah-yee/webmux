@@ -131,6 +131,10 @@ func baseHeaders(w http.ResponseWriter) func() {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	return func() {
 		if p := recover(); p != nil {
+			if p == http.ErrAbortHandler {
+				// Deliberate connection abort (e.g. raw bytes changed mid-stream).
+				panic(p)
+			}
 			slog.Error("request panic", "panic", p)
 			http.Error(w, "internal error", 500)
 		}

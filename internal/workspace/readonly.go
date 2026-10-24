@@ -29,6 +29,45 @@ func ReadGitInput(ctx context.Context, cwd string, limit int, input io.Reader, a
 	}
 	return readGitCommand(ctx, cwd, limit, input, overrides, args...)
 }
+
+// StreamGit runs a read-only Git command like ReadGitInput but copies stdout
+// to w without buffering or an internal timeout; the caller's ctx bounds it.
+// A write error from w terminates the process group and is returned wrapped.
+func StreamGit(ctx context.Context, cwd string, w io.Writer, args ...string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	overrides, err := readGitOverrides(ctx, cwd, 64<<10, args...)
+	if err != nil {
+		return err
+	}
+	out := &streamOutput{w: w, cancel: cancel}
+	err = runReadGit(ctx, cwd, nil, overrides, out, args...)
+	if out.err != nil {
+		return fmt.Errorf("Git 输出写入失败: %w", out.err)
+	}
+	return err
+}
+
+type streamOutput struct {
+	w      io.Writer
+	err    error
+	cancel context.CancelFunc
+}
+
+func (s *streamOutput) Write(p []byte) (int, error) {
+	if s.err != nil {
+		return 0, s.err
+	}
+	n, err := s.w.Write(p)
+	if err == nil && n < len(p) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		s.err = err
+		s.cancel()
+	}
+	return n, err
+}
 func readGitOverrides(ctx context.Context, cwd string, limit int, args ...string) ([]string, error) {
 	overrides := []string{}
 	if len(args) > 0 && (args[0] == "diff" || args[0] == "status") {

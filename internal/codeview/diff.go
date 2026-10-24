@@ -2,6 +2,8 @@ package codeview
 
 import (
 	"context"
+	"errors"
+	"github.com/rainchan/webmux/internal/workspace"
 	"strconv"
 	"strings"
 	"time"
@@ -25,18 +27,34 @@ func (b *binding) blob(ctx context.Context, p, source, oid, mode string) (Docume
 	if e != nil {
 		return Document{}, problem(500, "无效对象大小")
 	}
+	if imageCandidate(p) {
+		header := &headerWriter{}
+		if size > 0 {
+			if e := workspace.StreamGit(ctx, b.Root, header, "cat-file", "blob", oid); e != nil && !errors.Is(e, errHeaderFull) {
+				return Document{}, e
+			}
+		}
+		d := imageDocument(b.Root, p, source, oid, size, header.data)
+		d.Version = digest([]byte(oid))
+		return d, nil
+	}
 	if size > MaxBytes {
 		d := document(b.Root, p, source, oid, nil)
 		d.Kind = "too-large"
 		d.Reason = "超过 2 MiB"
 		d.Version = oid
+		d.Size = size
+		d.Downloadable = size <= MaxDownloadBytes
 		return d, nil
 	}
 	data, e := git(ctx, b.Root, "cat-file", "blob", oid)
 	if e != nil {
 		return Document{}, e
 	}
-	return document(b.Root, p, source, oid, data), nil
+	d := document(b.Root, p, source, oid, data)
+	d.Size = size
+	d.Downloadable = true
+	return d, nil
 }
 func (b *binding) capture(ctx context.Context, c Change) (Document, Document, error) {
 	if _, e := nodePath(nodeID(c.OldPath)); e != nil {
@@ -106,9 +124,9 @@ func (s *Service) Diff(ctx context.Context, id, cid, changeID string) (Diff, err
 	if strings.HasPrefix(c.Status, "U") {
 		r.Kind = "metadata"
 		r.Reason = "冲突文件仅显示元信息"
-	} else if old.Kind != "text" || next.Kind != "text" {
-		r.Kind = "metadata"
-		r.Reason = "非文本或受限内容不能显示行差异"
+	} else if kind, reason := classify(old, next); kind != "text" {
+		r.Kind = kind
+		r.Reason = reason
 	} else {
 		attrs, e := git(ctx, b.Root, "check-attr", "-z", "filter", "working-tree-encoding", "--", c.NewPath)
 		if e != nil {
@@ -125,6 +143,25 @@ func (s *Service) Diff(ctx context.Context, id, cid, changeID string) (Diff, err
 	v := &snapshot{session: id, context: cid, diff: &r, size: documentSize(old) + documentSize(next)}
 	r.Snapshot = s.put(v)
 	return r, nil
+}
+
+func isImage(d Document) bool { return strings.HasPrefix(d.MediaType, "image/") }
+
+// classify picks the comparison kind before attribute checks: two existing
+// texts (SVG or not) stay a line diff, as does added/deleted plain text;
+// images, optionally against an absent side, compare as images; anything
+// else is metadata only.
+func classify(old, next Document) (string, string) {
+	if old.Kind == "text" && next.Kind == "text" && (isImage(old) == isImage(next) || (old.Source != "empty" && next.Source != "empty")) {
+		return "text", ""
+	}
+	if !isImage(old) && !isImage(next) {
+		return "metadata", "非文本或受限内容不能显示行差异"
+	}
+	if (isImage(old) || old.Source == "empty") && (isImage(next) || next.Source == "empty") {
+		return "image", ""
+	}
+	return "metadata", "图片与非图片内容不能对比"
 }
 
 // sourceFile resolves only the current worktree, stage-zero index or HEAD.

@@ -18,6 +18,9 @@ function file(n: number, version = "original") {
       lineCount: 1,
       referenceable: true,
       reason: "",
+      mediaType: "",
+      size: `${version} file ${n}\n`.length,
+      downloadable: true,
     },
   };
 }
@@ -54,6 +57,7 @@ function serve() {
             gitStatus: "",
             ignored: false,
             referenceable: true,
+            mediaType: "",
           })),
           nextCursor: "",
           limited: false,
@@ -277,6 +281,8 @@ test("loads changes beyond 1000 lazily, virtualizes rows, filters and refreshes 
             text: "",
             lineCount: 0,
             referenceable: false,
+            size: 0,
+            downloadable: false,
           },
           new: next,
         });

@@ -108,6 +108,13 @@ export async function apiBuffer(id: string): Promise<Uint8Array> {
     await (await request(`/sessions/${id}/buffer`)).arrayBuffer(),
   );
 }
+// Raw bytes share the JSON transport's Bearer header, APIError and 401 event.
+export async function apiBlob(
+  path: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return (await request(path, "GET", undefined, signal)).blob();
+}
 // XHR exposes upload progress; fetch does not. Authentication and errors stay
 // shared with the JSON transport, and multipart boundaries belong to the browser.
 export function uploadFile(

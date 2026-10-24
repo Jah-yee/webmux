@@ -109,6 +109,9 @@ func (b *binding) directory(ctx context.Context, p string, include bool, ignored
 			kind = "special"
 		}
 		n := Node{ID: nodeID(rel), Path: displayPath(rel), Name: displayPath(name), Kind: kind, Ignored: isIgnored, Referenceable: utf8.ValidString(rel)}
+		if kind == "file" {
+			n.MediaType = nodeMediaType(name)
+		}
 		if kind == "symlink" {
 			data := make([]byte, 4096)
 			count, e := unix.Readlinkat(int(f.Fd()), name, data)

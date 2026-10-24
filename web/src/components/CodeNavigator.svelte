@@ -10,6 +10,7 @@
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import * as Tabs from "$lib/components/ui/tabs";
+  import IconPhoto from "~icons/tabler/photo";
 
   let {
     context,
@@ -185,7 +186,10 @@
             } else openFile(node.path, node.nodeId);
           }}
         >
-          <span class="break-all"
+          {#if node.mediaType.startsWith("image/")}<IconPhoto
+              class="mr-1 inline size-3.5 align-[-0.125em] text-muted-foreground"
+              aria-hidden="true"
+            />{/if}<span class="break-all"
             >{node.kind === "directory"
               ? "▸ "
               : node.kind === "boundary"

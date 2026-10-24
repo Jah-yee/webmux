@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -42,12 +43,13 @@ type Service struct {
 	snapshots map[string]*snapshot
 	bytes     int
 	slots     chan struct{}
+	transfers chan struct{}
 	done      chan struct{}
 	once      sync.Once
 }
 
 func New(m *session.Manager) *Service {
-	s := &Service{manager: m, roots: map[string]*binding{}, snapshots: map[string]*snapshot{}, slots: make(chan struct{}, 2), done: make(chan struct{})}
+	s := &Service{manager: m, roots: map[string]*binding{}, snapshots: map[string]*snapshot{}, slots: make(chan struct{}, 2), transfers: make(chan struct{}, 4), done: make(chan struct{})}
 	go s.sweep()
 	return s
 }
@@ -364,9 +366,19 @@ func document(root, p, source, oid string, data []byte) Document {
 			d.Reason = "超过 20000 行"
 		} else {
 			d.Text = string(data)
+			if extension(p) == ".svg" && svg(d.Text) {
+				d.MediaType = svgMediaType
+			}
 		}
 	}
 	return d
+}
+func fileIdentity(info os.FileInfo) *identity {
+	id := &identity{size: info.Size(), mtime: info.ModTime().UnixNano()}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		id.dev, id.ino = uint64(st.Dev), uint64(st.Ino)
+	}
+	return id
 }
 func (b *binding) read(p string) (Document, error) {
 	f, err := b.open(p)
@@ -381,7 +393,12 @@ func (b *binding) read(p string) (Document, error) {
 	if !before.Mode().IsRegular() {
 		return Document{}, problem(400, "目标不是常规文件")
 	}
-	data, err := io.ReadAll(io.LimitReader(f, MaxBytes+1))
+	candidate := imageCandidate(p)
+	limit := int64(MaxBytes + 1)
+	if candidate {
+		limit = headerBytes
+	}
+	data, err := io.ReadAll(io.LimitReader(f, limit))
 	if err != nil {
 		return Document{}, err
 	}
@@ -398,10 +415,20 @@ func (b *binding) read(p string) (Document, error) {
 	if e != nil || !os.SameFile(before, now) || before.Size() != after.Size() || before.ModTime() != after.ModTime() {
 		return Document{}, problem(409, "读取期间文件发生变化，请刷新")
 	}
-	d := document(b.Root, p, "worktree", "", data)
-	if before.Size() > MaxBytes {
-		d.Version = version([]any{d.Version, before.Size(), before.ModTime()})
+	ident := fileIdentity(before)
+	var d Document
+	if candidate {
+		d = imageDocument(b.Root, p, "worktree", "", before.Size(), data)
+		d.Version = version([]any{ident.dev, ident.ino, ident.size, ident.mtime, digest(data)})
+	} else {
+		d = document(b.Root, p, "worktree", "", data)
+		if before.Size() > MaxBytes {
+			d.Version = version([]any{d.Version, before.Size(), before.ModTime()})
+		}
+		d.Size = before.Size()
+		d.Downloadable = d.Size <= MaxDownloadBytes
 	}
+	d.identity = ident
 	return d, nil
 }
 func (s *Service) put(v *snapshot) string {

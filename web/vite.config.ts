@@ -1,10 +1,18 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
+import Icons from "unplugin-icons/vite";
 import { fileURLToPath, URL } from "node:url";
 import { embedAssets } from "./scripts/embed-assets.ts";
 export default defineConfig({
-  plugins: [svelte(), tailwindcss(), embedAssets()],
+  // Iconify icons compile to Svelte components at build time; only imported
+  // icons are bundled and nothing is fetched from the Iconify API at runtime.
+  plugins: [
+    svelte(),
+    tailwindcss(),
+    Icons({ compiler: "svelte" }),
+    embedAssets(),
+  ],
   resolve: {
     alias: { $lib: fileURLToPath(new URL("./src/lib", import.meta.url)) },
   },

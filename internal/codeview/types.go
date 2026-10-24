@@ -59,6 +59,7 @@ type Node struct {
 	Ignored       bool   `json:"ignored"`
 	Referenceable bool   `json:"referenceable"`
 	Link          string `json:"linkTarget,omitempty"`
+	MediaType     string `json:"mediaType"`
 }
 type Listing struct {
 	Children []Node    `json:"children"`
@@ -88,6 +89,18 @@ type Document struct {
 	Lines         int    `json:"lineCount"`
 	Referenceable bool   `json:"referenceable"`
 	Reason        string `json:"reason"`
+	MediaType     string `json:"mediaType"`
+	Size          int64  `json:"size"`
+	Downloadable  bool   `json:"downloadable"`
+	// identity pins the worktree file a snapshot was read from (raw bytes).
+	identity *identity
+}
+
+// identity is the stat tuple a worktree raw transfer must still match.
+type identity struct {
+	dev, ino uint64
+	size     int64
+	mtime    int64
 }
 type File struct {
 	Snapshot string    `json:"snapshotId"`

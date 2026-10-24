@@ -19,13 +19,12 @@
   import type { z } from "zod";
   import { nodeId } from "../code-reference";
   import { Button } from "$lib/components/ui/button";
-  import {
-    IconLayoutSidebarLeftCollapse,
-    IconLayoutSidebarLeftExpand,
-    IconPictureInPictureOff,
-    IconPictureInPictureOn,
-    IconRefresh,
-  } from "@tabler/icons-svelte";
+  import IconLayoutSidebarLeftCollapse from "~icons/tabler/layout-sidebar-left-collapse";
+  import IconLayoutSidebarLeftExpand from "~icons/tabler/layout-sidebar-left-expand";
+  import IconPhoto from "~icons/tabler/photo";
+  import IconPictureInPictureOff from "~icons/tabler/picture-in-picture-off";
+  import IconPictureInPictureOn from "~icons/tabler/picture-in-picture-on";
+  import IconRefresh from "~icons/tabler/refresh";
   import { EditorView } from "@codemirror/view";
   import CodeDocumentView from "./CodeDocumentView.svelte";
   import type { TextInsertion } from "../terminal-draft.svelte";
@@ -630,6 +629,11 @@
           {#each tabs as tab (tab.key)}
             {@const path = tab.file?.document.path ?? tab.diff?.new.path ?? ""}
             {@const meta = `${tab.diff ? tab.diff.change.group : tab.file?.document.source}${tab.status !== "unchanged" ? " ●" : ""}`}
+            {@const image = [
+              tab.file?.document.mediaType,
+              tab.diff?.new.mediaType,
+              tab.diff?.old.mediaType,
+            ].some((type) => type?.startsWith("image/"))}
             <div class="flex shrink-0 items-center border-r">
               <button
                 role="tab"
@@ -638,7 +642,10 @@
                 title={path}
                 class="px-2 py-1.5 text-xs whitespace-nowrap"
                 onclick={() => activate(tab.key)}
-                >{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
+                >{#if image}<IconPhoto
+                    class="mr-1 inline size-3.5 align-[-0.125em]"
+                    aria-hidden="true"
+                  />{/if}{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
               >
               <button
                 aria-label={`关闭 ${path}`}
