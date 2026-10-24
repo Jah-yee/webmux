@@ -153,12 +153,28 @@ export async function createShell(
   await page.getByLabel("会话名称", { exact: false }).fill(name);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expect(page.locator(".xterm-helper-textarea")).toBeAttached();
   return new URL(page.url()).pathname.split("/").at(-1)!;
+}
+
+// A healthy connection shows no text; the status dot names it instead.
+export async function expectConnected(page: Page) {
+  const header = page.locator(".terminal-header");
+  await expect(header.getByRole("img", { name: /· 已连接$/ })).toBeVisible();
+  await expect(header.getByRole("status")).toHaveCount(0);
+}
+
+// Below 640px the header moves upload, fullscreen and scroll-to-latest into
+// the terminal menu; this opens the menu there and returns the entry.
+export async function headerAction(page: Page, name: string) {
+  if ((page.viewportSize()?.width ?? 1280) >= 640)
+    return page
+      .locator(".terminal-header")
+      .getByRole("button", { name, exact: true });
+  await page.getByRole("button", { name: "终端菜单", exact: true }).click();
+  return page.getByRole("menuitem", { name, exact: true });
 }
 
 export async function runCommand(page: Page, command: string) {

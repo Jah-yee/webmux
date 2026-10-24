@@ -128,6 +128,12 @@
   color: var(--warning);
   background: color-mix(in oklab, var(--warning) 8%, var(--background));
 }
+/* env() is unreadable from script; menus read these to clear the status bar
+   and home indicator. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
 .terminal-page {
   position: fixed;
   top: 0;

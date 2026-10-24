@@ -6,6 +6,7 @@ import {
   createShell,
   runCommand,
   expectTerminalLine,
+  expectConnected,
 } from "./fixtures";
 
 type Point = { x: number; y: number };
@@ -288,9 +289,7 @@ test("closed OSC 52 copy dialog does not reopen when the terminal is entered aga
   await page.getByRole("button", { name: "返回会话列表", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
   await page.getByRole("link", { name, exact: true }).click();
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expectTerminalLine(page, "first-done");
   await expect(dialog).toBeHidden();

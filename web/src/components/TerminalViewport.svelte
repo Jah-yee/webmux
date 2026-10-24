@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import IconArrowDown from "~icons/tabler/arrow-down";
   import { Button } from "$lib/components/ui/button";
   import SoftKeys from "./SoftKeys.svelte";
   import type { Modifiers } from "../input";
@@ -9,10 +10,12 @@
   interface ViewportTerminal {
     readonly selection: string;
     readonly restoring: boolean;
+    readonly atBottom: boolean;
     readonly connection: Connection;
     readonly modifiers: Modifiers;
     copySelection(): void;
     clearSelection(): void;
+    scrollToBottom(): void;
   }
   interface ViewportUploads {
     readonly dragging: boolean;
@@ -23,6 +26,7 @@
   let {
     container = $bindable(),
     terminal: t,
+    visible,
     uploads,
     quickMenu,
     send,
@@ -32,6 +36,8 @@
   }: {
     container?: HTMLDivElement;
     terminal: ViewportTerminal;
+    // Whether the terminal pane is on screen (mobile may show code instead).
+    visible: boolean;
     uploads: ViewportUploads;
     quickMenu: Snippet<["top" | "bottom"]>;
     send: (input: string) => void;
@@ -72,6 +78,15 @@
       >
         {t.connection === "connected" ? "正在恢复…" : "正在连接…"}
       </div>{/if}
+    {#if !t.atBottom && !t.restoring && visible}<Button
+        variant="secondary"
+        size="sm"
+        class="absolute right-3 bottom-3 z-10 border shadow-md sm:hidden"
+        aria-label="回到最新"
+        onmousedown={(event) => event.preventDefault()}
+        onclick={() => t.scrollToBottom()}
+        ><IconArrowDown aria-hidden="true" />回到最新</Button
+      >{/if}
   </div>
   <SoftKeys
     {send}

@@ -3,7 +3,13 @@ import { promisify } from "node:util";
 import { mkdir, writeFile, access, rename } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page, Locator } from "@playwright/test";
-import { test, expect, runCommand, expectTerminalLine } from "./fixtures";
+import {
+  test,
+  expect,
+  runCommand,
+  expectTerminalLine,
+  expectConnected,
+} from "./fixtures";
 import { startE2EServer } from "./server.mjs";
 
 const exec = promisify(execFile);
@@ -62,9 +68,7 @@ async function createTree(page: Page, branch: string, name: string) {
   await expect(branchInput).toHaveValue(branch);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   return { path, id: new URL(page.url()).pathname.split("/").at(-1)! };
 }
 

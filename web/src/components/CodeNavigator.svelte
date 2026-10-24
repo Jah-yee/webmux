@@ -32,6 +32,8 @@
     locate,
     sessionCwd,
     reportedCwd,
+    navStatus,
+    reload,
   }: {
     context: z.infer<typeof CodeContextSchema> | undefined;
     listing: CodeListing | undefined;
@@ -52,6 +54,8 @@
     locate: (input: string) => Promise<void>;
     sessionCwd: string;
     reportedCwd: ReportedCwd | null;
+    navStatus: string;
+    reload: () => void;
   } = $props();
   let locateInput = $state("");
   let locateError = $state("");
@@ -90,6 +94,22 @@
   class="code-navigation flex min-h-0 shrink-0 flex-col overflow-hidden border-r"
   aria-label="文件与修改导航"
 >
+  {#if navStatus}<div class="flex shrink-0 items-center gap-1 px-2 pt-1">
+      <p
+        role="status"
+        class="min-w-0 flex-1 truncate text-xs text-warning"
+        title={navStatus}
+      >
+        {navStatus}
+      </p>
+      <Button variant="outline" size="sm" onclick={reload}>刷新导航</Button>
+    </div>
+  {:else}<p
+      class="shrink-0 truncate px-2 pt-1 text-left text-xs text-muted-foreground [direction:rtl]"
+      title={context?.rootPath}
+    >
+      <bdi>{context?.rootPath ?? "读取代码目录…"}</bdi>
+    </p>{/if}
   <Tabs.Root
     value={nav}
     onValueChange={(v) => {

@@ -289,3 +289,22 @@ test("native long press selects wide text and dragging copies multiple lines wit
     .element(page.getByRole("status", { name: "Terminal selection" }))
     .toHaveTextContent("");
 });
+
+test("viewing history is reported until the terminal returns to the latest output", async () => {
+  observeGlyphPixels(true);
+  const { socket } = await openTerminal();
+  await populateHistory(socket);
+  const position = page.getByRole("status", { name: "Terminal position" });
+  await expect.element(position).toHaveTextContent("latest");
+  await swipe(socket, 4.25);
+  await expect.element(position).toHaveTextContent("history");
+  // Output arriving while reading history does not pull the reader down.
+  socket.receive(0, "\r\nlater output");
+  await expect.element(position).toHaveTextContent("history");
+  await page.getByRole("button", { name: "Scroll to latest" }).click();
+  await expect.element(position).toHaveTextContent("latest");
+  await expectDomText("later output");
+  socket.receive(0, "\r\nnewest output");
+  await expectDomText("newest output");
+  await expect.element(position).toHaveTextContent("latest");
+});

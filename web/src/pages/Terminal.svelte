@@ -401,6 +401,7 @@
       <TerminalViewport
         bind:container
         terminal={t}
+        visible={terminalVisible()}
         {uploads}
         {quickMenu}
         send={softInput}

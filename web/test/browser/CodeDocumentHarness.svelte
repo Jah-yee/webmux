@@ -10,6 +10,7 @@
   let active = $state(true);
   let status = $state("unchanged");
   let inserted = $state("");
+  let width = $state(650);
   const original = $derived(
     syntax
       ? 'const message = "<img src=x onerror=alert(1)>";\n'
@@ -85,7 +86,9 @@
 <button onclick={() => revision++}>Replace snapshot</button>
 <button onclick={() => (active = !active)}>Toggle active</button>
 <button onclick={() => (status = "expired")}>Expire snapshot</button>
-<div style="height:650px;width:650px">
+<button onclick={() => (width = width === 650 ? 900 : 650)}>Toggle width</button
+>
+<div style:height="650px" style:width={`${width}px`}>
   <CodeDocumentView
     id="session"
     {diff}

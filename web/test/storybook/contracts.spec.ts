@@ -18,15 +18,9 @@ test("the production diff bundles its highlighting worker", async ({
   const diff = page.locator(".code-diff-reader");
   await expect(diff.locator("[data-line] span[style]").first()).toBeVisible();
   await expect(diff.locator("[data-diff-span]").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "并排视图" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(diff.locator("pre")).toHaveAttribute("data-diff-type", "split");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole("button", { name: "统一视图" })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(diff.locator("pre")).toHaveAttribute("data-diff-type", "single");
   await page.getByRole("button", { name: "自动换行" }).click();
   await expect(diff.locator("[data-line] span[style]").first()).toBeVisible();
   expect(errors).toEqual([]);

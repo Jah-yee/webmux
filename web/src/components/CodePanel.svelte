@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, type Snippet } from "svelte";
   import CodeNavigator from "./CodeNavigator.svelte";
   import { api } from "../api";
   import {
@@ -25,6 +25,8 @@
   import IconPictureInPictureOff from "~icons/tabler/picture-in-picture-off";
   import IconPictureInPictureOn from "~icons/tabler/picture-in-picture-on";
   import IconRefresh from "~icons/tabler/refresh";
+  import IconDots from "~icons/tabler/dots";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { EditorView } from "@codemirror/view";
   import CodeDocumentView from "./CodeDocumentView.svelte";
   import type { TextInsertion } from "../terminal-draft.svelte";
@@ -53,6 +55,8 @@
     status: string;
     sequence: number;
     comparison?: CodeDiff;
+    // Narrow-screen menu content supplied by the tab's document view.
+    menu?: Snippet;
   };
   let context = $state<z.infer<typeof CodeContextSchema>>();
   let listing = $state<CodeListing>();
@@ -75,6 +79,20 @@
   let popping = false;
   const canPopOut = popoutAvailable();
   const shown = $derived(visible || !!popout);
+  const activeMenu = $derived(tabs.find((tab) => tab.key === active)?.menu);
+  // Keep the narrow menu clear of the status bar and home indicator; env()
+  // is readable only through computed custom properties.
+  function safeAreaPadding() {
+    const style = getComputedStyle(section ?? document.documentElement);
+    const inset = (name: string) =>
+      parseFloat(style.getPropertyValue(name)) || 0;
+    return {
+      top: 8 + inset("--safe-top"),
+      bottom: 8 + inset("--safe-bottom"),
+      left: 8,
+      right: 8,
+    };
+  }
   async function togglePopout() {
     if (popout) return popout.close();
     if (!section || popping) return;
@@ -518,50 +536,107 @@
     class="code-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
     aria-label="代码工作区"
   >
-    <header class="flex shrink-0 items-center gap-2 border-b px-2 py-1">
-      <Button
-        variant="outline"
-        size="icon-sm"
-        aria-label={navOpen ? "收起导航" : "文件导航"}
-        aria-expanded={navOpen}
-        title={navOpen ? "收起导航" : "文件导航"}
-        onclick={() => (navOpen = !navOpen)}
-        >{#if navOpen}<IconLayoutSidebarLeftCollapse
-          />{:else}<IconLayoutSidebarLeftExpand />{/if}</Button
-      >
-      {#if navStatus}<span
-          role="status"
-          class="min-w-0 flex-1 truncate text-xs text-warning"
-          title={navStatus}>{navStatus}</span
-        ><Button variant="outline" size="sm" onclick={() => void load()}
-          >刷新导航</Button
-        >
-      {:else}<span
-          class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-          title={context?.rootPath}>{context?.rootPath ?? "读取代码目录…"}</span
-        >{/if}
-      <Button
-        variant="outline"
-        size="icon-sm"
-        aria-label="刷新全部"
-        title="刷新全部"
-        disabled={pending}
-        onclick={() => {
-          void load();
-          for (const tab of tabs) void refresh(tab);
-        }}><IconRefresh /></Button
-      >
-      {#if canPopOut}<Button
+    <div class="flex shrink-0 items-stretch border-b">
+      <div class="flex shrink-0 items-center px-2 py-1">
+        <Button
           variant="outline"
           size="icon-sm"
-          aria-label={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
-          aria-pressed={!!popout}
-          title={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
-          onclick={() => void togglePopout()}
-          >{#if popout}<IconPictureInPictureOff />{:else}<IconPictureInPictureOn
-            />{/if}</Button
-        >{/if}
-    </header>
+          class="relative"
+          aria-label={navOpen ? "收起导航" : "文件导航"}
+          aria-expanded={navOpen}
+          title={navOpen
+            ? "收起导航"
+            : navStatus
+              ? `文件导航（${navStatus}）`
+              : "文件导航"}
+          onclick={() => (navOpen = !navOpen)}
+          >{#if navOpen}<IconLayoutSidebarLeftCollapse
+            />{:else}<IconLayoutSidebarLeftExpand
+            />{/if}{#if navStatus && !navOpen}<span
+              class="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-warning"
+              aria-hidden="true"
+            ></span>{/if}</Button
+        >
+      </div>
+      <div
+        class="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:thin]"
+        role="tablist"
+        aria-label="文件标签"
+      >
+        {#each tabs as tab (tab.key)}
+          {@const path = tab.file?.document.path ?? tab.diff?.new.path ?? ""}
+          {@const meta = `${tab.diff ? tab.diff.change.group : tab.file?.document.source}${tab.status !== "unchanged" ? " ●" : ""}`}
+          {@const image = [
+            tab.file?.document.mediaType,
+            tab.diff?.new.mediaType,
+            tab.diff?.old.mediaType,
+          ].some((type) => type?.startsWith("image/"))}
+          <div class="flex shrink-0 items-center border-r first:border-l">
+            <button
+              role="tab"
+              aria-selected={active === tab.key}
+              aria-label={`${path} · ${meta}`}
+              title={path}
+              class="px-2 py-1.5 text-xs whitespace-nowrap aria-selected:font-medium aria-selected:text-foreground"
+              onclick={() => activate(tab.key)}
+              >{#if image}<IconPhoto
+                  class="mr-1 inline size-3.5 align-[-0.125em]"
+                  aria-hidden="true"
+                />{/if}{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
+            >
+            <button
+              aria-label={`关闭 ${path}`}
+              class="px-2"
+              onclick={() => close(tab.key)}>×</button
+            >
+          </div>{/each}
+      </div>
+      <div class="flex shrink-0 items-center gap-1 px-2 py-1">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="刷新全部"
+          title={context?.rootPath
+            ? `刷新全部（${context.rootPath}）`
+            : "刷新全部"}
+          disabled={pending}
+          onclick={() => {
+            void load();
+            for (const tab of tabs) void refresh(tab);
+          }}><IconRefresh /></Button
+        >
+        {#if canPopOut}<Button
+            variant="outline"
+            size="icon-sm"
+            class="max-sm:hidden"
+            aria-label={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
+            aria-pressed={!!popout}
+            title={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
+            onclick={() => void togglePopout()}
+            >{#if popout}<IconPictureInPictureOff
+              />{:else}<IconPictureInPictureOn />{/if}</Button
+          >{/if}
+        {#if activeMenu}<DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              {#snippet child({ props })}<Button
+                  {...props}
+                  variant="outline"
+                  size="icon-sm"
+                  class="sm:hidden"
+                  aria-label="代码菜单"
+                  title="代码菜单"><IconDots aria-hidden="true" /></Button
+                >{/snippet}
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content
+              align="end"
+              collisionPadding={safeAreaPadding()}
+              class="w-72 max-w-[calc(100vw-1rem)]"
+            >
+              {@render activeMenu()}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>{/if}
+      </div>
+    </div>
     {#if error}<p
         role="alert"
         class="shrink-0 px-2 py-1 text-sm break-all text-destructive"
@@ -586,6 +661,8 @@
           {pending}
           {sessionCwd}
           {reportedCwd}
+          {navStatus}
+          reload={() => void load()}
           changesEnabled={shown && !changesError && !navStatus}
           bind:nav
           bind:query
@@ -614,39 +691,6 @@
           onkeydown={resizeKey}
         ></div>{/if}
       <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <div
-          class="flex shrink-0 overflow-x-auto border-b [scrollbar-width:thin]"
-          role="tablist"
-          aria-label="文件标签"
-        >
-          {#each tabs as tab (tab.key)}
-            {@const path = tab.file?.document.path ?? tab.diff?.new.path ?? ""}
-            {@const meta = `${tab.diff ? tab.diff.change.group : tab.file?.document.source}${tab.status !== "unchanged" ? " ●" : ""}`}
-            {@const image = [
-              tab.file?.document.mediaType,
-              tab.diff?.new.mediaType,
-              tab.diff?.old.mediaType,
-            ].some((type) => type?.startsWith("image/"))}
-            <div class="flex shrink-0 items-center border-r">
-              <button
-                role="tab"
-                aria-selected={active === tab.key}
-                aria-label={`${path} · ${meta}`}
-                title={path}
-                class="px-2 py-1.5 text-xs whitespace-nowrap"
-                onclick={() => activate(tab.key)}
-                >{#if image}<IconPhoto
-                    class="mr-1 inline size-3.5 align-[-0.125em]"
-                    aria-hidden="true"
-                  />{/if}{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
-              >
-              <button
-                aria-label={`关闭 ${path}`}
-                class="px-2"
-                onclick={() => close(tab.key)}>×</button
-              >
-            </div>{/each}
-        </div>
         {#each tabs as tab (tab.key)}<div
             class="min-h-0 flex-1 overflow-hidden"
             class:hidden={active !== tab.key}
@@ -668,6 +712,7 @@
               {beginOpen}
               openSide={(file, intent) =>
                 install(file, undefined, intent === selectionSequence)}
+              bind:menu={tab.menu}
             />
           </div>{/each}
         {#if !tabs.length}<p class="p-4 text-sm text-muted-foreground">

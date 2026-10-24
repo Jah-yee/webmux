@@ -1,7 +1,14 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import { test, expect, createShell, quote, recordInput } from "./fixtures";
+import {
+  test,
+  expect,
+  createShell,
+  headerAction,
+  quote,
+  recordInput,
+} from "./fixtures";
 
 const mode = (page: Page) => page.getByRole("button", { name: /^草稿模式/ });
 const draft = (page: Page) =>
@@ -99,7 +106,7 @@ test("code references and uploaded paths join the same draft without PTY input",
     r.url().endsWith(`/api/sessions/${id}/upload`),
   );
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "上传文件", exact: true }).click();
+  await (await headerAction(page, "上传文件")).click();
   await (
     await chooser
   ).setFiles({
@@ -331,7 +338,7 @@ for (const initialDraft of [true, false]) {
         r.url().endsWith(`/api/sessions/${id}/upload`),
       );
       const chooser = page.waitForEvent("filechooser");
-      await page.getByRole("button", { name: "上传文件", exact: true }).click();
+      await (await headerAction(page, "上传文件")).click();
       await (
         await chooser
       ).setFiles({
@@ -470,7 +477,7 @@ test("an uploaded path waiting for terminal recovery moves to draft immediately"
   });
   try {
     const chooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "上传文件", exact: true }).click();
+    await (await headerAction(page, "上传文件")).click();
     await page.evaluate(() => {
       Object.defineProperty(document, "hidden", {
         configurable: true,

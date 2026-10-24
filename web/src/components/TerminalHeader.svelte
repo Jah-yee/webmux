@@ -1,12 +1,10 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import {
-    IconArrowLeft,
-    IconArrowDown,
-    IconMaximize,
-    IconMinimize,
-    IconUpload,
-  } from "@tabler/icons-svelte";
+  import IconArrowLeft from "~icons/tabler/arrow-left";
+  import IconArrowDown from "~icons/tabler/arrow-down";
+  import IconMaximize from "~icons/tabler/maximize";
+  import IconMinimize from "~icons/tabler/minimize";
+  import IconUpload from "~icons/tabler/upload";
   import { navigate, sessionStatusText } from "../api";
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -64,6 +62,25 @@
     close: () => void;
   } = $props();
   let fileInput: HTMLInputElement;
+  const connectionText = $derived(
+    t.connection === "connected"
+      ? "已连接"
+      : t.connection === "exited"
+        ? "已退出"
+        : t.connection === "missing"
+          ? "不存在"
+          : "重连中",
+  );
+  const uploadDisabled = $derived(
+    uploading ||
+      (!draft.enabled && t.connection !== "connected") ||
+      t.connection === "missing" ||
+      t.exitCode !== null,
+  );
+  function scrollToLatest() {
+    t.scrollToBottom();
+    if (!desktop) codeShown = false;
+  }
 </script>
 
 <header
@@ -80,48 +97,44 @@
   <span class="min-w-0 flex-1 truncate text-sm font-medium"
     >{t.info?.title || "终端"}</span
   >
+  <!-- Text appears before the dot so reconnecting only narrows the title
+       instead of shifting the dot and the actions. -->
+  {#if !t.info || t.connection !== "connected"}<span
+      class="text-xs whitespace-nowrap text-muted-foreground"
+      role="status">{connectionText}</span
+    >{/if}
   {#if t.info}<span
       class={`status-dot status-${t.info.status}`}
       class:status-failed={t.info.status === "exited" &&
         t.info.exitCode !== null &&
         t.info.exitCode !== 0}
       role="img"
-      aria-label={sessionStatusText(t.info)}
-      title={sessionStatusText(t.info)}
+      aria-label={`${sessionStatusText(t.info)} · ${connectionText}`}
+      title={`${sessionStatusText(t.info)} · ${connectionText}`}
     ></span>{/if}
-  <span class="text-xs text-muted-foreground" role="status"
-    >{t.connection === "connected"
-      ? "已连接"
-      : t.connection === "exited"
-        ? "已退出"
-        : t.connection === "missing"
-          ? "不存在"
-          : "重连中"}</span
-  >
+  {#if fullscreen.offered}<Button
+      variant="ghost"
+      size="icon-sm"
+      class="max-sm:hidden"
+      aria-label={fullscreen.active ? "退出全屏" : "全屏"}
+      title={fullscreen.active ? "退出全屏" : "全屏"}
+      aria-pressed={fullscreen.active}
+      aria-busy={fullscreen.busy}
+      disabled={fullscreen.busy}
+      onclick={() => {
+        void fullscreen.toggle();
+      }}
+    >
+      {#if fullscreen.active}<IconMinimize class="size-4" aria-hidden="true" />
+      {:else}<IconMaximize class="size-4" aria-hidden="true" />{/if}
+    </Button>{/if}
   <Button
     variant="ghost"
     size="icon-sm"
-    aria-label={fullscreen.active ? "退出全屏" : "全屏"}
-    title={fullscreen.active ? "退出全屏" : "全屏"}
-    aria-pressed={fullscreen.active}
-    aria-busy={fullscreen.busy}
-    disabled={fullscreen.busy}
-    onclick={() => {
-      void fullscreen.toggle();
-    }}
-  >
-    {#if fullscreen.active}<IconMinimize class="size-4" />
-    {:else}<IconMaximize class="size-4" />{/if}
-  </Button>
-  <Button
-    variant="ghost"
-    size="icon-sm"
+    class="max-sm:hidden"
     aria-label="上传文件"
     title="上传文件"
-    disabled={uploading ||
-      (!draft.enabled && t.connection !== "connected") ||
-      t.connection === "missing" ||
-      t.exitCode !== null}
+    disabled={uploadDisabled}
     onclick={() => fileInput.click()}
     ><IconUpload class="size-4" aria-hidden="true" /></Button
   >
@@ -139,13 +152,12 @@
   <Button
     variant="ghost"
     size="icon-sm"
+    class="max-sm:hidden"
     aria-label="滚动到最新位置"
     title="滚动到最新位置"
     disabled={t.restoring}
-    onclick={() => {
-      t.scrollToBottom();
-      if (!desktop) codeShown = false;
-    }}><IconArrowDown class="size-4" aria-hidden="true" /></Button
+    onclick={scrollToLatest}
+    ><IconArrowDown class="size-4" aria-hidden="true" /></Button
   >
   <div class="quick-commands-header flex">{@render quickMenu("bottom")}</div>
   <Button
@@ -190,6 +202,26 @@
         >{/snippet}
     </DropdownMenu.Trigger>
     <DropdownMenu.Content align="end">
+      <!-- Narrow headers keep only frequent actions; these mirror the
+           buttons hidden below 640px. -->
+      {#if fullscreen.offered}<DropdownMenu.Item
+          class="sm:hidden"
+          disabled={fullscreen.busy}
+          onSelect={() => {
+            void fullscreen.toggle();
+          }}>{fullscreen.active ? "退出全屏" : "全屏"}</DropdownMenu.Item
+        >{/if}
+      <DropdownMenu.Item
+        class="sm:hidden"
+        disabled={uploadDisabled}
+        onSelect={() => fileInput.click()}>上传文件</DropdownMenu.Item
+      >
+      <DropdownMenu.Item
+        class="sm:hidden"
+        disabled={t.restoring}
+        onSelect={scrollToLatest}>滚动到最新位置</DropdownMenu.Item
+      >
+      <DropdownMenu.Separator class="sm:hidden" />
       <DropdownMenu.Item
         onSelect={() => {
           void copy();

@@ -6,6 +6,7 @@ import {
   createShell,
   expectTerminalLine,
   recordInput,
+  expectConnected,
 } from "./fixtures";
 
 // Only one entry is rendered visibly at a time; role queries skip the hidden one.
@@ -42,9 +43,7 @@ async function addCommand(page: Page, command: string, enter: boolean) {
 async function backToTerminal(page: Page, id: string) {
   await page.getByRole("button", { name: "返回终端", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/s/${id}$`));
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
 }
 
@@ -172,9 +171,7 @@ test("commands are disabled while the terminal cannot send, but drafts still acc
 
   blockReconnect = false;
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
-    "已连接",
-  );
+  await expectConnected(page);
   await request.delete(`/api/sessions/${id}`);
   await expect(page.locator(".terminal-header").getByRole("status")).toHaveText(
     "已退出",

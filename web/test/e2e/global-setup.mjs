@@ -1,6 +1,15 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { cp, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+  access,
+  cp,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  stat,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,10 +48,26 @@ async function build(command, args, cwd) {
   }
 }
 
-// Build the real embedded application once per invocation, before any workers
-// start. Workers and retries share only this immutable executable; each server
-// still owns its ports, HOME, state directory, repositories and PTYs.
+// Ubuntu CI supplies one freshly built executable to every shard. Other runs
+// build once per invocation. Workers and retries share only the executable;
+// each server owns its ports, HOME, state directory, repositories and PTYs.
 export default async function globalSetup() {
+  const prepared = process.env.WEBMUX_E2E_BINARY;
+  if (prepared) {
+    try {
+      const binary = await realpath(prepared);
+      if (!(await stat(binary)).isFile())
+        throw new Error("expected an executable file");
+      await access(binary, constants.X_OK);
+      process.env.WEBMUX_E2E_BINARY = binary;
+      console.log("E2E build: using prepared binary");
+      return;
+    } catch (error) {
+      throw new Error(`Invalid WEBMUX_E2E_BINARY: ${error.message}`, {
+        cause: error,
+      });
+    }
+  }
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "webmux-e2e-build-")),
   );

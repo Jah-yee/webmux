@@ -1,6 +1,13 @@
 import { onMount } from "svelte";
+import {
+  fullscreenOffered,
+  fullscreenSupported,
+  isStandalone,
+} from "../capabilities";
 
 export interface Fullscreen {
+  // Whether the page offers a fullscreen control at all.
+  readonly offered: boolean;
   readonly active: boolean;
   readonly busy: boolean;
   toggle(): Promise<void>;
@@ -13,6 +20,11 @@ export function useFullscreen(setError: (message: string) => void): Fullscreen {
   let busy = $state(false);
   let owned = false;
   let mounted = false;
+  // Neither capability changes while the page runs.
+  const offered = fullscreenOffered({
+    supported: fullscreenSupported(),
+    standalone: isStandalone(),
+  });
 
   onMount(() => {
     mounted = true;
@@ -37,11 +49,7 @@ export function useFullscreen(setError: (message: string) => void): Fullscreen {
   async function toggle() {
     if (busy) return;
     setError("");
-    if (
-      !document.fullscreenElement &&
-      (!document.fullscreenEnabled ||
-        typeof document.documentElement.requestFullscreen !== "function")
-    ) {
+    if (!document.fullscreenElement && !fullscreenSupported()) {
       setError(
         "当前浏览器环境未开放网页全屏；可尝试“添加到主屏幕”以独立模式打开，减少浏览器底栏。",
       );
@@ -79,6 +87,7 @@ export function useFullscreen(setError: (message: string) => void): Fullscreen {
   }
 
   return {
+    offered,
     get active() {
       return active;
     },

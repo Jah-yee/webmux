@@ -61,4 +61,8 @@
   <output aria-label="Copy requests">{copies}</output>
   <button onclick={() => terminal.copySelection()}>Copy selection</button>
   <button onclick={() => terminal.clearSelection()}>Clear selection</button>
+  <output aria-label="Terminal position"
+    >{terminal.atBottom ? "latest" : "history"}</output
+  >
+  <button onclick={() => terminal.scrollToBottom()}>Scroll to latest</button>
 </div>

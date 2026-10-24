@@ -33,6 +33,8 @@ export interface TerminalController {
   readonly modifiers: Modifiers;
   readonly error: string;
   readonly selection: string;
+  // Whether the newest output is in view (see `updateBottom`).
+  readonly atBottom: boolean;
   readonly historyTruncated: boolean;
   readonly control: ControlState | undefined;
   readonly controlling: boolean;
@@ -86,6 +88,9 @@ export function useTerminal(
   );
   let modifiers = $state<Modifiers>({ ctrl: false, alt: false });
   let selection = $state("");
+  // Whether the newest output is in view: the xterm viewport sits at the
+  // buffer end and, for an observer panning a larger grid, the host does too.
+  let atBottom = $state(true);
   let pasteResult = false;
   function safeFit() {
     const parent = getContainer();
@@ -105,9 +110,20 @@ export function useTerminal(
       } else renderer?.fit();
       if (scrollOnFit && terminal) {
         terminal.scrollToBottom();
+        if (stream.observing) parent.scrollTop = parent.scrollHeight;
         scrollOnFit = false;
       }
+      updateBottom();
     }
+  }
+  function updateBottom() {
+    const parent = getContainer();
+    if (!terminal || !parent) return;
+    const buffer = terminal.buffer.active;
+    atBottom =
+      buffer.viewportY >= buffer.baseY &&
+      (!parent.classList.contains("observing") ||
+        parent.scrollTop + parent.clientHeight >= parent.scrollHeight - 1);
   }
   function scrollToBottom() {
     scrollOnFit = true;
@@ -163,6 +179,9 @@ export function useTerminal(
       const selected = term.onSelectionChange(() => {
         selection = term.getSelection();
       });
+      const scrolled = term.onScroll(updateBottom);
+      const parsed = term.onWriteParsed(updateBottom);
+      parent.addEventListener("scroll", updateBottom, { passive: true });
       const detachTouch = attachTouchGestures(term, parent, {
         fontSize: () => fontSize,
         setFontSize,
@@ -177,11 +196,15 @@ export function useTerminal(
         view.dispose();
         detachTouch();
         detachInput();
+        scrolled.dispose();
+        parsed.dispose();
+        parent.removeEventListener("scroll", updateBottom);
         selected.dispose();
         attachment.dispose();
         terminal = undefined;
         renderer = undefined;
         parent.classList.remove("observing");
+        atBottom = true;
         scrollOnFit = false;
       };
     }
@@ -219,6 +242,9 @@ export function useTerminal(
     },
     get selection() {
       return selection;
+    },
+    get atBottom() {
+      return atBottom;
     },
     get historyTruncated() {
       return stream.historyTruncated;
