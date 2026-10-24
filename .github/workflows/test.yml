@@ -119,13 +119,13 @@ jobs:
           retention-days: 14
 
   e2e:
-    name: E2E (Ubuntu ${{ matrix.shard }}/2)
+    name: E2E (Ubuntu ${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -133,7 +133,7 @@ jobs:
           go: "true"
           browsers: "true"
       - name: Run Playwright E2E shard
-        run: pnpm --dir web exec playwright test --config playwright.config.ts --shard=${{ matrix.shard }}/2
+        run: pnpm --dir web exec playwright test --config playwright.config.ts --shard=${{ matrix.shard }}/6
       - name: Preserve E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v4
