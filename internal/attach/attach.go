@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,8 +24,13 @@ import (
 
 // inputModeReset turns off what a session's program may have enabled in the
 // native terminal: win32-input-mode, modifyOtherKeys, kitty keyboard flags,
-// mouse and focus reporting and bracketed paste; and shows the cursor.
-const inputModeReset = "\x1b[?9001l\x1b[>4;0m\x1b[<99u\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[?25h"
+// mouse and focus reporting, bracketed paste and colour scheme reports; and
+// shows the cursor.
+const inputModeReset = "\x1b[?9001l\x1b[>4;0m\x1b[<99u\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[?2031l\x1b[?25h"
+
+// backgroundQuery asks the native terminal for its background colour (OSC 11),
+// which nearly every terminal answers, unlike CSI ? 996 n.
+const backgroundQuery = "\x1b]11;?\x1b\\"
 
 // DetachKey is Ctrl+], which never reaches the session.
 const DetachKey = 0x1d
@@ -47,6 +53,7 @@ const (
 	sendResize  = 0x01
 	sendResync  = 0x02
 	sendControl = 0x05
+	sendReply   = 0x06
 )
 
 // Close codes of /ws/s/{id}.
@@ -153,11 +160,15 @@ type attachment struct {
 	cols, rows int
 
 	// controlMu guards whether this terminal controls the session, an
-	// unconfirmed claim, and the controlling client's label.
-	controlMu  sync.Mutex
-	controlled bool
-	claiming   bool
-	controller string
+	// unconfirmed claim, the controlling client's label, whether the
+	// program asked for colour scheme reports, and unanswered background
+	// queries.
+	controlMu     sync.Mutex
+	controlled    bool
+	claiming      bool
+	controller    string
+	schemeReports bool
+	probes        int
 }
 
 func (a *attachment) send(ctx context.Context, frame []byte) error {
@@ -206,7 +217,12 @@ func (a *attachment) pumpInput(ctx context.Context) error {
 	for {
 		n, err := a.term.Read(buf)
 		if n > 0 {
-			chunk := buf[:n]
+			chunk, report := a.takeBackground(buf[:n])
+			if report != nil {
+				if err := a.send(ctx, append([]byte{sendReply}, report...)); err != nil {
+					return fmt.Errorf("connection lost: %w", err)
+				}
+			}
 			at := detachIndex(chunk)
 			if at >= 0 {
 				chunk = chunk[:at]
@@ -239,6 +255,67 @@ func (a *attachment) isControlling() bool {
 	return a.controlled
 }
 
+// takeBackground removes the answers to this client's background queries
+// from chunk. While controlling, it returns the colour scheme report for the
+// last one: CSI ? 997 ; 1 n for dark, 2 for light. A reply split across reads
+// is not recognised and reaches the session as input.
+func (a *attachment) takeBackground(chunk []byte) ([]byte, []byte) {
+	a.controlMu.Lock()
+	defer a.controlMu.Unlock()
+	var report []byte
+	for a.probes > 0 {
+		start, end, dark, ok := backgroundReply(chunk)
+		if !ok {
+			break
+		}
+		a.probes--
+		chunk = append(chunk[:start:start], chunk[end:]...)
+		if a.controlled && !a.claiming && a.schemeReports {
+			report = []byte("\x1b[?997;2n")
+			if dark {
+				report = []byte("\x1b[?997;1n")
+			}
+		}
+	}
+	return chunk, report
+}
+
+// backgroundReply finds an OSC 11 answer, ESC ] 11 ; rgb:R/G/B ended by BEL
+// or ST, in p and reports whether that colour is dark.
+func backgroundReply(p []byte) (start, end int, dark, ok bool) {
+	const prefix = "\x1b]11;rgb:"
+	start = bytes.Index(p, []byte(prefix))
+	if start < 0 {
+		return 0, 0, false, false
+	}
+	body := p[start+len(prefix):]
+	n := bytes.IndexAny(body, "\a\x1b")
+	if n < 0 {
+		return 0, 0, false, false
+	}
+	end = start + len(prefix) + n + 1
+	if body[n] == 0x1b {
+		if n+1 >= len(body) || body[n+1] != '\\' {
+			return 0, 0, false, false
+		}
+		end++
+	}
+	parts := bytes.Split(body[:n], []byte("/"))
+	if len(parts) != 3 {
+		return 0, 0, false, false
+	}
+	luminance := 0.0
+	for i, weight := range []float64{0.2126, 0.7152, 0.0722} {
+		digits := len(parts[i])
+		v, err := strconv.ParseUint(string(parts[i]), 16, 16)
+		if err != nil || digits == 0 || digits > 4 {
+			return 0, 0, false, false
+		}
+		luminance += weight * float64(v) / float64(uint64(1)<<(4*digits)-1)
+	}
+	return start, end, luminance < 0.5, true
+}
+
 // takeControl claims the session, applies this terminal's size and asks for
 // a replay, which repaints over the banner and confirms the claim.
 func (a *attachment) takeControl(ctx context.Context) error {
@@ -253,19 +330,25 @@ func (a *attachment) takeControl(ctx context.Context) error {
 }
 
 // applyControl records a control frame and reports whether this terminal
-// controls the session afterwards.
-func (a *attachment) applyControl(body []byte) bool {
+// controls the session afterwards, and whether it should query its
+// background to announce its colour scheme: as in the browser, when it starts
+// answering for a program that wants reports, or the program starts wanting
+// them. The program may have asked before this terminal attached, or been
+// answered with another device's theme.
+func (a *attachment) applyControl(body []byte) (controlling, probe bool) {
 	var state struct {
 		Controller *struct {
 			ClientID string `json:"clientId"`
 			Label    string `json:"label"`
 		} `json:"controller"`
+		ColorSchemeReports bool `json:"colorSchemeReports"`
 	}
 	if json.Unmarshal(body, &state) != nil {
-		return a.isControlling()
+		return a.isControlling(), false
 	}
 	a.controlMu.Lock()
 	defer a.controlMu.Unlock()
+	was := a.controlled && !a.claiming
 	mine := state.Controller != nil && state.Controller.ClientID == a.client
 	switch {
 	case mine:
@@ -279,7 +362,13 @@ func (a *attachment) applyControl(body []byte) bool {
 			a.controller = state.Controller.Label
 		}
 	}
-	return a.controlled
+	// The mode belongs to the session, so it is current even mid-claim.
+	probe = state.ColorSchemeReports && mine && (!was || !a.schemeReports)
+	a.schemeReports = state.ColorSchemeReports
+	if probe {
+		a.probes++
+	}
+	return a.controlled, probe
 }
 
 // banner is drawn over the top-left corner while another client controls
@@ -469,10 +558,15 @@ func (a *attachment) pumpOutput(ctx context.Context) readResult {
 			if a.observe {
 				continue
 			}
-			if a.applyControl(frame[1:]) {
+			controlling, probe := a.applyControl(frame[1:])
+			if controlling {
 				// Sent when this connection becomes the active one again.
 				a.resize(ctx, true)
-				continue
+				if !probe {
+					continue
+				}
+				out = []byte(backgroundQuery)
+				break
 			}
 			out = []byte{}
 		}

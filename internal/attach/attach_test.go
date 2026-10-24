@@ -255,6 +255,61 @@ func TestOtherControllerKeepsControlUntilEnter(t *testing.T) {
 	}
 }
 
+// A program that enabled colour scheme reports (DEC 2031) before the native
+// terminal attached learns that terminal's scheme from its background: the
+// probe's answer is consumed, and only CSI ? 997 ; 1|2 n reaches the program.
+func TestAttachReportsNativeColorScheme(t *testing.T) {
+	for _, tc := range []struct {
+		name, background, want string
+	}{
+		{"dark", "\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\", "E[?997;1n"},
+		{"light", "\x1b]11;rgb:ffff/fafa/f0f0\a", "E[?997;2n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, client := server(t)
+			s, err := m.Create("", "custom", []string{"sh", "-c", `stty -icanon -echo; printf '\033[?2031hready\n'; head -c 9 | tr '\033' E; echo; sleep 30`}, nil, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "program enabled reports", func() bool { return strings.Contains(s.Info().Preview, "ready") })
+			term := newTerminal(80, 24)
+			errs := make(chan error, 1)
+			go func() {
+				_, err := Run(context.Background(), client, s.Info().ID, term, Options{})
+				errs <- err
+			}()
+			eventually(t, "background probe", func() bool { return strings.Contains(term.output(), backgroundQuery) })
+			_, _ = term.feed.Write([]byte(tc.background))
+			eventually(t, "scheme report", func() bool { return strings.Contains(term.output(), tc.want) })
+			_, _ = term.feed.Write([]byte{DetachKey})
+			if err := <-errs; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestBackgroundSchemeParsesOSC11Replies(t *testing.T) {
+	for _, tc := range []struct {
+		in         string
+		start, end int
+		dark, ok   bool
+	}{
+		{"\x1b]11;rgb:0000/0000/0000\x1b\\", 0, 25, true, true},
+		{"a\x1b]11;rgb:ff/ff/ff\ab", 1, 19, false, true},
+		{"\x1b]11;rgb:f/f/f\a", 0, 15, false, true},
+		{"\x1b]11;rgb:2828/2c2c/3434\x1b\\", 0, 25, true, true},
+		{"\x1b]11;rgb:0000/0000\a", 0, 0, false, false},
+		{"\x1b]11;rgb:0000/0000/00", 0, 0, false, false},
+		{"\x1b]10;rgb:ffff/ffff/ffff\a", 0, 0, false, false},
+	} {
+		start, end, dark, ok := backgroundReply([]byte(tc.in))
+		if ok != tc.ok || ok && (start != tc.start || end != tc.end || dark != tc.dark) {
+			t.Errorf("backgroundReply(%q) = %d %d %v %v", tc.in, start, end, dark, ok)
+		}
+	}
+}
+
 // Programs such as omp enable modifyOtherKeys or kitty keyboard mode, after
 // which the native terminal encodes Ctrl+] as an escape sequence.
 func TestDetachIndexRecognisesEncodedCtrlBracket(t *testing.T) {
