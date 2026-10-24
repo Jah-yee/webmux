@@ -11,16 +11,12 @@ import (
 	"github.com/rainchan/webmux/internal/session"
 )
 
-func TestOmpPresetLoadsBashrcAndForwardsArguments(t *testing.T) {
+func TestAgentPresetsLoadBashrcAndForwardArguments(t *testing.T) {
 	home := t.TempDir()
 	bin := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", bin+string(filepath.ListSeparator)+os.Getenv("PATH"))
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte("export WEBMUX_TEST_TOKEN=bashrc\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	script := "#!/bin/sh\nprintf 'token=%s\\n' \"$WEBMUX_TEST_TOKEN\"\nfor arg in \"$@\"; do printf 'arg=<%s>\\n' \"$arg\"; done\n"
-	if err := os.WriteFile(filepath.Join(bin, "omp"), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
 	c, err := Load(filepath.Join(home, "config.toml"), false)
@@ -36,20 +32,28 @@ func TestOmpPresetLoadsBashrcAndForwardsArguments(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create(home, "omp", nil, []string{"--resume", "two words"}, "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-s.Done():
-	case <-time.After(5 * time.Second):
-		t.Fatal("omp preset did not exit")
-	}
-	out := string(s.Buffer())
-	if !strings.Contains(out, "token=bashrc") {
-		t.Fatalf("~/.bashrc environment missing: %q", out)
-	}
-	if !strings.Contains(out, "arg=<--resume>") || !strings.Contains(out, "arg=<two words>") {
-		t.Fatalf("preset arguments missing or split: %q", out)
+	for _, agent := range []string{"claude", "codex", "omp"} {
+		t.Run(agent, func(t *testing.T) {
+			script := "#!/bin/sh\nprintf 'agent=%s token=%s\\n' \"" + agent + "\" \"$WEBMUX_TEST_TOKEN\"\nfor arg in \"$@\"; do printf 'arg=<%s>\\n' \"$arg\"; done\n"
+			if err := os.WriteFile(filepath.Join(bin, agent), []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			s, err := m.Create(home, agent, nil, []string{"--resume", "two words"}, "", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-s.Done():
+			case <-time.After(5 * time.Second):
+				t.Fatalf("%s preset did not exit", agent)
+			}
+			out := string(s.Buffer())
+			if !strings.Contains(out, "agent="+agent+" token=bashrc") {
+				t.Fatalf("~/.bashrc environment missing: %q", out)
+			}
+			if !strings.Contains(out, "arg=<--resume>") || !strings.Contains(out, "arg=<two words>") {
+				t.Fatalf("preset arguments missing or split: %q", out)
+			}
+		})
 	}
 }

@@ -58,13 +58,13 @@ allow_args = false
 [[presets]]
 name = "claude"
 label = "Claude Code"
-cmd = ["claude"]
+cmd = ["bash", "-ic", "exec claude \"$@\"", "claude"]
 allow_args = true
 
 [[presets]]
 name = "codex"
 label = "Codex CLI"
-cmd = ["codex"]
+cmd = ["bash", "-ic", "exec codex \"$@\"", "codex"]
 allow_args = true
 
 [[presets]]

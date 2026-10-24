@@ -121,6 +121,14 @@ func DefaultStateDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".local", "state", "webmux")
 }
+
+// bashrcCommand runs program through an interactive bash so it sees the
+// environment and PATH from ~/.bashrc, which a service manager never loads.
+// The trailing program is bash -c's $0; appended arguments reach it via "$@".
+func bashrcCommand(program string) []string {
+	return []string{"bash", "-ic", `exec ` + program + ` "$@"`, program}
+}
+
 func Load(path string, required bool) (Config, error) {
 	c := Config{
 		Listen:           "0.0.0.0:7681",
@@ -135,9 +143,9 @@ func Load(path string, required bool) (Config, error) {
 		},
 		Presets: []session.Preset{
 			{Name: "shell", Label: "Shell", Cmd: []string{}},
-			{Name: "claude", Label: "Claude Code", Cmd: []string{"claude"}, AllowArgs: true},
-			{Name: "codex", Label: "Codex CLI", Cmd: []string{"codex"}, AllowArgs: true},
-			{Name: "omp", Label: "omp", Cmd: []string{"bash", "-ic", `exec omp "$@"`, "omp"}, AllowArgs: true},
+			{Name: "claude", Label: "Claude Code", Cmd: bashrcCommand("claude"), AllowArgs: true},
+			{Name: "codex", Label: "Codex CLI", Cmd: bashrcCommand("codex"), AllowArgs: true},
+			{Name: "omp", Label: "omp", Cmd: bashrcCommand("omp"), AllowArgs: true},
 		},
 		Push: PushConfig{
 			Enabled:      true,

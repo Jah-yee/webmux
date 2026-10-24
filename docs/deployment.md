@@ -63,7 +63,7 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 
 `custom` 是保留预设名。追加参数按引号与反斜杠规则拆分为 argv，不经 shell 求值。要改变 shell 的启动参数，可为 shell 预设显式设置 `cmd = ["/bin/zsh", "-l", "-i"]`。
 
-omp 预设以 `bash -ic 'exec omp "$@"' omp` 启动，从而加载 `~/.bashrc` 中的环境变量；末尾的 `omp` 是 `bash -c` 的 `$0` 占位符，追加参数经 `"$@"` 原样传给 omp。
+claude、codex 与 omp 预设以 `bash -ic 'exec <程序> "$@"' <程序>` 启动（如 `bash -ic 'exec claude "$@"' claude`），从而加载 `~/.bashrc` 中的环境变量与 `PATH`；末尾的程序名是 `bash -c` 的 `$0` 占位符，追加参数经 `"$@"` 原样传给 agent。
 
 ### 状态目录
 
