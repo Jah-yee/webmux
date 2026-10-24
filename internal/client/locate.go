@@ -6,11 +6,10 @@ package client
 import (
 	"errors"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/runtime"
+	"github.com/rainchan/webmux/internal/session"
 )
 
 // Target is everything a client command knows before talking to a server.
@@ -30,18 +29,6 @@ type Target struct {
 	Socket string
 }
 
-// ExpandHome expands a leading "~/" and makes the path absolute.
-func ExpandHome(path string) (string, error) {
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		path = filepath.Join(home, strings.TrimPrefix(path, "~"))
-	}
-	return filepath.Abs(path)
-}
-
 // LoadConfig applies the server's rules: a default path may be missing, an
 // explicit one must exist, and the result is validated.
 func LoadConfig(path string, explicit bool) (config.Config, error) {
@@ -56,7 +43,7 @@ func LoadConfig(path string, explicit bool) (config.Config, error) {
 // Locate never modifies files, including a stale record.
 func Locate(path string, explicit bool) Target {
 	t := Target{ConfigPath: path, ConfigExplicit: explicit}
-	if expanded, err := ExpandHome(path); err == nil {
+	if expanded, err := session.ExpandPath(path); err == nil {
 		t.ConfigPath = expanded
 	}
 	_, statErr := os.Stat(t.ConfigPath)
