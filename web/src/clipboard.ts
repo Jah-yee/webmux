@@ -23,3 +23,25 @@ export async function copyText(text: string): Promise<boolean> {
     area.remove();
   }
 }
+
+// Non-text clipboard items become uploadable files named after their type.
+export async function clipboardFiles(
+  items: readonly ClipboardItem[],
+): Promise<File[]> {
+  const files: File[] = [];
+  for (const [index, item] of items.entries()) {
+    const type = item.types.find((type) => !type.startsWith("text/"));
+    if (!type) continue;
+    const blob = await item.getType(type);
+    const extension =
+      type === "image/jpeg"
+        ? "jpg"
+        : type.split("/")[1].replace(/[^a-z0-9]/gi, "") || "bin";
+    files.push(
+      new File([blob], `clipboard-${Date.now()}-${index}.${extension}`, {
+        type,
+      }),
+    );
+  }
+  return files;
+}
