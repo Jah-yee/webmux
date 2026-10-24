@@ -54,18 +54,68 @@ function terminalTheme() {
   };
 }
 
+// Draft-mode routing supplied by the page: while `draftEnabled()` holds, user
+// keys, text and IME commits go to the draft instead of the PTY.
+export interface TerminalUserInput {
+  draftEnabled: () => boolean;
+  focusDraft: () => void;
+  key: (event: KeyboardEvent) => void;
+  insertText: (text: string) => void;
+}
+
+export interface TerminalClipboard {
+  paste: () => void;
+  copySelection: (text: string) => void;
+}
+
+export interface TerminalController {
+  readonly ready: boolean;
+  readonly info: SessionInfo | undefined;
+  readonly connection: Connection;
+  readonly restoring: boolean;
+  readonly exitCode: number | null;
+  readonly fontSize: number;
+  readonly modifiers: Modifiers;
+  readonly error: string;
+  readonly selection: string;
+  readonly historyTruncated: boolean;
+  readonly control: ControlState | undefined;
+  readonly controlling: boolean;
+  readonly clientId: string;
+  claim(): void;
+  submit(
+    submissionId: string,
+    text: string,
+    enter: boolean,
+    report: (state: SubmissionProgress) => void,
+  ): boolean;
+  track(
+    submissionId: string,
+    report: (state: SubmissionProgress) => void,
+  ): void;
+  untrack(submissionId: string): void;
+  copySelection(): void;
+  clearSelection(): void;
+  send(input: string): boolean;
+  setFontSize(value: number): void;
+  resetModifiers(): void;
+  toggleModifier(key: keyof Modifiers): void;
+  paste(text: string): boolean;
+  keyboard(): void;
+  clear(): void;
+  resync(): void;
+  fit(): void;
+  scrollToBottom(): void;
+  focus(): void;
+}
+
 export function useTerminal(
   getContainer: () => HTMLDivElement,
   id: string,
-  clipboard: { paste: () => void; copySelection: (text: string) => void },
+  clipboard: TerminalClipboard,
   isVisible: () => boolean = () => true,
-  userInput?: {
-    draftEnabled: () => boolean;
-    focusDraft: () => void;
-    key: (event: KeyboardEvent) => void;
-    insertText: (text: string) => void;
-  },
-) {
+  userInput?: TerminalUserInput,
+): TerminalController {
   let terminal: Terminal | undefined;
   let socket: SocketConnection | undefined;
   let fit: FitAddon | undefined;
