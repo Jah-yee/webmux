@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/rainchan/webmux/internal/session"
@@ -28,38 +27,26 @@ func (s *Service) git(ctx context.Context, cwd string, args ...string) ([]byte, 
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, s.gitPath, append([]string{"-C", cwd}, args...)...)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "LC_ALL=C")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
-	cmd.WaitDelay = time.Second
 	stdout := &boundedOutput{limit: maxWorkspaceGitOutput, cancel: cancel}
-	stderr := &boundedOutput{limit: maxWorkspaceGitError, cancel: cancel}
-	cmd.Stdout, cmd.Stderr = stdout, stderr
-	if err := session.RunCommand(cmd); err != nil {
-		// Cmd's context watcher can finish when the leader exits, before pipe
-		// copying ends. A hook's background children may still hold those pipes;
-		// WaitDelay closes descriptors, but does not terminate that process group.
-		if cmd.Process != nil && (ctx.Err() != nil || errors.Is(err, exec.ErrWaitDelay)) {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
-		if stdout.exceeded || stderr.exceeded {
+	run := runGitProcess(ctx, gitProcess{
+		path:        s.gitPath,
+		args:        append([]string{"-C", cwd}, args...),
+		env:         []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "LC_ALL=C"},
+		stdout:      stdout,
+		stderrLimit: maxWorkspaceGitError,
+	})
+	if err := run.err; err != nil {
+		if stdout.exceeded || run.stderrExceeded {
 			return nil, problem(413, "Git 输出超过限制，实际状态可能已变化；请刷新")
 		}
-		if ctx.Err() != nil {
-			return nil, problem(504, "Git 操作取消或超时，实际状态可能已变化: %v", ctx.Err())
+		if run.ctxErr != nil {
+			return nil, problem(504, "Git 操作取消或超时，实际状态可能已变化: %v", run.ctxErr)
 		}
 		var launch *exec.Error
 		if errors.As(err, &launch) || errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
 			return nil, problem(503, "Git 无法执行: %v", err)
 		}
-		return nil, problem(500, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(stderr.String()), err)
+		return nil, problem(500, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(run.stderr), err)
 	}
 	return stdout.Bytes(), nil
 }
