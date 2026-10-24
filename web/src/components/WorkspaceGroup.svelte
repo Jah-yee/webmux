@@ -12,6 +12,7 @@
   import * as Item from "$lib/components/ui/item";
   import SessionRow from "./SessionRow.svelte";
   import InlineNotice from "./InlineNotice.svelte";
+  import { countSessions } from "../session-status";
   let {
     title,
     path,
@@ -36,13 +37,7 @@
     pinned?: boolean;
     ontogglepin?: () => void;
   } = $props();
-  const counts = $derived({
-    running: sessions.filter(
-      (s) => s.status === "running" || s.status === "idle",
-    ).length,
-    waiting: sessions.filter((s) => s.status === "waiting").length,
-    exited: sessions.filter((s) => s.status === "exited").length,
-  });
+  const counts = $derived(countSessions(sessions));
   const groupPath = $derived(path ?? worktree?.path);
 </script>
 
@@ -121,7 +116,7 @@
         <p class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span
             >运行 <span class="inline-block w-[3ch] text-right tabular-nums"
-              >{counts.running}</span
+              >{counts.active}</span
             ></span
           >
           <span
