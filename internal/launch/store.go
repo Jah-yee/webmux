@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 const (
@@ -326,41 +327,9 @@ func (s *Service) saveLocked(configs []Config) error {
 	if configs == nil {
 		configs = []Config{}
 	}
-	data, err := json.MarshalIndent(storedFile{V: 1, Configs: configs}, "", "  ")
+	err := statefile.WriteJSON(s.path, storedFile{V: 1, Configs: configs}, statefile.Options{TempPattern: ".launch-configs-*"})
 	if err != nil {
 		return fmt.Errorf("保存启动配置: %w", err)
-	}
-	if err := writeAtomic(s.dir, s.path, data); err != nil {
-		return fmt.Errorf("保存启动配置: %w", err)
-	}
-	return nil
-}
-
-func writeAtomic(dir, path string, data []byte) error {
-	tmp, err := os.CreateTemp(dir, ".launch-configs-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	defer func() { _ = tmp.Close() }()
-	if err := tmp.Chmod(0600); err != nil {
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return err
-	}
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
 	}
 	return nil
 }

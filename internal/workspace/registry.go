@@ -13,6 +13,7 @@ import (
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 type registration struct {
@@ -152,44 +153,15 @@ func (s *Service) save(entries []*repositoryState) error {
 	for _, entry := range entries {
 		stored.Repositories = append(stored.Repositories, entry.entry)
 	}
-	data, err := json.MarshalIndent(stored, "", "  ")
-	if err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(s.stateDir, ".repositories-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	defer func() { _ = f.Close() }()
-	if err := f.Chmod(0600); err != nil {
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(f.Name(), filepath.Join(s.stateDir, "repositories.json")); err != nil {
-		return err
-	}
-	directory, err := os.Open(s.stateDir)
-	if err == nil {
-		err = directory.Sync()
-		_ = directory.Close()
-	}
-	if err != nil {
+	err := statefile.WriteJSON(filepath.Join(s.stateDir, "repositories.json"), stored, statefile.Options{TempPattern: ".repositories-*", RequireDirSync: true})
+	if dirErr, ok := errors.AsType[*statefile.DirSyncError](err); ok {
 		// Rename already published different bytes. Keep the last confirmed
 		// memory state, but never allow it to overwrite the uncertain disk state.
 		s.capability.RegistryAvailable = false
-		s.capability.RegistryError = "清单已替换但目录同步失败，持久结果不确定；仓库管理已停用，请重启重新读取: " + err.Error()
+		s.capability.RegistryError = "清单已替换但目录同步失败，持久结果不确定；仓库管理已停用，请重启重新读取: " + dirErr.Error()
 		return errors.New(s.capability.RegistryError)
 	}
-	return nil
+	return err
 }
 func (s *Service) requireRegistryLocked() error {
 	if !s.capability.RegistryAvailable {
