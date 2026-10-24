@@ -7,6 +7,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import * as Card from "$lib/components/ui/card";
+  import TokenHelp from "./components/TokenHelp.svelte";
   import SessionList from "./pages/SessionList.svelte";
   import Settings from "./pages/Settings.svelte";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
@@ -82,7 +83,10 @@
             }}
           >
             <div class="space-y-2">
-              <Label for="token">共享 Token</Label>
+              <div class="flex items-center gap-1">
+                <Label for="token">共享 Token</Label>
+                <TokenHelp />
+              </div>
               <Input
                 id="token"
                 type="password"
