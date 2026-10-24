@@ -7,6 +7,7 @@
   } from "@tabler/icons-svelte";
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import { coarseTouchMinHeight } from "$lib/touch-targets";
   import type { QuickCommand } from "../schemas";
   import { commandPreview } from "../quickCommands";
 
@@ -61,7 +62,7 @@
       {@const preview = commandPreview(cmd)}
       {@const enter = target === "terminal" && cmd.enter}
       <DropdownMenu.Item
-        class="min-h-9 [@media(any-pointer:coarse)]:min-h-11"
+        class="min-h-9 {coarseTouchMinHeight}"
         disabled={blocked}
         aria-label={[cmd.name, preview].filter(Boolean).join("：") +
           (enter ? "（并回车）" : "")}
@@ -85,16 +86,12 @@
           把常用命令或提示词存起来，在这里一键发送。
         </p>
       </div>
-      <DropdownMenu.Item
-        class="[@media(any-pointer:coarse)]:min-h-11"
-        onSelect={manage}
+      <DropdownMenu.Item class={coarseTouchMinHeight} onSelect={manage}
         ><IconPlus aria-hidden="true" />添加快捷指令…</DropdownMenu.Item
       >
     {/each}
     <DropdownMenu.Separator />
-    <DropdownMenu.Item
-      class="[@media(any-pointer:coarse)]:min-h-11"
-      onSelect={manage}
+    <DropdownMenu.Item class={coarseTouchMinHeight} onSelect={manage}
       ><IconSettings aria-hidden="true" />管理快捷指令…</DropdownMenu.Item
     >
   </DropdownMenu.Content>
