@@ -2,7 +2,6 @@ package client
 
 import (
 	"net"
-	"net/netip"
 	"sort"
 	"strings"
 
@@ -22,8 +21,6 @@ type Interface struct {
 
 // ExposedWarning is reported for a wildcard listener without a token.
 const ExposedWarning = "SHELL EXPOSED: listening on all interfaces without a token; isolate with Tailscale/WireGuard or set a token"
-
-var tailscaleRange = netip.MustParsePrefix("100.64.0.0/10")
 
 // Links derives token-free http links for the bound address listen. The
 // server's /local/v1/status and the CLI fallback both call it.
@@ -55,7 +52,7 @@ func Links(listen string, tokenConfigured bool, interfaces func() ([]Interface, 
 		if ip != nil {
 			host = ip.String()
 		}
-		urls.Remote = append(urls.Remote, contract.RemoteURL{URL: link(host), Interface: interfaceOf(ip, interfaces), Kind: kindOf(ip)})
+		urls.Remote = append(urls.Remote, contract.RemoteURL{URL: link(host), Interface: interfaceOf(ip, interfaces), Kind: contract.AddressKind(ip)})
 	}
 	return urls, warnings
 }
@@ -67,14 +64,14 @@ func remoteCandidates(list []Interface, port string) []contract.RemoteURL {
 			continue
 		}
 		for _, ip := range iface.Addrs {
-			v4 := ip.To4()
-			if v4 == nil || v4.IsLoopback() || v4.IsLinkLocalUnicast() || v4.IsUnspecified() {
+			v4, ok := contract.RemoteIPv4(ip)
+			if !ok {
 				continue
 			}
 			remote = append(remote, contract.RemoteURL{
 				URL:       "http://" + net.JoinHostPort(v4.String(), port),
 				Interface: iface.Name,
-				Kind:      kindOf(v4),
+				Kind:      contract.AddressKind(v4),
 			})
 		}
 	}
@@ -83,13 +80,6 @@ func remoteCandidates(list []Interface, port string) []contract.RemoteURL {
 		return remote[i].Kind == "tailscale" && remote[j].Kind != "tailscale"
 	})
 	return remote
-}
-
-func kindOf(ip net.IP) string {
-	if addr, ok := netip.AddrFromSlice(ip.To4()); ok && ip.To4() != nil && tailscaleRange.Contains(addr) {
-		return "tailscale"
-	}
-	return "lan"
 }
 
 func interfaceOf(ip net.IP, interfaces func() ([]Interface, error)) string {
