@@ -6,7 +6,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import * as Command from "$lib/components/ui/command";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
-  import WorkspaceDialog from "./WorkspaceDialog.svelte";
+  import ResponsiveDialog from "./ResponsiveDialog.svelte";
   let {
     repositoryName,
     worktrees,
@@ -23,7 +23,7 @@
   const selected = new SvelteSet<string>();
 </script>
 
-<WorkspaceDialog
+<ResponsiveDialog
   title="添加已有 worktree 到主页"
   description={`${repositoryName}：只把正在关注的 worktree 放到主页。移出主页不会删除 worktree；有会话的 worktree 始终显示。`}
   {onclose}
@@ -116,4 +116,4 @@
       >
     </div>
   </form>
-</WorkspaceDialog>
+</ResponsiveDialog>

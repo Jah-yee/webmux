@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { MediaQuery } from "svelte/reactivity";
   import { untrack } from "svelte";
   import { IconChevronDown } from "@tabler/icons-svelte";
   import {
@@ -25,11 +24,10 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import * as Drawer from "$lib/components/ui/drawer";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import * as Collapsible from "$lib/components/ui/collapsible";
   import DirectoryPicker from "./DirectoryPicker.svelte";
+  import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import WorktreeCreateFields from "./WorktreeCreateFields.svelte";
 
   let {
@@ -55,9 +53,7 @@
     onworktreecreated: (tree: Worktree) => void;
     onclose: () => void;
   } = $props();
-  const desktop = new MediaQuery("(min-width: 640px)");
   const recent = recentDirs();
-  let open = $state(true);
   let cwd = $state(untrack(() => recent[0] || defaultCwd));
   // The last launch choice: `preset:<name>`, `config:<id>` or `custom`. Only
   // the choice is remembered, never config contents. A legacy `lastPreset`
@@ -508,54 +504,17 @@
   </form>
 {/snippet}
 
-{#if desktop.current}
-  <Dialog.Root
-    bind:open
-    onOpenChange={(value) => {
-      if (!value && !busy) onclose();
-      else if (!value) open = true;
-    }}
-  >
-    <Dialog.Content
-      class="max-h-[90dvh] overflow-y-auto p-6 sm:max-w-xl"
-      onEscapeKeydown={(event) => {
-        if (busy) event.preventDefault();
-      }}
-      onInteractOutside={(event) => {
-        if (busy) event.preventDefault();
-      }}
-    >
-      <Dialog.Header
-        ><Dialog.Title>新建会话与工作树</Dialog.Title><Dialog.Description
-          >选择目录和命令。浏览器断开后，会话仍会继续。</Dialog.Description
-        ></Dialog.Header
-      >
-      {@render fields()}
-    </Dialog.Content>
-  </Dialog.Root>
-{:else}
-  <Drawer.Root
-    bind:open
-    dismissible={!busy}
-    onOpenChange={(value) => {
-      if (!value && !busy) onclose();
-      else if (!value) open = true;
-    }}
-  >
-    <Drawer.Content class="data-[vaul-drawer-direction=bottom]:max-h-[95dvh]">
-      <Drawer.Header
-        ><Drawer.Title>新建会话与工作树</Drawer.Title><Drawer.Description
-          >选择目录和命令，创建持久终端会话。</Drawer.Description
-        ></Drawer.Header
-      >
-      <div
-        class="overflow-y-auto px-4 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))]"
-      >
-        {@render fields()}
-      </div>
-    </Drawer.Content>
-  </Drawer.Root>
-{/if}
+<ResponsiveDialog
+  title="新建会话与工作树"
+  description="选择目录和命令。浏览器断开后，会话仍会继续。"
+  drawerDescription="选择目录和命令，创建持久终端会话。"
+  class="p-6"
+  pinDrawerHeader
+  {busy}
+  {onclose}
+>
+  {@render fields()}
+</ResponsiveDialog>
 
 {#if mkdirMounted}<AlertDialog.Root bind:open={mkdirOpen}>
     <AlertDialog.Content>
