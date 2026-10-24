@@ -92,69 +92,63 @@ func (b *binding) scanChanges(ctx context.Context, visit func(Change) error) (st
 
 func (s *Service) Changes(ctx context.Context, id, cid string, queries ...ChangeQuery) (Changes, error) {
 	r := Changes{Entries: []Change{}, Checked: time.Now().UTC()}
-	release, err := s.acquire(ctx)
-	if err != nil {
-		return r, err
-	}
-	defer release()
-	b, err := s.root(ctx, id, cid)
-	if err != nil {
-		return r, err
-	}
-	var q ChangeQuery
-	if len(queries) > 0 {
-		q = queries[0]
-	}
-	if q.Group != "" && q.Group != "unstaged" && q.Group != "staged" && q.Group != "untracked" {
-		return r, problem(400, "无效修改分组")
-	}
-	var path string
-	if q.NodeID != "" {
-		path, err = nodePath(q.NodeID)
+	return withRoot(ctx, s, id, cid, func(b *binding) (Changes, error) {
+		var err error
+		var q ChangeQuery
+		if len(queries) > 0 {
+			q = queries[0]
+		}
+		if q.Group != "" && q.Group != "unstaged" && q.Group != "staged" && q.Group != "untracked" {
+			return r, problem(400, "无效修改分组")
+		}
+		var path string
+		if q.NodeID != "" {
+			path, err = nodePath(q.NodeID)
+			if err != nil {
+				return r, err
+			}
+		}
+		start, tag := 0, ""
+		if q.Cursor != "" {
+			var offset string
+			var ok bool
+			tag, offset, ok = strings.Cut(q.Cursor, ":")
+			start, err = strconv.Atoi(offset)
+			if !ok || tag == "" || err != nil || start < 0 {
+				return r, problem(400, "无效修改游标")
+			}
+		}
+		search := strings.ToLower(q.Q)
+		r.Version, err = b.scanChanges(ctx, func(c Change) error {
+			if q.Group != "" && q.Group != c.Group {
+				return nil
+			}
+			if q.NodeID != "" && c.NewPath != path && c.OldPath != path {
+				return nil
+			}
+			if search != "" && !strings.Contains(strings.ToLower(displayPath(c.NewPath)), search) && !strings.Contains(strings.ToLower(displayPath(c.OldPath)), search) {
+				return nil
+			}
+			if r.Total >= start && len(r.Entries) < ChangePageSize {
+				r.Entries = append(r.Entries, c)
+			}
+			r.Total++
+			return nil
+		})
 		if err != nil {
 			return r, err
 		}
-	}
-	start, tag := 0, ""
-	if q.Cursor != "" {
-		var offset string
-		var ok bool
-		tag, offset, ok = strings.Cut(q.Cursor, ":")
-		start, err = strconv.Atoi(offset)
-		if !ok || tag == "" || err != nil || start < 0 {
-			return r, problem(400, "无效修改游标")
+		expected := version([]string{cid, r.Version, q.Q, q.NodeID, q.Group})
+		if q.Cursor != "" && tag != expected {
+			return r, problem(409, "修改列表已改变，请刷新列表")
 		}
-	}
-	search := strings.ToLower(q.Q)
-	r.Version, err = b.scanChanges(ctx, func(c Change) error {
-		if q.Group != "" && q.Group != c.Group {
-			return nil
+		if start > r.Total {
+			return r, problem(400, "无效修改页")
 		}
-		if q.NodeID != "" && c.NewPath != path && c.OldPath != path {
-			return nil
+		end := start + len(r.Entries)
+		if end < r.Total {
+			r.Next = fmt.Sprintf("%s:%d", expected, end)
 		}
-		if search != "" && !strings.Contains(strings.ToLower(displayPath(c.NewPath)), search) && !strings.Contains(strings.ToLower(displayPath(c.OldPath)), search) {
-			return nil
-		}
-		if r.Total >= start && len(r.Entries) < ChangePageSize {
-			r.Entries = append(r.Entries, c)
-		}
-		r.Total++
-		return nil
+		return r, nil
 	})
-	if err != nil {
-		return r, err
-	}
-	expected := version([]string{cid, r.Version, q.Q, q.NodeID, q.Group})
-	if q.Cursor != "" && tag != expected {
-		return r, problem(409, "修改列表已改变，请刷新列表")
-	}
-	if start > r.Total {
-		return r, problem(400, "无效修改页")
-	}
-	end := start + len(r.Entries)
-	if end < r.Total {
-		r.Next = fmt.Sprintf("%s:%d", expected, end)
-	}
-	return r, nil
 }

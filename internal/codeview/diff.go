@@ -86,63 +86,56 @@ func (b *binding) capture(ctx context.Context, c Change) (Document, Document, er
 	return old, next, e
 }
 func (s *Service) Diff(ctx context.Context, id, cid, changeID string) (Diff, error) {
-	release, e := s.acquire(ctx)
-	if e != nil {
-		return Diff{}, e
-	}
-	defer release()
-	b, e := s.root(ctx, id, cid)
-	if e != nil {
-		return Diff{}, e
-	}
-	var c *Change
-	before, e := b.scanChanges(ctx, func(entry Change) error {
-		if entry.ID == changeID {
-			copy := entry
-			c = &copy
-		}
-		return nil
-	})
-	if e != nil {
-		return Diff{}, e
-	}
-	if c == nil {
-		return Diff{}, problem(409, "修改来源已改变，请刷新列表")
-	}
-	old, next, e := b.capture(ctx, *c)
-	if e != nil {
-		return Diff{}, e
-	}
-	after, e := b.scanChanges(ctx, nil)
-	if e != nil {
-		return Diff{}, e
-	}
-	if after != before {
-		return Diff{}, problem(409, "读取期间 Git 来源已改变")
-	}
-	r := Diff{Old: old, New: next, Kind: "text", Checked: time.Now().UTC(), Change: *c}
-	if strings.HasPrefix(c.Status, "U") {
-		r.Kind = "metadata"
-		r.Reason = "冲突文件仅显示元信息"
-	} else if kind, reason := classify(old, next); kind != "text" {
-		r.Kind = kind
-		r.Reason = reason
-	} else {
-		attrs, e := git(ctx, b.Root, "check-attr", "-z", "filter", "working-tree-encoding", "--", c.NewPath)
+	return withRoot(ctx, s, id, cid, func(b *binding) (Diff, error) {
+		var c *Change
+		before, e := b.scanChanges(ctx, func(entry Change) error {
+			if entry.ID == changeID {
+				copy := entry
+				c = &copy
+			}
+			return nil
+		})
 		if e != nil {
-			return r, e
+			return Diff{}, e
 		}
-		a := strings.Split(string(attrs), "\x00")
-		for i := 0; i+2 < len(a); i += 3 {
-			if a[i+2] != "unspecified" && a[i+2] != "unset" {
-				r.Kind = "metadata"
-				r.Reason = "需要内容转换，不能保证原始行映射"
+		if c == nil {
+			return Diff{}, problem(409, "修改来源已改变，请刷新列表")
+		}
+		old, next, e := b.capture(ctx, *c)
+		if e != nil {
+			return Diff{}, e
+		}
+		after, e := b.scanChanges(ctx, nil)
+		if e != nil {
+			return Diff{}, e
+		}
+		if after != before {
+			return Diff{}, problem(409, "读取期间 Git 来源已改变")
+		}
+		r := Diff{Old: old, New: next, Kind: "text", Checked: time.Now().UTC(), Change: *c}
+		if strings.HasPrefix(c.Status, "U") {
+			r.Kind = "metadata"
+			r.Reason = "冲突文件仅显示元信息"
+		} else if kind, reason := classify(old, next); kind != "text" {
+			r.Kind = kind
+			r.Reason = reason
+		} else {
+			attrs, e := git(ctx, b.Root, "check-attr", "-z", "filter", "working-tree-encoding", "--", c.NewPath)
+			if e != nil {
+				return r, e
+			}
+			a := strings.Split(string(attrs), "\x00")
+			for i := 0; i+2 < len(a); i += 3 {
+				if a[i+2] != "unspecified" && a[i+2] != "unset" {
+					r.Kind = "metadata"
+					r.Reason = "需要内容转换，不能保证原始行映射"
+				}
 			}
 		}
-	}
-	v := &snapshot{session: id, context: cid, diff: &r, size: documentSize(old) + documentSize(next)}
-	r.Snapshot = s.put(v)
-	return r, nil
+		v := &snapshot{session: id, context: cid, diff: &r, size: documentSize(old) + documentSize(next)}
+		r.Snapshot = s.put(v)
+		return r, nil
+	})
 }
 
 func isImage(d Document) bool { return strings.HasPrefix(d.MediaType, "image/") }
