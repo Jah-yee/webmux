@@ -1,20 +1,45 @@
 <script lang="ts">
-  import { useTerminal } from "../../src/hooks/terminal.svelte";
+  import { untrack } from "svelte";
+  import {
+    useTerminal,
+    type TerminalController,
+  } from "../../src/hooks/terminal.svelte";
+  import type { TerminalUserInput } from "../../src/hooks/terminal-input";
+
+  type Props = {
+    // Draft-mode routing, as Terminal.svelte passes it to the hook.
+    userInput?: TerminalUserInput;
+    // Receives explicit clipboard paste requests; without it they fail.
+    onPaste?: () => void;
+    // Exposes the hook's public API to tests that drive it directly.
+    expose?: (terminal: TerminalController) => void;
+  };
+  const props: Props = $props();
+  const { userInput, onPaste, expose } = untrack(() => ({ ...props }));
 
   let container: HTMLDivElement;
   let copied = $state("");
   let copies = $state(0);
-  const terminal = useTerminal(() => container, "terminal-render-fixture", {
-    paste: () => {
-      throw new Error(
-        "Unexpected clipboard paste in terminal rendering fixture",
-      );
+  const terminal = useTerminal(
+    () => container,
+    "terminal-render-fixture",
+    {
+      paste: () => {
+        if (!onPaste)
+          throw new Error(
+            "Unexpected clipboard paste in terminal rendering fixture",
+          );
+        onPaste();
+      },
+      copySelection: (text) => {
+        copied = text;
+        copies++;
+      },
     },
-    copySelection: (text) => {
-      copied = text;
-      copies++;
-    },
-  });
+    () => true,
+    userInput,
+  );
+  expose?.(terminal);
 </script>
 
 <div
