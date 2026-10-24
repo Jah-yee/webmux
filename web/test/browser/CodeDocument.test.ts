@@ -14,6 +14,21 @@ const gutter = (side: "deletion" | "addition", line: number) =>
   );
 const send = () => page.getByRole("button", { name: /发送位置到终端/ }).click();
 const inserted = () => page.getByLabelText("Inserted reference");
+// The rendered text once it has stayed the same for three animation frames:
+// layout changes reach the virtualizer through a ResizeObserver and then a
+// queued frame, so two frames are the minimum and one more is margin.
+async function settledCode() {
+  let text = code();
+  for (let stable = 0; stable < 3;) {
+    const { promise, resolve } = Promise.withResolvers<number>();
+    requestAnimationFrame(resolve);
+    await promise;
+    const next = code();
+    stable = next === text ? stable + 1 : 0;
+    text = next;
+  }
+  return text;
+}
 
 afterEach(async () => {
   await cleanup();
@@ -78,7 +93,10 @@ test("expired snapshots retain content and disable mouse and keyboard expansion"
   await expect.poll(code).toContain("ordinary line 20");
   await page.getByRole("button", { name: "Expire snapshot" }).click();
   await expect.element(expand).toHaveAttribute("aria-disabled", "true");
-  const before = code();
+  // Expiring adds a status line that shortens the viewer; the virtualizer
+  // re-renders for the new height on a later animation frame. Take the
+  // baseline only after that, so the click is the only remaining cause.
+  const before = await settledCode();
   await page
     .elementLocator(shadow()!.querySelector("[data-unmodified-lines]")!)
     .click();
