@@ -10,7 +10,7 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 - `internal/session` owns PTYs, bounded byte scrollback, metadata, status detection, and process cleanup. `internal/api` owns REST routes, authentication, Origin checks, and static serving; `internal/hub` bridges session subscriptions to WebSockets.
 - REST handles configuration, session operations, and filesystem requests. `/ws/sessions` delivers a snapshot followed by list events; `/ws/s/{id}` carries terminal frames. Raw PTY bytes reach xterm without server-side terminal emulation; OSC/title and preview parsing are side channels.
 - Replay capture and live subscription registration share a lock: preserve gap-free reattachment. Bounded queues disconnect slow clients rather than blocking PTY readers. Each connection has one data writer; cancellation must stop connection work without killing the persistent session.
-- Backend payloads and `web/src/schemas.ts` form one contract. Keep frame handling in `internal/hub` and `web/src/hooks/terminal.svelte.ts` aligned; update schemas and consumers together when changing JSON fields.
+- Backend payloads and `web/src/schemas.ts` form one contract. Keep frame handling in `internal/hub` and `web/src/hooks/terminal-socket.svelte.ts` (composed by `useTerminal` in `terminal.svelte.ts`) aligned; update schemas and consumers together when changing JSON fields.
 
 ## Key Directories
 

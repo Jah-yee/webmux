@@ -3,8 +3,8 @@
   import {
     useTerminal,
     type TerminalController,
-    type TerminalUserInput,
   } from "../../src/hooks/terminal.svelte";
+  import type { TerminalUserInput } from "../../src/hooks/terminal-input";
 
   type Props = {
     // Draft-mode routing, as Terminal.svelte passes it to the hook.
