@@ -1,5 +1,6 @@
-# Default is loopback. Bind only a trusted Tailscale/WireGuard address.
-listen = "127.0.0.1:7681"
+# Default listens on all interfaces; set a token and restrict access with a firewall/VPN.
+# Use "127.0.0.1:7681" for loopback only.
+listen = "0.0.0.0:7681"
 token = ""
 scrollback_bytes = 2097152
 default_cwd = "~"

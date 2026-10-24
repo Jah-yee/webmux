@@ -64,7 +64,7 @@ func TestConfigurationPrecedence(t *testing.T) {
 		args                 []string
 		listen, token, shell string
 	}{
-		{"defaults", nil, "127.0.0.1:7681", "", "/bin/sh"},
+		{"defaults", nil, "0.0.0.0:7681", "", "/bin/sh"},
 		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", "/bin/bash"},
 		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", "/bin/bash"},
 		{"explicit empty token", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", "/bin/bash"},

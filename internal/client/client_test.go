@@ -73,7 +73,7 @@ func TestLocate(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(dir, "xdg"))
 
 	target := Locate(filepath.Join(dir, "absent.toml"), false)
-	if target.ConfigErr != nil || target.ConfigExists || target.Config.Listen != "127.0.0.1:7681" || target.RunDir != filepath.Join(dir, "xdg", "webmux", "run") {
+	if target.ConfigErr != nil || target.ConfigExists || target.Config.Listen != "0.0.0.0:7681" || target.RunDir != filepath.Join(dir, "xdg", "webmux", "run") {
 		t.Fatalf("default config: %+v", target)
 	}
 	if !errors.Is(target.RecordErr, runtime.ErrNoRecord) || target.Stale() || target.Socket != filepath.Join(target.RunDir, "webmux.sock") {

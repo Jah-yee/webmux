@@ -33,7 +33,7 @@ func TestConfigShowAndPath(t *testing.T) {
 	}
 	stdout, _, code = runConfig(t, "show", "--json")
 	var shown contract.ConfigV1
-	if err := json.Unmarshal([]byte(stdout), &shown); err != nil || code != 0 || shown.Exists || shown.Listen != "127.0.0.1:7681" || shown.TokenConfigured || shown.StateDir != filepath.Join(home, ".local", "state", "webmux") || len(shown.Presets) != 4 {
+	if err := json.Unmarshal([]byte(stdout), &shown); err != nil || code != 0 || shown.Exists || shown.Listen != "0.0.0.0:7681" || shown.TokenConfigured || shown.StateDir != filepath.Join(home, ".local", "state", "webmux") || len(shown.Presets) != 4 {
 		t.Fatalf("defaults %d %s", code, stdout)
 	}
 	if _, _, code := runConfig(t, "show", "--config", filepath.Join(home, "missing.toml")); code != 1 {

@@ -61,7 +61,7 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 > 截图由 `pnpm --dir web screenshots` 基于真实后端自动生成（桌面 1440×900，移动端 Pixel 7 模拟）。
 
 > [!WARNING]
-> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认只监听 `127.0.0.1:7681`；远程访问请绑定 Tailscale / WireGuard 等可信 VPN 地址，并设置共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)；需要固定公网入口时按 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md) 操作。
+> WebMux 等同于以当前系统用户身份把 shell 暴露到网络上。默认监听所有接口 `0.0.0.0:7681`，未设置 token 时启动会打印警告；请设置共享 token，仅本机使用时改为 `127.0.0.1:7681`，远程访问建议绑定 Tailscale / WireGuard 等可信 VPN 地址，并设置共享 token。**除非明确使用 `--tunnel` 并接受“Token 是唯一入口屏障”的风险，不要开放到公网。** 详见 [安全策略](SECURITY.md)；需要固定公网入口时按 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md) 操作。
 
 ## 特性
 
@@ -167,7 +167,7 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 | 配置项               | 默认值                       | 说明                                           |
 | -------------------- | ---------------------------- | ---------------------------------------------- |
-| `listen`             | `127.0.0.1:7681`             | HTTP / WebSocket 监听地址                      |
+| `listen`             | `0.0.0.0:7681`             | HTTP / WebSocket 监听地址                      |
 | `token`              | 空（不认证）                 | 共享 token                                     |
 | `scrollback_bytes`   | `2097152`                    | 每会话保留的原始终端字节数                     |
 | `default_cwd`        | `~`                          | 新建会话的默认目录                             |

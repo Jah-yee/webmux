@@ -123,7 +123,7 @@ func DefaultStateDir() string {
 }
 func Load(path string, required bool) (Config, error) {
 	c := Config{
-		Listen:           "127.0.0.1:7681",
+		Listen:           "0.0.0.0:7681",
 		ScrollbackBytes:  2097152,
 		DefaultCwd:       "~",
 		IdleAfterSeconds: 30,
