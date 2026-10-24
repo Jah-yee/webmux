@@ -1,6 +1,7 @@
-# Default listens on all interfaces; set a token and restrict access with a firewall/VPN.
+# Default listens on all interfaces; restrict access with a firewall/VPN.
 # Use "127.0.0.1:7681" for loopback only.
 listen = "0.0.0.0:7681"
+# Empty generates a new random token on every start unless listen is loopback.
 token = ""
 scrollback_bytes = 2097152
 default_cwd = "~"

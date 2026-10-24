@@ -165,7 +165,7 @@ func configValidate(args []string, stdout, stderr io.Writer) int {
 	c, err := client.LoadConfig(path, explicit)
 	if err == nil && c.Tunnel.Enabled && c.Token != "" && len(c.Token) < minTunnelTokenLength {
 		// The same check serve applies after loading.
-		err = ensureTunnelToken(&c)
+		err = ensureToken(&c)
 	}
 	if err != nil {
 		result.OK = false

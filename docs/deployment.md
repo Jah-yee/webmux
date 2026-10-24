@@ -44,22 +44,22 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 
 ### 配置项
 
-| 配置项               | 默认值                                                     | 说明                                                                                        |
-| -------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`                                           | HTTP / WebSocket 监听地址                                                                   |
-| `token`              | 空                                                         | 共享 token，空表示不认证；启用隧道且为空时每次启动随机生成，隧道模式显式 token 至少 43 字符 |
-| `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                      |
-| `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                           |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                          |
-| `shell`              | `$SHELL` 或 `/bin/bash`                                    | Shell 预设使用的程序，以 `-l -i` 启动                                                       |
-| `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                |
-| `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                              |
-| `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件           |
-| `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                       |
-| `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                        |
-| `presets`            | shell / claude / codex / omp                               | `name`、`label`、`cmd`（argv 数组）、`allow_args`；配置后替换默认列表；作为内置预设实时提供 |
-| `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                    |
-| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                               |
+| 配置项               | 默认值                                                     | 说明                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listen`             | `0.0.0.0:7681`                                             | HTTP / WebSocket 监听地址                                                                                                                                            |
+| `token`              | 空                                                         | 共享 token；监听 loopback 且未启用隧道时空表示不认证；其他监听地址或启用隧道且为空时每次启动随机生成，并打印带 `#token=` 的本地链接；隧道模式显式 token 至少 43 字符 |
+| `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                                                                                               |
+| `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                                                                                                    |
+| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                                                                                                   |
+| `shell`              | `$SHELL` 或 `/bin/bash`                                    | Shell 预设使用的程序，以 `-l -i` 启动                                                                                                                                |
+| `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                                                                                         |
+| `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                                                                                                       |
+| `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件                                                                                    |
+| `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                                                                                                |
+| `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                                                                                                 |
+| `presets`            | shell / claude / codex / omp                               | `name`、`label`、`cmd`（argv 数组）、`allow_args`；配置后替换默认列表；作为内置预设实时提供                                                                          |
+| `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                                                                                             |
+| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                                                                                                        |
 
 `custom` 是保留预设名。追加参数按引号与反斜杠规则拆分为 argv，不经 shell 求值。要改变 shell 的启动参数，可为 shell 预设显式设置 `cmd = ["/bin/zsh", "-l", "-i"]`。
 
@@ -278,7 +278,7 @@ cloudflared = "" # 可选：cloudflared 路径
 
 Cloudflare 控制台步骤、两个 token 的区别、Windows/WSL 托盘操作、验证方法与故障排查见 **[Cloudflare Named Tunnel 配置指南](cloudflare-tunnel.md)**。
 
-> 隧道模式打印的链接与二维码包含 token；以 systemd / launchd 运行时它们会写入 journal 或日志文件，请限制日志访问权限；自动生成的 token 每次重启都会更换。非隧道模式不打印固定的已配置 token。
+> 隧道模式或自动生成 token 时打印的链接与二维码包含 token；以 systemd / launchd 运行时它们会写入 journal 或日志文件，请限制日志访问权限；自动生成的 token 每次重启都会更换。非隧道模式不打印固定的已配置 token。
 
 ## 手机推送（Web Push）
 

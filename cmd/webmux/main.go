@@ -135,7 +135,7 @@ type serverRun struct {
 	// ConfigFound reports whether the configuration file existed at start.
 	ConfigFound bool
 	LogFile     string
-	// TokenGenerated marks a per-process tunnel token.
+	// TokenGenerated marks a per-process token absent from the config.
 	TokenGenerated bool
 }
 
@@ -183,7 +183,7 @@ func loadConfig(args []string) (serverRun, error) {
 		return run, err
 	}
 	hadToken := c.Token != ""
-	if err = ensureTunnelToken(&c); err != nil {
+	if err = ensureToken(&c); err != nil {
 		return run, err
 	}
 	run.Config = c
@@ -191,18 +191,17 @@ func loadConfig(args []string) (serverRun, error) {
 	return run, nil
 }
 
-// ensureTunnelToken keeps a public entry point authenticated: an empty token
-// is generated for this process, and a configured one must not be weaker than
-// that generated form.
-func ensureTunnelToken(c *config.Config) error {
-	if !c.Tunnel.Enabled {
-		return nil
-	}
+// ensureToken keeps every network entry point authenticated: an empty token
+// is generated for this process unless the server listens only on loopback
+// without a tunnel, and a tunnel token must not be weaker than that form.
+func ensureToken(c *config.Config) error {
 	if c.Token == "" {
-		c.Token = generateToken()
+		if c.Tunnel.Enabled || !loopbackListen(c.Listen) {
+			c.Token = generateToken()
+		}
 		return nil
 	}
-	if len(c.Token) < minTunnelTokenLength {
+	if c.Tunnel.Enabled && len(c.Token) < minTunnelTokenLength {
 		return fmt.Errorf("tunnel mode requires the webmux token to be at least %d characters; leave it empty to generate one, or create one with openssl rand -base64 32", minTunnelTokenLength)
 	}
 	return nil
@@ -236,13 +235,9 @@ func run(args []string) error {
 }
 
 // serve runs until ctx ends. c must come from loadConfig, which generates or
-// vets the tunnel token. Access URLs go to out, never to slog, so tokens stay
-// out of structured logs.
+// vets the token. Access URLs go to out, never to slog, so tokens stay out of
+// structured logs.
 func serve(ctx context.Context, c serverRun, out io.Writer) error {
-	host, _, _ := net.SplitHostPort(c.Listen)
-	if (host == "0.0.0.0" || host == "::" || host == "") && c.Token == "" {
-		slog.Warn("SHELL EXPOSED: listening on all interfaces without token; isolate with Tailscale/WireGuard")
-	}
 	locator := tunnel.Locator{Explicit: c.Tunnel.Cloudflared, StateDir: c.StateDir, Mirrors: c.Tunnel.DownloadMirrors}
 	var cloudflared string
 	if c.Tunnel.Enabled {
@@ -289,9 +284,9 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	rt.serve()
 	slog.Info("webmux listening", "address", listener.Addr(), "version", version)
 	localLink := local
-	if c.Tunnel.Enabled {
-		// Tunnel mode always prints the token because the operator cannot
-		// otherwise know the generated one. A configured non-tunnel token
+	if c.Tunnel.Enabled || c.TokenGenerated {
+		// Tunnel mode and generated tokens print the token because the
+		// operator cannot otherwise know it. A configured non-tunnel token
 		// stays out of captured stdout, which a service manager persists.
 		localLink = contract.AccessURL(local, c.Token)
 	}

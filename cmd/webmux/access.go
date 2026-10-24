@@ -24,6 +24,20 @@ func localOrigin(addr net.Addr) string {
 	return "http://" + net.JoinHostPort(host, strconv.Itoa(tcp.Port))
 }
 
+// loopbackListen reports whether listen binds only a loopback address;
+// wildcards, interface addresses and other host names reach the network.
+func loopbackListen(listen string) bool {
+	host, _, err := net.SplitHostPort(listen)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // minTunnelTokenLength matches the 43 URL-safe characters of generateToken;
 // a tunnel exposed to the internet must not use a shorter configured token.
 const minTunnelTokenLength = 43

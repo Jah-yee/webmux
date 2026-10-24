@@ -36,7 +36,9 @@ func TestTunnelFlagAndGeneratedToken(t *testing.T) {
 		{"configured token kept", []string{"--tunnel", "--token", tunnelTestToken}, true, tunnelTestToken, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			c, err := loadConfig(row.args)
+			// Loopback isolates the tunnel rule from wildcard token generation.
+			args := append([]string{"--listen", "127.0.0.1:7681"}, row.args...)
+			c, err := loadConfig(args)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -44,7 +46,7 @@ func TestTunnelFlagAndGeneratedToken(t *testing.T) {
 				t.Fatalf("tunnel enabled %v", c.Tunnel.Enabled)
 			}
 			if row.generated {
-				again, _ := loadConfig(row.args)
+				again, _ := loadConfig(args)
 				if len(c.Token) != 43 || c.Token == again.Token {
 					t.Fatalf("generated tokens %q %q", c.Token, again.Token)
 				}

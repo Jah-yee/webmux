@@ -52,7 +52,7 @@ type Record struct {
 	ConfigPath       string `json:"configPath"`
 	TokenConfigured  bool   `json:"tokenConfigured"`
 	TokenFingerprint string `json:"tokenFingerprint,omitempty"`
-	// TokenGenerated marks a per-process tunnel token absent from the config.
+	// TokenGenerated marks a per-process token absent from the config.
 	TokenGenerated bool      `json:"tokenGenerated,omitempty"`
 	Launcher       string    `json:"launcher"`
 	LogFile        string    `json:"logFile"`

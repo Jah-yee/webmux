@@ -63,19 +63,29 @@ func TestConfigurationPrecedence(t *testing.T) {
 		name                 string
 		args                 []string
 		listen, token, shell string
+		generated            bool
 	}{
-		{"defaults", nil, "0.0.0.0:7681", "", "/bin/sh"},
-		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", "/bin/bash"},
-		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", "/bin/bash"},
-		{"explicit empty token", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", "/bin/bash"},
+		{"defaults", nil, "0.0.0.0:7681", "", "/bin/sh", true},
+		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", "/bin/bash", false},
+		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", "/bin/bash", false},
+		{"explicit empty token on loopback", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", "/bin/bash", false},
+		{"explicit empty token on localhost", []string{"--config", file, "--listen", "localhost:9002", "--token="}, "localhost:9002", "", "/bin/bash", false},
+		{"explicit empty token on IPv6 wildcard", []string{"--config", file, "--listen", "[::]:9003", "--token="}, "[::]:9003", "", "/bin/bash", true},
+		{"explicit empty token on VPN address", []string{"--config", file, "--listen", "100.64.0.5:9004", "--token="}, "100.64.0.5:9004", "", "/bin/bash", true},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			c, err := loadConfig(row.args)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if c.Listen != row.listen || c.Token != row.token || c.Shell != row.shell {
-				t.Fatalf("configuration: listen=%q token=%q shell=%q", c.Listen, c.Token, c.Shell)
+			if c.TokenGenerated != row.generated || row.generated && len(c.Token) < minTunnelTokenLength {
+				t.Fatalf("token generated=%v len=%d, want generated=%v", c.TokenGenerated, len(c.Token), row.generated)
+			}
+			if !row.generated && c.Token != row.token {
+				t.Fatalf("token %q, want %q", c.Token, row.token)
+			}
+			if c.Listen != row.listen || c.Shell != row.shell {
+				t.Fatalf("configuration: listen=%q shell=%q", c.Listen, c.Shell)
 			}
 			if c.DefaultCwd != dir || !reflect.DeepEqual(c.Presets[0].Cmd, []string{row.shell, "-l", "-i"}) {
 				t.Fatalf("unresolved defaults: cwd=%q shell argv=%q", c.DefaultCwd, c.Presets[0].Cmd)
