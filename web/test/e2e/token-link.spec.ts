@@ -57,7 +57,9 @@ test("a #token= link signs in and leaves no token in the address or history", as
 
 test("an invalid #token= link shows the token form", async ({ page }) => {
   await page.goto(`${server.baseURL}/#token=wrong`);
-  await expect(page.getByLabel("共享 Token")).toHaveValue("wrong");
+  await expect(page.getByLabel("共享 Token", { exact: true })).toHaveValue(
+    "wrong",
+  );
   await expect(page.getByRole("alert")).toHaveText("authentication required");
   expect(page.url()).toBe(`${server.baseURL}/`);
 });
