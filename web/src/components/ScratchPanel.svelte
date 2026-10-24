@@ -17,6 +17,11 @@
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import * as Dialog from "$lib/components/ui/dialog";
   import {
+    narrowTouchHeight,
+    narrowTouchMinHeight,
+    narrowTouchSize,
+  } from "$lib/touch-targets";
+  import {
     scratchEntriesLimit,
     scratchEntryLimit,
     scratchStorageLimit,
@@ -206,7 +211,7 @@
             <Button
               variant="outline"
               size="icon"
-              class="size-11 sm:size-9"
+              class={narrowTouchSize}
               disabled={locked || full}
               title="将当前草稿存入暂存"
               aria-label="将当前草稿存入暂存"
@@ -226,7 +231,7 @@
           <Button
             variant="ghost"
             size="icon"
-            class="size-11 text-muted-foreground sm:size-9"
+            class="{narrowTouchSize} text-muted-foreground"
             disabled={!draft.scratch.length}
             title="清空暂存"
             aria-label="清空暂存"
@@ -261,7 +266,7 @@
                           {...props}
                           variant="ghost"
                           size="icon-sm"
-                          class="size-11 sm:size-9"
+                          class={narrowTouchSize}
                           title="更多操作"
                           aria-label={`暂存第 ${index + 1} 条的更多操作`}
                           ><IconDots aria-hidden="true" /></Button
@@ -270,7 +275,7 @@
                     </DropdownMenu.Trigger>
                     <DropdownMenu.Content align="end">
                       <DropdownMenu.Item
-                        class="min-h-11 sm:min-h-9"
+                        class={narrowTouchMinHeight}
                         disabled={index === 0}
                         aria-label={`上移暂存第 ${index + 1} 条`}
                         onSelect={() => drafts.moveScratch(draft, item.id, -1)}
@@ -279,7 +284,7 @@
                         />上移</DropdownMenu.Item
                       >
                       <DropdownMenu.Item
-                        class="min-h-11 sm:min-h-9"
+                        class={narrowTouchMinHeight}
                         disabled={index === draft.scratch.length - 1}
                         aria-label={`下移暂存第 ${index + 1} 条`}
                         onSelect={() => drafts.moveScratch(draft, item.id, 1)}
@@ -289,7 +294,7 @@
                       >
                       <DropdownMenu.Separator />
                       <DropdownMenu.Item
-                        class="min-h-11 sm:min-h-9"
+                        class={narrowTouchMinHeight}
                         variant="destructive"
                         aria-label={`删除暂存第 ${index + 1} 条`}
                         onSelect={() => drafts.removeScratch(draft, item.id)}
@@ -300,7 +305,7 @@
                   <Button
                     variant="secondary"
                     size="icon"
-                    class="size-11 text-primary sm:size-9"
+                    class="{narrowTouchSize} text-primary"
                     disabled={!item.text || locked}
                     title="取用到草稿"
                     aria-label={`取用暂存第 ${index + 1} 条`}
@@ -392,7 +397,7 @@
         </div>
         <Button
           size="sm"
-          class="h-11 px-4 sm:h-9"
+          class="{narrowTouchHeight} px-4"
           disabled={!newText || full}
           onclick={add}><IconPlus aria-hidden="true" />添加暂存</Button
         >

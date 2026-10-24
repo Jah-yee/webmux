@@ -1,21 +1,35 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { MediaQuery } from "svelte/reactivity";
+  import { cn } from "$lib/utils";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Drawer from "$lib/components/ui/drawer";
 
+  // A form dialog that is a centered Dialog on desktop and a bottom Drawer on
+  // narrow screens. While `busy`, every dismissal path (Escape, outside click,
+  // close button, drawer drag) is ignored so an in-flight request is never
+  // abandoned with its form.
   let {
     title,
     description,
+    drawerDescription,
     onclose,
     children,
     busy = false,
+    class: className,
+    pinDrawerHeader = false,
   }: {
     title: string;
     description: string;
+    /** Shorter drawer copy; defaults to `description`. */
+    drawerDescription?: string;
     onclose: () => void;
     children: Snippet;
     busy?: boolean;
+    /** Extra desktop Dialog content classes. */
+    class?: string;
+    /** Keep the drawer header fixed and scroll only the body. */
+    pinDrawerHeader?: boolean;
   } = $props();
   const desktop = new MediaQuery("(min-width: 640px)");
   let open = $state(true);
@@ -25,10 +39,28 @@
   }
 </script>
 
+{#snippet drawerBody()}
+  <div
+    class={[
+      pinDrawerHeader && "overflow-y-auto",
+      "px-4 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))]",
+    ]}
+  >
+    {@render children()}
+  </div>
+{/snippet}
+
+{#snippet drawerHeader()}
+  <Drawer.Header>
+    <Drawer.Title>{title}</Drawer.Title>
+    <Drawer.Description>{drawerDescription ?? description}</Drawer.Description>
+  </Drawer.Header>
+{/snippet}
+
 {#if desktop.current}
   <Dialog.Root bind:open onOpenChange={changed}>
     <Dialog.Content
-      class="max-h-[90dvh] overflow-y-auto sm:max-w-xl"
+      class={cn("max-h-[90dvh] overflow-y-auto sm:max-w-xl", className)}
       onEscapeKeydown={(event) => {
         if (busy) event.preventDefault();
       }}
@@ -46,15 +78,15 @@
 {:else}
   <Drawer.Root bind:open onOpenChange={changed} dismissible={!busy}>
     <Drawer.Content class="data-[vaul-drawer-direction=bottom]:max-h-[95dvh]">
-      <div class="min-h-0 overflow-y-auto">
-        <Drawer.Header>
-          <Drawer.Title>{title}</Drawer.Title>
-          <Drawer.Description>{description}</Drawer.Description>
-        </Drawer.Header>
-        <div class="px-4 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {@render children()}
+      {#if pinDrawerHeader}
+        {@render drawerHeader()}
+        {@render drawerBody()}
+      {:else}
+        <div class="min-h-0 overflow-y-auto">
+          {@render drawerHeader()}
+          {@render drawerBody()}
         </div>
-      </div>
+      {/if}
     </Drawer.Content>
   </Drawer.Root>
 {/if}

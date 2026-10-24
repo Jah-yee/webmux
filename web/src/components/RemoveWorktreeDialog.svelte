@@ -10,7 +10,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Label } from "$lib/components/ui/label";
-  import WorkspaceDialog from "./WorkspaceDialog.svelte";
+  import ResponsiveDialog from "./ResponsiveDialog.svelte";
   let {
     worktree,
     onclose,
@@ -71,7 +71,7 @@
   }
 </script>
 
-<WorkspaceDialog
+<ResponsiveDialog
   title={force ? "强制删除 worktree" : "删除 worktree"}
   description={force
     ? "危险操作：停止已确认的 WebMux 会话，并永久丢弃删除时目录中的全部内容。"
@@ -204,4 +204,4 @@
       {/if}
     </div>
   </form>
-</WorkspaceDialog>
+</ResponsiveDialog>

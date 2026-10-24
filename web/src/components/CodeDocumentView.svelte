@@ -14,7 +14,7 @@
   import { codeReference, nodeId } from "../code-reference";
   import CodeReader from "./CodeReader.svelte";
   import { Button } from "$lib/components/ui/button";
-  import IconPlus from "~icons/tabler/plus";
+  import CodeLineAction from "./CodeLineAction.svelte";
   import CodeImageView from "./CodeImageView.svelte";
   import CodeDownloadButton from "./CodeDownloadButton.svelte";
   import {
@@ -481,16 +481,12 @@
       >
         {#snippet lineAction(row)}
           {@const reference = referenceAt(row)}
-          {#if reference}
-            <Button
-              size="icon"
-              class="size-9 border border-border shadow-sm"
-              aria-label={`发送第 ${row} 行位置到${draftEnabled ? "草稿" : "终端"}`}
+          {#if reference}<CodeLineAction
+              line={reference.number}
+              {draftEnabled}
               disabled={status !== "unchanged"}
               onclick={() => send(reference.text)}
-              ><IconPlus class="size-5" aria-hidden="true" /></Button
-            >
-          {/if}
+            />{/if}
         {/snippet}
       </CodeDiffReader>
     {/key}
@@ -513,17 +509,13 @@
       >
         {#snippet lineAction(row)}
           {@const reference = referenceAt(row)}
-          {#if reference}
-            <Button
-              size="icon"
-              class="size-9 border border-border shadow-sm"
-              aria-label={`发送第 ${reference.number} 行位置到${draftEnabled ? "草稿" : "终端"}`}
-              title={`发送第 ${reference.number} 行位置到${draftEnabled ? "草稿" : "终端"}`}
+          {#if reference}<CodeLineAction
+              line={reference.number}
+              {draftEnabled}
+              tooltip
               disabled={status !== "unchanged"}
               onclick={() => send(reference.text)}
-              ><IconPlus class="size-5" aria-hidden="true" /></Button
-            >
-          {/if}
+            />{/if}
         {/snippet}
       </CodeReader>{/key}
   {:else if imageDocument && doc}

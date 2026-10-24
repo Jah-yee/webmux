@@ -6,7 +6,7 @@
   import TerminalInputComposer from "../src/components/TerminalInputComposer.svelte";
   import ScratchPanel from "../src/components/ScratchPanel.svelte";
   import CodeChangesList from "../src/components/CodeChangesList.svelte";
-  import WorkspaceDialog from "../src/components/WorkspaceDialog.svelte";
+  import ResponsiveDialog from "../src/components/ResponsiveDialog.svelte";
   import { Button } from "../src/lib/components/ui/button";
   import { createTerminalDrafts } from "../src/terminal-draft.svelte";
   import {
@@ -135,7 +135,7 @@
   {:else if scenario === "workspace-dialog"}
     <Button onclick={() => (open = true)}>打开工作区</Button>
     {#if open}
-      <WorkspaceDialog
+      <ResponsiveDialog
         title={`工作区 ${longToken}`}
         description={longError}
         onclose={() => (open = false)}
@@ -150,7 +150,7 @@
           {/each}
           <Button onclick={() => (open = false)}>关闭预览</Button>
         </div>
-      </WorkspaceDialog>
+      </ResponsiveDialog>
     {/if}
   {/if}
   {#if notice}<p class="mt-2 break-all" role="status">{notice}</p>{/if}

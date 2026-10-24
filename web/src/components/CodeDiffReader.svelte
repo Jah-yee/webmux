@@ -7,8 +7,12 @@
     type SelectedLineRange,
     type SelectionSide,
   } from "@pierre/diffs";
-  import { SearchQuery } from "@codemirror/search";
-  import { Text } from "@codemirror/state";
+  import {
+    findMatchLines,
+    matchStatus,
+    stepMatch,
+    type MatchCursor,
+  } from "../code-search";
   import { z } from "zod";
   import { store, stored } from "../api";
   import { acquireDiffHighlighter } from "../code-diff-highlighter";
@@ -65,7 +69,7 @@
     regexp: false,
     wholeWord: false,
   });
-  let matchIndex = $state(-1);
+  let cursor = $state.raw<MatchCursor>();
   const id = "diff";
   const diffStyle = $derived(
     style === "auto" ? (width >= 760 ? "split" : "unified") : style,
@@ -86,22 +90,9 @@
   const sourceLines = $derived(
     side === "old" ? fileDiff.deletionLines : fileDiff.additionLines,
   );
-  const matches = $derived.by(() => {
-    if (!hasChanges || !search.search) return [];
-    const query = new SearchQuery(search);
-    if (!query.valid) return [];
-    const doc = Text.of(sourceLines.join("").split("\n"));
-    const cursor = query.getCursor(doc);
-    const result: number[] = [];
-    for (
-      let match = cursor.next();
-      !match.done && result.length < 5000;
-      match = cursor.next()
-    ) {
-      result.push(doc.lineAt(match.value.from).number);
-    }
-    return result;
-  });
+  const matches = $derived(
+    hasChanges ? findMatchLines(sourceLines, search) : [],
+  );
 
   export function clearLineAction() {
     selected = null;
@@ -130,7 +121,6 @@
       if (item?.type === "diff")
         item.instance.expandHunk(region, "both", Number.POSITIVE_INFINITY);
     }
-    const range = { start: number, end: number, side: sourceSide };
     viewer?.scrollTo({
       type: "line",
       id,
@@ -138,6 +128,10 @@
       side: sourceSide,
       align: "center",
     });
+    pickLine(number, sourceSide);
+  }
+  function pickLine(line: number, lineSide: SelectionSide) {
+    const range = { start: line, end: line, side: lineSide };
     viewer?.setSelectedLines({ id, range }, { notify: false });
     choose(range);
   }
@@ -151,11 +145,11 @@
       )
       ?.focus();
   }
-  function nextMatch(direction: number) {
-    if (!matches.length) return;
-    const current = matchIndex < 0 && direction < 0 ? 0 : matchIndex;
-    matchIndex = (current + direction + matches.length) % matches.length;
-    scrollToLine(matches[matchIndex]);
+  function nextMatch(direction: 1 | -1) {
+    const next = stepMatch(cursor, matches, direction);
+    if (!next) return;
+    cursor = next;
+    scrollToLine(matches[next.index]);
   }
   function goto(value: string) {
     const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());
@@ -203,25 +197,13 @@
           return;
         // 1.3.6 toggles a selected row by number alone, even when clicking the
         // opposite side. Explicitly retain the clicked side for references.
-        const range = {
-          start: props.lineNumber,
-          end: props.lineNumber,
-          side: props.annotationSide,
-        };
-        viewer?.setSelectedLines({ id, range }, { notify: false });
-        choose(range);
+        pickLine(props.lineNumber, props.annotationSide);
       },
       onLineClick(props) {
         if (!coarse || props.type !== "diff-line") return;
         const nativeSelection = document.getSelection();
         if (nativeSelection && !nativeSelection.isCollapsed) return;
-        const range = {
-          start: props.lineNumber,
-          end: props.lineNumber,
-          side: props.annotationSide,
-        };
-        viewer?.setSelectedLines({ id, range }, { notify: false });
-        choose(range);
+        pickLine(props.lineNumber, props.annotationSide);
       },
       // CodeView publishes getRenderedItems() after the item render callback.
       // Defer until then so plain-text files get named, focusable controls on
@@ -397,11 +379,6 @@
     void expired;
     if (mounted) enhanceControls();
   });
-  $effect(() => {
-    void search;
-    void side;
-    matchIndex = -1;
-  });
 </script>
 
 <div
@@ -502,9 +479,7 @@
         }}
       />
       <p class="px-2 pb-1 text-xs text-muted-foreground" role="status">
-        {side === "old" ? "旧侧" : "新侧"} · {matches.length
-          ? `${matchIndex + 1} / ${matches.length}${matches.length === 5000 ? "+" : ""}`
-          : "无匹配"}
+        {side === "old" ? "旧侧" : "新侧"} · {matchStatus(cursor, matches)}
       </p>
     </div>
   {:else if panel === "goto"}

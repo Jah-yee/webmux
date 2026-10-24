@@ -5,7 +5,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import DirectoryPicker from "./DirectoryPicker.svelte";
-  import WorkspaceDialog from "./WorkspaceDialog.svelte";
+  import ResponsiveDialog from "./ResponsiveDialog.svelte";
   let {
     defaultCwd,
     onclose,
@@ -30,7 +30,7 @@
   }
 </script>
 
-<WorkspaceDialog
+<ResponsiveDialog
   title="添加仓库"
   description="选择已有且可信的本机 Git 仓库。主目录、worktree 或子目录均可；同一仓库只登记一次，不会 init 或 clone。"
   {onclose}
@@ -74,4 +74,4 @@
       >
     </div>
   </form>
-</WorkspaceDialog>
+</ResponsiveDialog>

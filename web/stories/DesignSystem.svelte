@@ -20,7 +20,7 @@
   import InlineNotice from "../src/components/InlineNotice.svelte";
   import SessionStatus from "../src/components/SessionStatus.svelte";
   import SessionRow from "../src/components/SessionRow.svelte";
-  import WorkspaceDialog from "../src/components/WorkspaceDialog.svelte";
+  import ResponsiveDialog from "../src/components/ResponsiveDialog.svelte";
   import { session, now } from "./fixtures";
   import type { SessionInfo } from "../src/schemas";
 
@@ -445,7 +445,7 @@
     </div>
     <InlineNotice
       >编辑弹窗使用生产组件
-      WorkspaceDialog。调整窗口宽度，可检查桌面弹窗和手机抽屉。</InlineNotice
+      ResponsiveDialog。调整窗口宽度，可检查桌面弹窗和手机抽屉。</InlineNotice
     >
   {:else if section === "sessions"}
     <div role="list" aria-label="会话状态示例" class="space-y-3">
@@ -460,7 +460,7 @@
 </main>
 
 {#if dialogOpen}
-  <WorkspaceDialog
+  <ResponsiveDialog
     title="编辑工作区"
     description="让名称易于识别，路径保持完整可查。"
     onclose={() => (dialogOpen = false)}
@@ -489,7 +489,7 @@
         >
       </div>
     </div>
-  </WorkspaceDialog>
+  </ResponsiveDialog>
 {/if}
 <AlertDialog.Root bind:open={confirmOpen}>
   <AlertDialog.Content>

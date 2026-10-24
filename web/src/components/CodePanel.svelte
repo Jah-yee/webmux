@@ -263,31 +263,31 @@
   }
   async function openFile(path: string, opaqueId = nodeId(path)) {
     if (!context) return;
-    const intent = beginOpen();
-    const key = `${context.contextId}:${opaqueId}:worktree`;
-    if (tabs.some((t) => t.key === key)) {
-      active = key;
-      closeOverlayNav();
-      void check();
-      return;
-    }
-    await read(
-      key,
-      () =>
-        api(
-          `${base}/file?${params({ nodeId: opaqueId })}`,
-          CodeFileSchema,
-          "GET",
-          undefined,
-          controllers.get(key)?.signal,
-        ),
-      (value) => install(value, undefined, intent === selectionSequence),
+    await openTab(
+      `${context.contextId}:${opaqueId}:worktree`,
+      `${base}/file?${params({ nodeId: opaqueId })}`,
+      CodeFileSchema,
+      (value, activate) => install(value, undefined, activate),
     );
   }
   async function openDiff(change: CodeChange) {
     if (!context) return;
+    await openTab(
+      `${context.contextId}:${change.nodeId ?? nodeId(change.newPath)}:diff:${change.group}`,
+      `${base}/diff?${params({ changeId: change.changeId })}`,
+      CodeDiffSchema,
+      (value, activate) => install(undefined, value, activate),
+    );
+  }
+  // Focuses an already open tab, or fetches and installs it. A response only
+  // activates its tab when no later open request superseded it.
+  async function openTab<T extends z.ZodType>(
+    key: string,
+    path: string,
+    schema: T,
+    done: (value: z.infer<T>, activate: boolean) => void,
+  ) {
     const intent = beginOpen();
-    const key = `${context.contextId}:${change.nodeId ?? nodeId(change.newPath)}:diff:${change.group}`;
     if (tabs.some((t) => t.key === key)) {
       active = key;
       closeOverlayNav();
@@ -296,15 +296,8 @@
     }
     await read(
       key,
-      () =>
-        api(
-          `${base}/diff?${params({ changeId: change.changeId })}`,
-          CodeDiffSchema,
-          "GET",
-          undefined,
-          controllers.get(key)?.signal,
-        ),
-      (value) => install(undefined, value, intent === selectionSequence),
+      () => api(path, schema, "GET", undefined, controllers.get(key)?.signal),
+      (value) => done(value, intent === selectionSequence),
     );
   }
   async function read<T>(
