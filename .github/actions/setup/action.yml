@@ -5,6 +5,12 @@ description: >
   add per-ref copies to the repository's cache quota.
 
 inputs:
+  frontend:
+    description: Install pnpm and locked frontend dependencies.
+    default: "true"
+  node:
+    description: Install the pinned Node runtime.
+    default: "true"
   go:
     description: Install Go from go.mod and restore its module/build cache.
     default: "false"
@@ -35,22 +41,27 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@v4
+    - if: inputs.frontend == 'true'
+      uses: pnpm/action-setup@v4
       with:
         version: 12.11.2
-    - uses: actions/setup-node@v4
+    - if: inputs.node == 'true'
+      uses: actions/setup-node@v4
       with:
         node-version-file: .nvmrc
-    - id: pnpm-store
+    - if: inputs.frontend == 'true'
+      id: pnpm-store
       shell: bash
       run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-    - id: pnpm-cache
+    - if: inputs.frontend == 'true'
+      id: pnpm-cache
       uses: actions/cache/restore@v4
       with:
         path: ${{ steps.pnpm-store.outputs.path }}
         key: pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('web/pnpm-lock.yaml') }}
         restore-keys: pnpm-${{ runner.os }}-${{ runner.arch }}-
-    - shell: bash
+    - if: inputs.frontend == 'true'
+      shell: bash
       run: pnpm --dir web install --frozen-lockfile
 
     - if: inputs.go == 'true'

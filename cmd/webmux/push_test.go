@@ -41,6 +41,7 @@ func subscribe(t *testing.T, listen, endpoint string) {
 }
 
 func TestStatusReportsPush(t *testing.T) {
+	t.Parallel()
 	const endpoint = "https://push.example/SECRET-ENDPOINT"
 	for _, row := range []struct {
 		name, extra string
@@ -52,6 +53,7 @@ func TestStatusReportsPush(t *testing.T) {
 		{"disabled", "[push]\nenabled = false\n", contract.PushStatus{}},
 	} {
 		t.Run(row.name, func(t *testing.T) {
+			t.Parallel()
 			f := newFixture(t, row.extra)
 			stdout, _, _ := f.run(t, "status", "--json")
 			if strings.Contains(stdout, `"push"`) {

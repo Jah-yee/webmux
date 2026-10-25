@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # A newer push to the same pull request supersedes its running checks; main
 # runs always finish so every merged commit keeps a complete result.
@@ -14,9 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Platform-independent suites run on Ubuntu only. macOS keeps one job per run
-# (macOS concurrency is capped per account) for the darwin-specific Go process
-# code and the real-PTY E2E suite.
+# Platform-independent suites run on Ubuntu. Native macOS Go race and three
+# real-PTY E2E shards use separate runners so compilation and browser work
+# do not compete for the same three-core machine.
 jobs:
   lint:
     name: Format, check and build
@@ -36,15 +37,20 @@ jobs:
         run: pnpm --dir web check:arch
       - name: Check and build frontend
         run: pnpm --dir web build
-      - name: Build shared Ubuntu E2E runtime
+      - name: Build shared E2E runtime
         run: |
-          mkdir -p "$RUNNER_TEMP/webmux-e2e"
-          go build -trimpath -o "$RUNNER_TEMP/webmux-e2e/webmux" ./cmd/webmux
-          tar -czf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$RUNNER_TEMP/webmux-e2e" webmux
-      - name: Share Ubuntu E2E runtime
+          node .github/scripts/package-e2e-runtime.mjs "$RUNNER_TEMP/webmux-e2e"
+          for platform in linux darwin; do
+            mkdir -p "$RUNNER_TEMP/webmux-e2e/.ci-runtime/$platform"
+            arch=amd64
+            if [ "$platform" = darwin ]; then arch=arm64; fi
+            CGO_ENABLED=0 GOOS=$platform GOARCH=$arch go build -trimpath -o "$RUNNER_TEMP/webmux-e2e/.ci-runtime/$platform/webmux" ./cmd/webmux
+          done
+          tar -czf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$RUNNER_TEMP/webmux-e2e" web .ci-runtime
+      - name: Share E2E runtime
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-runtime-ubuntu
+          name: e2e-runtime
           path: ${{ runner.temp }}/webmux-e2e.tar.gz
           compression-level: 0
           if-no-files-found: error
@@ -136,7 +142,6 @@ jobs:
 
   e2e:
     name: E2E (Ubuntu ${{ matrix.shard }}/6)
-    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -147,18 +152,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
-          browsers: "true"
+          frontend: "false"
+      - name: Wait for this run's shared runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/wait-e2e-runtime.sh
       - name: Download shared E2E runtime
         uses: actions/download-artifact@v4
         with:
-          name: e2e-runtime-ubuntu
+          name: e2e-runtime
           path: ${{ runner.temp }}
       - name: Extract shared E2E runtime
-        run: tar -xzf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$RUNNER_TEMP"
+        run: tar -xzf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$GITHUB_WORKSPACE"
+      - name: Install test browser
+        run: node web/node_modules/playwright/cli.js install --with-deps chromium
       - name: Run Playwright E2E shard
         env:
-          WEBMUX_E2E_BINARY: ${{ runner.temp }}/webmux
-        run: pnpm --dir web exec playwright test --config playwright.config.ts --shard=${{ matrix.shard }}/6
+          WEBMUX_E2E_BINARY: ${{ github.workspace }}/.ci-runtime/linux/webmux
+        working-directory: web
+        run: node node_modules/playwright/cli.js test --config playwright.config.ts --shard=${{ matrix.shard }}/6
       - name: Preserve E2E diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -171,40 +183,65 @@ jobs:
           retention-days: 14
 
   macos:
-    name: Go race and E2E (macOS)
+    name: Go race and E2E (macOS ${{ matrix.suite }} ${{ matrix.shard }})
     runs-on: macos-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { suite: go, shard: 0 }
+          - { suite: e2e, shard: 1 }
+          - { suite: e2e, shard: 2 }
+          - { suite: e2e, shard: 3 }
     steps:
       - uses: actions/checkout@v4
       - id: setup
         uses: ./.github/actions/setup
         with:
-          go: "true"
-          browsers: "true"
-      - name: Build embedded frontend
-        run: pnpm --dir web exec vite build
-      - name: Run Go race and Playwright E2E
+          frontend: "false"
+          node: ${{ matrix.suite == 'e2e' }}
+          go: ${{ matrix.suite == 'go' }}
+      - name: Wait for this run's shared runtime
         env:
-          WEBMUX_E2E_DIST: ${{ github.workspace }}/web/dist
-        run: bash .github/scripts/test-macos.sh
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/wait-e2e-runtime.sh
+      - name: Download shared E2E runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-runtime
+          path: ${{ runner.temp }}
+      - name: Extract shared runtime
+        run: |
+          if [ '${{ matrix.suite }}' = go ]; then
+            tar -xzf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$GITHUB_WORKSPACE" web/dist
+          else
+            tar -xzf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$GITHUB_WORKSPACE"
+          fi
+      - name: Install test browser
+        if: matrix.suite == 'e2e'
+        run: node web/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Run native Go race tests
+        if: matrix.suite == 'go'
+        run: go test -race -parallel=4 ./...
+      - name: Run Playwright E2E shard
+        if: matrix.suite == 'e2e'
+        env:
+          WEBMUX_E2E_BINARY: ${{ github.workspace }}/.ci-runtime/darwin/webmux
+        working-directory: web
+        run: node node_modules/playwright/cli.js test --config playwright.config.ts --shard=${{ matrix.shard }}/3
       - name: Preserve E2E diagnostics
-        if: always()
+        if: always() && matrix.suite == 'e2e'
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-results-macos
+          name: e2e-results-macos-${{ matrix.shard }}
           path: |
             web/playwright-report/e2e/
             web/test-results/e2e/
           if-no-files-found: ignore
           retention-days: 14
-      - name: Save pnpm cache
-        if: github.ref == 'refs/heads/main' && steps.setup.outputs.pnpm-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ steps.setup.outputs.pnpm-store }}
-          key: ${{ steps.setup.outputs.pnpm-key }}
       - name: Save Go cache
-        if: github.ref == 'refs/heads/main' && steps.setup.outputs.go-hit != 'true'
+        if: matrix.suite == 'go' && github.ref == 'refs/heads/main' && steps.setup.outputs.go-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ steps.setup.outputs.go-paths }}

@@ -156,6 +156,9 @@ export async function createShell(
   await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expect(page.locator(".xterm-helper-textarea")).toBeAttached();
+  // A live PTY connection can precede Bash's terminal-mode initialization.
+  // Wait for the fixture shell before sending command bytes into it.
+  await expectTerminalLine(page, "webmux-e2e$");
   return new URL(page.url()).pathname.split("/").at(-1)!;
 }
 

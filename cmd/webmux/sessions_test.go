@@ -78,6 +78,7 @@ func (r *ptyRun) wait() int {
 }
 
 func TestRunAttachDetachAndExitCode(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, "")
 	f.start(t, nil, true, "--config", f.config)
 
@@ -127,6 +128,7 @@ func TestRunAttachDetachAndExitCode(t *testing.T) {
 }
 
 func TestSessionCommandsWithoutServer(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, "")
 	// Without a terminal only detached runs get as far as the server.
 	for _, args := range [][]string{{"ls"}, {"run", "--detach", "--", "true"}, {"open", "abcdefgh"}} {
@@ -137,6 +139,7 @@ func TestSessionCommandsWithoutServer(t *testing.T) {
 }
 
 func TestAttachedRunWithoutServerOnTerminal(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t, "")
 	run := f.ptyStart(t, "run", "--", "claude")
 	if code := run.wait(); code != 3 || !strings.Contains(run.output(), "not running") {
