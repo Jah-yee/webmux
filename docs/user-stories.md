@@ -47,7 +47,7 @@
 | H    | 手机、平板与触摸操作             | US-H01–US-H08 |
 | I    | 只读代码工作区、Diff 与引用      | US-I01–US-I15 |
 | J    | 仓库登记与 worktree 管理         | US-J01–US-J11 |
-| K    | 配置、运行与服务管理             | US-K01–US-K09 |
+| K    | 配置、运行与服务管理             | US-K01–US-K10 |
 | L    | 开发、验证与发布支持             | US-L01–US-L07 |
 | M    | 原生终端、CLI 与本机控制面       | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道              | US-N01–US-N08 |
@@ -226,8 +226,9 @@
 | US-K07 启停、诊断与卸载   | 作为部署者，我希望用统一命令管理后台服务并查看日志，以便维护和排查故障。                              | 提供 start、stop、restart、status、logs、logs --follow/-f、uninstall；停止、重启、卸载会结束会话；卸载保留二进制、配置、日志与状态目录；服务启用不等于端口已监听，应结合状态和日志诊断。                                                                                                             |
 | US-K08 保存仓库清单       | 作为部署者，我希望指定状态目录并保护其内容，以便重启或升级后仍保留项目登记。                          | `state_dir` 保存仓库清单、受保护的运行时记录/本机 API 信息及可选 cloudflared 缓存，不持久保存会话或终端输出；支持 XDG 默认路径；仓库清单使用私有权限、原子更新与单实例锁；仓库存储失败不阻止直接终端工作。                                                                                           |
 | US-K09 可信远程入口与升级 | 作为部署者，我希望通过可信 VPN 或 HTTPS 代理访问，并知道升级的影响，以便维护远程终端。                | `listen`、`token`、`allowed_origins` 配合部署；TLS 由外部代理提供，正确保留 Host 并配置 Origin；`version` 与 `help` 提供版本和命令信息，`version --json` 另含控制契约版本且不读取配置；替换二进制后需重启，重启结束会话但保留仓库登记与磁盘工作树。                                                  |
+| US-K10 定位设置分区       | 作为使用者，我希望通过分区导航快速找到设置项，以便在桌面和手机上减少长页面翻找。                      | 桌面左侧显示固定分区导航，手机顶部显示可横向滚动的吸顶导航；提供快捷指令、启动配置、草稿与暂存、公网访问、通知推送、输出预览六个入口；点击或键盘激活滚动到对应分区并转移焦点，滚动时高亮当前分区；支持地址片段直达和浏览器前进后退；定位不卸载表单、不丢失尚未保存的输入。                           |
 
-依据：[CLI 命令](../cmd/webmux/main.go)、[启动](../cmd/webmux/main.go)、[配置](../internal/config/config.go)、[配置命令](../cmd/webmux/configcmd.go)、[用户服务](../internal/service/)、[部署指南](deployment.md)。
+依据：[CLI 命令](../cmd/webmux/main.go)、[启动](../cmd/webmux/main.go)、[配置](../internal/config/config.go)、[配置命令](../cmd/webmux/configcmd.go)、[用户服务](../internal/service/)、[部署指南](deployment.md)、[设置页](../web/src/pages/Settings.svelte)、[设置导航](../web/src/components/SettingsNavigation.svelte)、[导航浏览器回归](../web/test/browser/SettingsNavigation.test.ts)。
 
 ## L. 开发、验证与发布支持
 
@@ -312,6 +313,7 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
 | 首页分组、管理表单按需加载、增量更新、稳定排序、搜索、状态过滤、空状态     | US-C01–US-C05                                       |
 | 结构化 agent 信号、OSC 通知、BEL 与集成配置                                | US-C06；US-K04                                      |
 | 设置页的预览、草稿与暂存存储、快捷指令                                     | US-C07；US-F07；US-G01–US-G04                       |
+| 设置页桌面侧栏、手机吸顶分区导航、锚点与滚动高亮                           | US-K10                                              |
 | Git 外部变化、前台恢复与手动刷新                                           | US-C08；US-J02                                      |
 | 主题切换与浏览器本机显示偏好                                               | US-C09；US-D08；US-H04                              |
 | 终端输入输出、历史、重连、同步、清屏、全屏                                 | US-D01–US-D04；US-D07–US-D08                        |
