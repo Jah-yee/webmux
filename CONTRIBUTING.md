@@ -88,7 +88,8 @@ CI 将各套件拆成并行 job：格式检查与前端构建、Go race、Vitest
 ## Pullfrog 模型配置
 
 `.github/workflows/pullfrog.yml` 使用 OpenCode Go 订阅通道的
-`opencode-go/deepseek-v4.1-flash`。在仓库的 GitHub Actions Secrets 中设置
+`opencode-go/deepseek-v4.1-flash`，并通过 `effort: high` 固定使用 High 推理等级。
+在仓库的 GitHub Actions Secrets 中设置
 `OPENCODE_API_KEY`，值为订阅所在 OpenCode workspace 的 API Key；不要使用
 DeepSeek 直连的 `DEEPSEEK_API_KEY`。
 
