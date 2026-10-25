@@ -7,7 +7,8 @@
   import { selectPreview } from "../preview";
   import { copyText } from "../clipboard";
   import { locationHints } from "../session-location";
-  import { IconArrowUpRight, IconDots } from "@tabler/icons-svelte";
+  import IconArrowUpRight from "~icons/tabler/arrow-up-right";
+  import IconDots from "~icons/tabler/dots";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Item from "$lib/components/ui/item";
@@ -59,12 +60,15 @@
 
 <Item.Root
   role="listitem"
-  class="session-row relative min-h-14 min-w-0 border-0 p-0"
+  variant="card"
+  size="flush"
+  class="relative min-h-14 min-w-0"
   data-session-id={session.id}
   data-status={session.status}
 >
   <a
-    class="session-link group block w-full min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    data-session-link
+    class="group block w-full min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     aria-label={session.title}
     href={`/s/${session.id}`}
     onclick={(event) => {
@@ -81,11 +85,8 @@
     }}
   >
     <div class="min-w-0 px-4 pt-4 pr-14">
-      <Item.Title
-        class="min-w-0 max-w-full text-sm font-medium group-hover:underline"
-        title={session.title}
-      >
-        <span class="truncate">{session.title}</span>
+      <Item.Title class="min-w-0 max-w-full" title={session.title}>
+        <span class="truncate group-hover:underline">{session.title}</span>
         <IconArrowUpRight
           class="size-4 shrink-0 text-muted-foreground"
           aria-hidden="true"
@@ -137,9 +138,9 @@
     <pre
       data-slot="terminal-preview"
       aria-label="终端输出预览"
-      style:height={`calc(${previewSettings.lines}lh + 1rem)`}
+      style:--preview-lines={previewSettings.lines}
       class:preview-empty={!preview}
-      class="mt-4 min-w-0 overflow-hidden px-4 pb-4 font-mono text-xs leading-5 whitespace-pre text-foreground/85">{preview ||
+      class="h-preview mt-4 min-w-0 overflow-hidden px-4 pb-4 font-mono text-xs leading-5 whitespace-pre text-foreground/85">{preview ||
         (session.preview
           ? "末尾行已隐藏，暂无可显示内容"
           : "等待终端输出…")}</pre>
@@ -175,15 +176,6 @@
 </Item.Root>
 
 <style>
-  :global(.session-row) {
-    background: var(--card);
-    box-shadow: inset 0 0 0 1px var(--border);
-  }
-
-  :global(.session-row:hover) {
-    background: color-mix(in oklab, var(--muted) 45%, var(--card));
-  }
-
   .preview-empty {
     color: var(--muted-foreground);
     white-space: normal;

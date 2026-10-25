@@ -18,10 +18,7 @@ export function parseHomeWorktrees(raw: string): HomeWorktrees {
 }
 
 /** A repository the user never curated shows only its main worktree. */
-export function pinnedIds(
-  home: HomeWorktrees,
-  repo: Repository,
-): ReadonlySet<string> {
+function pinnedIds(home: HomeWorktrees, repo: Repository): ReadonlySet<string> {
   return new Set(
     home[repo.id] ??
       repo.worktrees.filter((tree) => tree.kind === "main").map((t) => t.id),

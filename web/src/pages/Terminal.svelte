@@ -364,7 +364,7 @@
   class="terminal-page"
   class:force-soft-keys={forceSoftKeys}
   class:ios={isIOS()}
-  style:height={`${viewport.height}px`}
+  style:--viewport-height={`${viewport.height}px`}
 >
   <TerminalHeader
     terminal={t}

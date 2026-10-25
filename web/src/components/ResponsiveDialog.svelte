@@ -40,12 +40,7 @@
 </script>
 
 {#snippet drawerBody()}
-  <div
-    class={[
-      pinDrawerHeader && "overflow-y-auto",
-      "px-4 pt-1 pb-[max(1rem,env(safe-area-inset-bottom))]",
-    ]}
-  >
+  <div class={[pinDrawerHeader && "overflow-y-auto", "px-4 pt-1 pb-safe-4"]}>
     {@render children()}
   </div>
 {/snippet}

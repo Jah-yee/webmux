@@ -47,9 +47,9 @@ test("the code panel pops out into its own window and returns intact", async ({
     .click();
   const panel = page.getByRole("region", { name: "代码工作区" });
   await page.getByRole("button", { name: "other.txt", exact: true }).click();
-  await expect(page.locator(".code-reader:visible .cm-content")).toContainText(
-    "other document",
-  );
+  await expect(
+    page.locator("[data-code-reader]:visible .cm-content"),
+  ).toContainText("other document");
 
   const opened = page.context().waitForEvent("page");
   await page
@@ -65,9 +65,9 @@ test("the code panel pops out into its own window and returns intact", async ({
   const box = (await popped.boundingBox())!;
   expect([box.width, box.height]).toEqual(size);
   await expect(pip.locator(".cm-editor").first()).toHaveCSS("display", "flex");
-  await expect(pip.locator(".code-reader .cm-content").first()).toContainText(
-    "other document",
-  );
+  await expect(
+    pip.locator("[data-code-reader] .cm-content").first(),
+  ).toContainText("other document");
 
   // The theme follows the opener.
   await page.evaluate(() => document.documentElement.classList.add("dark"));
@@ -102,12 +102,12 @@ test("the code panel pops out into its own window and returns intact", async ({
   await expect.poll(async () => (await diffStyled(diff)).sheets).toBe(1);
   expect((await diffStyled(diff)).gutter).toBeGreaterThan(0);
   await page.getByRole("tab", { name: /^other\.txt/ }).click();
-  await expect(page.locator(".code-reader:visible .cm-content")).toContainText(
-    "other document",
-  );
+  await expect(
+    page.locator("[data-code-reader]:visible .cm-content"),
+  ).toContainText("other document");
   // Editors rebound to the opener still respond to input.
   await page
-    .locator(".code-reader:visible .cm-lineNumbers .cm-gutterElement")
+    .locator("[data-code-reader]:visible .cm-lineNumbers .cm-gutterElement")
     .filter({ hasText: /^1$/ })
     .click();
   await expect(
@@ -184,9 +184,9 @@ test("without Picture-in-Picture a desktop browser pops out into an ordinary pop
   // Closing the popup with the window control returns the panel.
   await popup.close();
   await expect(page.getByText("代码已在独立窗口中显示")).toHaveCount(0);
-  await expect(page.locator(".code-reader:visible .cm-content")).toContainText(
-    "popup document",
-  );
+  await expect(
+    page.locator("[data-code-reader]:visible .cm-content"),
+  ).toContainText("popup document");
 
   // Reloading the opener closes a popup instead of stranding the panel there.
   const again = page.waitForEvent("popup");

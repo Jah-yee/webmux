@@ -14,6 +14,8 @@
   import { codeReference, nodeId } from "../code-reference";
   import CodeReader from "./CodeReader.svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Label } from "$lib/components/ui/label";
+  import * as NativeSelect from "$lib/components/ui/native-select";
   import CodeLineAction from "./CodeLineAction.svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import IconChevronDown from "~icons/tabler/chevron-down";
@@ -418,7 +420,7 @@
 
 <!-- Narrow screens move the document bar into the code panel's menu. -->
 {#snippet documentMenu()}
-  <DropdownMenu.Label class="break-all text-foreground">
+  <DropdownMenu.Label variant="title" class="break-all">
     {doc?.absolutePath}
     {#if renamed}
       <span class="mt-1 block text-muted-foreground"
@@ -537,19 +539,23 @@
           >
         </div>{/if}
       {#if shownDiff}
-        {#if imageChange}<label class="flex shrink-0 items-center gap-1"
+        {#if imageChange}<Label size="sm" class="shrink-0"
             >预览来源
-            <select
+            <NativeSelect.Root
+              size="sm"
               aria-label="预览来源"
               bind:value={side}
               onchange={clearSelection}
-              class="h-7 rounded border bg-background px-1"
-              ><option value="new"
-                >修改后（{sourceLabel(shownDiff.new.source)}）</option
-              ><option value="old"
-                >修改前（{sourceLabel(shownDiff.old.source)}）</option
-              ></select
-            ></label
+              ><NativeSelect.Option value="new"
+                >修改后（{sourceLabel(
+                  shownDiff.new.source,
+                )}）</NativeSelect.Option
+              ><NativeSelect.Option value="old"
+                >修改前（{sourceLabel(
+                  shownDiff.old.source,
+                )}）</NativeSelect.Option
+              ></NativeSelect.Root
+            ></Label
           >{/if}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>

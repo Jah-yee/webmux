@@ -1,7 +1,7 @@
 <script lang="ts">
   import InlineNotice from "./InlineNotice.svelte";
   import { untrack } from "svelte";
-  import { IconBolt } from "@tabler/icons-svelte";
+  import IconBolt from "~icons/tabler/bolt";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -92,7 +92,8 @@
           rows={4}
           maxlength={4096}
           placeholder="例如：git status"
-          class="max-h-[40dvh] font-mono"
+          mono
+          class="max-h-[40dvh]"
           autocapitalize="off"
           autocorrect="off"
           spellcheck={false}

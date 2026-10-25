@@ -33,24 +33,26 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 
 Run from the repository root:
 
-| Command                                    | Purpose                                                                     |
-| ------------------------------------------ | --------------------------------------------------------------------------- |
-| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                       |
-| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`.   |
-| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.         |
-| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                    |
-| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                |
-| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                        |
-| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                   |
-| `make check`                               | Build frontend, check formatting, run Oxlint, `go vet` and `golangci-lint`. |
-| `pnpm --dir web lint`                      | Run Oxlint on frontend code.                                                |
-| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                          |
+| Command                                    | Purpose                                                                                                               |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                                                                 |
+| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`.                                             |
+| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.                                                   |
+| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                                                              |
+| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                                                          |
+| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                                                                  |
+| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                                                             |
+| `make check`                               | Build frontend, check formatting, run Oxlint, the architecture guard, `go vet` and `golangci-lint`.                   |
+| `pnpm --dir web lint`                      | Run Oxlint on frontend code.                                                                                          |
+| `pnpm --dir web check:arch`                | Run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test). |
+| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                                                                    |
 
 Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its development TOML; otherwise browser write requests are rejected. Configuration defaults to `~/.config/webmux/config.toml`; `-config`, `-listen`, and `-token` override startup settings.
 
 ## Code Conventions & Common Patterns
 
 - Go uses gofmt. Frontend files use Oxfmt with an 80-column print width, two spaces, semicolons, trailing commas, and Svelte formatting enabled. Oxlint checks JS/TS and Svelte script blocks; keep `svelte-check` for Svelte template and type diagnostics. TypeScript is strict; `$lib` aliases `web/src/lib`.
+- Before writing UI, look for an existing component in `web/src/lib/components/ui/`, then `web/src/components/`, then the shadcn-svelte registry; give design-system components a new variant or size instead of restyling them with `class`. Run `pnpm --dir web check:arch` before finishing frontend work. The committed baselines are empty, so any violation fails; fix it rather than adding `eslint-disable`/`jscpd:ignore` or growing a baseline. A baseline is only for adopting a new rule that has existing violations, followed by `pnpm --dir web arch:ratchet` as they are fixed. See [Frontend Architecture Guard](docs/frontend-architecture.md).
 - Follow existing names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune-bearing hooks, Go `*_test.go`, and Playwright `*.spec.ts`.
 - Use Iconify for new or changed UI icons, preferring the `tabler` collection for visual consistency. Bundle the required icon data locally so icons work without a public icon API. Migrate existing direct icon-library imports when updating the related UI. Icon-only controls must have an accessible name and a visible tooltip; decorative icons use `aria-hidden="true"`. See [Icons](docs/design-system.md#icons).
 - Use Svelte 5 `$state`/`$derived` for local reactive state and lifecycle cleanup for sockets, xterm, listeners, and observers. Reuse `api.ts` and `ws.ts`; do not add parallel request or reconnect conventions.
@@ -66,6 +68,7 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 - `web/embed.go`: embeds `web/dist`; rebuild the frontend before compiling Go to avoid missing or stale assets.
 - `Makefile`, `go.mod`, `web/package.json`, `web/pnpm-lock.yaml`, `web/pnpm-workspace.yaml`: build commands, tool/dependency versions, and permitted install scripts.
 - `web/vite.config.ts`, `web/tsconfig.json`, `web/components.json`, `.oxfmtrc.json`, `web/.oxlintrc.json`: proxy/alias, strict typing, UI generation, formatting, and lint configuration.
+- `web/eslint.config.mjs`, `web/.dependency-cruiser.cjs`, `web/.jscpd.json`, `web/knip.json`, `web/test/architecture.test.ts` and their baselines (`web/eslint-suppressions.json`, `web/.dependency-cruiser-known-violations.json`, `web/.jscpd-baseline.json`): frontend architecture guard.
 - `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level; confirm implementation details against source. Maintain `docs/user-stories.md` under the rules below; update other documentation when relevant. `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.
 - `openspec/config.yaml`: spec-driven workflow context. Write new specification artifacts in Simplified Chinese, retaining English structural headings and SHALL/MUST keywords. `.agents/`, `.claude/`, and `.omp/` contain generated workflow integrations.
 
@@ -116,7 +119,7 @@ make test-browsers-install        # Chromium (+ Linux libraries; may require sud
 - Browser tests exercise real Svelte/Tailwind/xterm rendering without a backend. Local E2E builds one production frontend and embedded Go executable per invocation in a private temporary build directory; Ubuntu CI builds the executable once in the format/build job and shares it with all six shards through an artifact. Workers share only the immutable executable, with independent backends, HOME/config/workdirs and dynamic ports (one worker locally, two on Ubuntu CI and four on macOS CI), and automatic session/process cleanup. Do not connect tests to an existing developer service.
 - Target a frontend test with `pnpm --dir web exec vitest run --config vitest.config.ts test/input.test.ts`, or an E2E spec with `pnpm --dir web exec playwright test test/e2e/terminal.spec.ts`.
 - Preserve behavioral coverage for authentication/Origin rejection, argv boundaries, replay continuity, exit ordering, cancellation, terminal input/rendering, and touch interactions. No numeric coverage threshold is configured.
-- `.github/workflows/test.yml` runs parallel jobs: formatting/frontend build, Go race, Vitest, Storybook and six E2E shards on Ubuntu; E2E shards wait for the format/build job, reuse its executable, and skip Go setup; one macOS job runs Go race and E2E concurrently, checks both exit codes, and keeps the platform-specific suites. `Test result` aggregates every job. PR runs restore caches read-only and superseded PR runs are cancelled; caches are saved from `main`. Failure diagnostics live in `web/playwright-report/`, `web/test-results/`, and `web/.vitest/attachments/` (uploaded per job); open the E2E HTML report with `pnpm --dir web test:e2e:report`.
+- `.github/workflows/test.yml` runs parallel jobs: formatting/architecture guard/frontend build, Go race, Vitest, Storybook and six E2E shards on Ubuntu; E2E shards wait for the format/build job, reuse its executable, and skip Go setup; one macOS job runs Go race and E2E concurrently, checks both exit codes, and keeps the platform-specific suites. `Test result` aggregates every job. PR runs restore caches read-only and superseded PR runs are cancelled; caches are saved from `main`. Failure diagnostics live in `web/playwright-report/`, `web/test-results/`, and `web/.vitest/attachments/` (uploaded per job); open the E2E HTML report with `pnpm --dir web test:e2e:report`.
 - Chromium mobile emulation does not replace real-device iOS Safari/Android keyboard and native selection-menu checks.
 
 ## UI Pull Request Evidence

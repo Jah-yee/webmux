@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { IconMoon, IconSettings, IconSun } from "@tabler/icons-svelte";
+  import IconMoon from "~icons/tabler/moon";
+  import IconSettings from "~icons/tabler/settings";
+  import IconSun from "~icons/tabler/sun";
   import { Button } from "$lib/components/ui/button";
   import { toggleTheme } from "../theme";
   import type { Connection } from "../ws";
@@ -41,7 +43,7 @@
 </script>
 
 <header
-  class="app-header workspace-header flex min-h-(--app-header-height) items-center border-b bg-card"
+  class="app-header flex min-h-(--app-header-height) items-center border-b bg-card"
 >
   <div
     class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-0.5 sm:px-8"

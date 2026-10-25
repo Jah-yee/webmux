@@ -9,6 +9,7 @@
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
+  import { Checkbox } from "$lib/components/ui/checkbox";
   import { Label } from "$lib/components/ui/label";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   let {
@@ -140,7 +141,8 @@
             id="confirm-worktree-path"
             bind:value={confirmPath}
             rows={2}
-            class="font-mono break-all"
+            mono
+            class="break-all"
             autocomplete="off"
             autocapitalize="off"
             autocorrect="off"
@@ -148,17 +150,16 @@
             disabled={busy}
           />
         </div>
-        <label class="flex items-start gap-3 text-sm">
-          <input
-            type="checkbox"
+        <Label class="items-start">
+          <Checkbox
             bind:checked={closeSessions}
             disabled={busy}
-            class="mt-1 size-4 shrink-0 accent-destructive"
+            class="mt-0.5"
           />
           <span
             >我同意关闭上面列出的活动会话，并永久删除该目录的全部内容（包括忽略文件）。</span
           >
-        </label>
+        </Label>
       {/if}
     {/if}
     {#if error}<p role="alert" class="break-all text-sm text-destructive">
@@ -194,8 +195,7 @@
       {:else if preview.forceAllowed}
         <Button
           type="button"
-          variant="outline"
-          class="text-destructive"
+          variant="destructive"
           disabled={busy}
           onclick={() => {
             force = true;

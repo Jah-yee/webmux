@@ -32,6 +32,8 @@ jobs:
         run: make format-check
       - name: Lint frontend
         run: pnpm --dir web lint
+      - name: Check frontend architecture
+        run: pnpm --dir web check:arch
       - name: Check and build frontend
         run: pnpm --dir web build
       - name: Build shared Ubuntu E2E runtime

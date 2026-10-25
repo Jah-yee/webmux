@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IconChevronDown } from "@tabler/icons-svelte";
+  import IconChevronDown from "~icons/tabler/chevron-down";
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Collapsible from "$lib/components/ui/collapsible";

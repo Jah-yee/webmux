@@ -8,11 +8,17 @@
         default: "border-transparent",
         outline: "border-border",
         muted: "bg-muted/50 border-transparent",
+        // A list entry on its own card surface that highlights on hover. The
+        // inset ring draws the edge without a border box, and its title reads
+        // at body size.
+        card: "border-0 bg-card shadow-[inset_0_0_0_1px_var(--border)] hover:bg-[color-mix(in_oklab,var(--muted)_45%,var(--card))] [&_[data-slot=item-title]]:text-sm",
       },
       size: {
         default: "gap-2.5 px-3 py-2.5",
         sm: "gap-2.5 px-3 py-2.5",
         xs: "gap-2 px-2.5 py-2 in-data-[slot=dropdown-menu-content]:p-0",
+        // The content brings its own padding, e.g. a full-size link.
+        flush: "gap-2.5 p-0",
       },
     },
     defaultVariants: {

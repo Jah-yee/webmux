@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import { IconX } from "@tabler/icons-svelte";
+  import IconX from "~icons/tabler/x";
 
   let {
     line,
@@ -17,7 +17,8 @@
 </script>
 
 <form
-  class="code-goto-line flex items-center gap-1 p-1"
+  data-code-goto-line
+  class="flex items-center gap-1 p-1"
   onsubmit={(e) => {
     e.preventDefault();
     onsubmit(value);

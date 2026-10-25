@@ -57,7 +57,7 @@ export const FileDiffSchema = z.object({
   additionLines: z.array(z.string()).max(20000),
 }) satisfies z.ZodType<FileDiffMetadata>;
 
-export const DiffResultSchema = z.discriminatedUnion("kind", [
+const DiffResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ready"), fileDiff: FileDiffSchema }),
   z.object({ kind: z.literal("limited"), reason: z.string() }),
 ]);

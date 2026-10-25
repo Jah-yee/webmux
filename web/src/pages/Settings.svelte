@@ -1,17 +1,16 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    IconArrowDown,
-    IconArrowUp,
-    IconBolt,
-    IconPlus,
-    IconRocket,
-    IconTrash,
-  } from "@tabler/icons-svelte";
+  import IconArrowDown from "~icons/tabler/arrow-down";
+  import IconArrowUp from "~icons/tabler/arrow-up";
+  import IconBolt from "~icons/tabler/bolt";
+  import IconPlus from "~icons/tabler/plus";
+  import IconRocket from "~icons/tabler/rocket";
+  import IconTrash from "~icons/tabler/trash";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { ListButton } from "$lib/components/ui/list-button";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import * as Card from "$lib/components/ui/card";
   import * as Empty from "$lib/components/ui/empty";
@@ -146,6 +145,16 @@
   });
 </script>
 
+{#snippet deleteButton(label: string, onclick: () => void)}
+  <Button
+    variant="ghost"
+    size="icon-sm"
+    aria-label={`删除 ${label}`}
+    title="删除"
+    {onclick}><IconTrash aria-hidden="true" /></Button
+  >
+{/snippet}
+
 <div class="safe-area-page min-h-dvh">
   <header class="app-header border-b bg-card">
     <div
@@ -180,7 +189,7 @@
       </Card.Header>
       <Card.Content class="space-y-4">
         {#if quickCommands.list.length === 0}
-          <Empty.Root class="border border-dashed">
+          <Empty.Root variant="outline">
             <Empty.Header>
               <Empty.Media variant="icon"><IconBolt /></Empty.Media>
               <Empty.Title>还没有快捷指令</Empty.Title>
@@ -199,9 +208,9 @@
             {#each quickCommands.list as cmd, index (cmd.id)}
               {@const label = commandLabel(cmd)}
               <Item.Root variant="outline" size="sm">
-                <button
-                  type="button"
-                  class="flex min-w-0 flex-1 flex-col gap-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                <ListButton
+                  variant="content"
+                  class="flex min-w-0 flex-1 flex-col"
                   aria-label={`编辑 ${label}`}
                   onclick={() => edit(cmd)}
                 >
@@ -213,7 +222,7 @@
                       class="truncate font-mono text-xs text-muted-foreground"
                       >{commandPreview(cmd)}</span
                     >{/if}
-                </button>
+                </ListButton>
                 <Item.Actions class="gap-1">
                   <Button
                     variant="ghost"
@@ -233,16 +242,10 @@
                     onclick={() => move(index, 1)}
                     ><IconArrowDown aria-hidden="true" /></Button
                   >
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`删除 ${label}`}
-                    title="删除"
-                    onclick={() => {
-                      deleting = cmd;
-                      deleteOpen = true;
-                    }}><IconTrash aria-hidden="true" /></Button
-                  >
+                  {@render deleteButton(label, () => {
+                    deleting = cmd;
+                    deleteOpen = true;
+                  })}
                 </Item.Actions>
               </Item.Root>
             {/each}
@@ -277,7 +280,7 @@
         {#if launchState === "loading"}
           <!-- Same shape as the empty state, the usual first result, so the
                cards below do not shift when the list arrives. -->
-          <Empty.Root class="border border-dashed" aria-busy="true">
+          <Empty.Root variant="outline" aria-busy="true">
             <Empty.Header>
               <Empty.Media variant="icon"><IconRocket /></Empty.Media>
               <Empty.Title role="status">正在读取启动配置…</Empty.Title>
@@ -300,7 +303,7 @@
             >重新读取</Button
           >
         {:else if launchConfigs.length === 0}
-          <Empty.Root class="border border-dashed">
+          <Empty.Root variant="outline">
             <Empty.Header>
               <Empty.Media variant="icon"><IconRocket /></Empty.Media>
               <Empty.Title>还没有启动配置</Empty.Title>
@@ -318,9 +321,9 @@
           <Item.Group class="gap-2" aria-label="启动配置列表">
             {#each launchConfigs as config (config.id)}
               <Item.Root variant="outline" size="sm">
-                <button
-                  type="button"
-                  class="flex min-w-0 flex-1 flex-col gap-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                <ListButton
+                  variant="content"
+                  class="flex min-w-0 flex-1 flex-col"
                   aria-label={`编辑 ${config.name}`}
                   onclick={() => editLaunchConfig(config.id)}
                 >
@@ -335,19 +338,13 @@
                   <span class="truncate font-mono text-xs text-muted-foreground"
                     >{joinArgs(config.cmd)}</span
                   >
-                </button>
+                </ListButton>
                 <Item.Actions class="gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`删除 ${config.name}`}
-                    title="删除"
-                    onclick={() => {
-                      launchDeleting = config;
-                      launchDeleteError = "";
-                      launchDeleteOpen = true;
-                    }}><IconTrash aria-hidden="true" /></Button
-                  >
+                  {@render deleteButton(config.name, () => {
+                    launchDeleting = config;
+                    launchDeleteError = "";
+                    launchDeleteOpen = true;
+                  })}
                 </Item.Actions>
               </Item.Root>
             {/each}
@@ -464,8 +461,8 @@
           </p>
           <pre
             aria-label="预览效果示例"
-            style:height={`calc(${previewSettings.lines}lh + 1rem)`}
-            class="min-w-0 overflow-hidden bg-muted p-2 font-mono text-xs leading-5 whitespace-pre text-foreground dark:bg-background">{preview ||
+            style:--preview-lines={previewSettings.lines}
+            class="h-preview min-w-0 overflow-hidden bg-muted p-2 font-mono text-xs leading-5 whitespace-pre text-foreground dark:bg-background">{preview ||
               "末尾行已隐藏，暂无可显示内容"}</pre>
         </div>
         <Button

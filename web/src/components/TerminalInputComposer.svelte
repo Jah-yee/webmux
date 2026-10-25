@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { IconInbox, IconTrash } from "@tabler/icons-svelte";
+  import IconInbox from "~icons/tabler/inbox";
+  import IconTrash from "~icons/tabler/trash";
   import { tick } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Textarea } from "$lib/components/ui/textarea";
@@ -163,7 +164,8 @@
     value={draft.text}
     readonly={locked}
     aria-label="草稿内容"
-    class="min-h-0 flex-1 resize-none overflow-y-auto font-mono [field-sizing:fixed]"
+    mono
+    class="min-h-0 flex-1 resize-none overflow-y-auto field-sizing-fixed"
     autocapitalize="off"
     autocorrect="off"
     spellcheck={false}
@@ -199,7 +201,7 @@
   />
   <div class="flex shrink-0 flex-wrap items-center gap-2">
     <span
-      class="min-w-0 flex-[1_1_100%] [overflow-wrap:anywhere] sm:flex-[1_1_12rem] text-xs text-muted-foreground"
+      class="min-w-0 flex-[1_1_100%] wrap-anywhere sm:flex-[1_1_12rem] text-xs text-muted-foreground"
       role="status"
       aria-label="草稿提交状态"
       >{draft.submission

@@ -12,12 +12,13 @@
     matchStatus,
     stepMatch,
     type MatchCursor,
+    type SearchSpec,
   } from "../code-search";
   import { z } from "zod";
   import { store, stored } from "../api";
   import { acquireDiffHighlighter } from "../code-diff-highlighter";
   import { Button } from "$lib/components/ui/button";
-  import CodeSearchPanel, { type SearchSpec } from "./CodeSearchPanel.svelte";
+  import CodeSearchPanel from "./CodeSearchPanel.svelte";
   import CodeGotoLine from "./CodeGotoLine.svelte";
   import IconSearch from "~icons/tabler/search";
   import IconTextWrap from "~icons/tabler/text-wrap";
@@ -130,7 +131,7 @@
     await tick();
     root
       .querySelector<HTMLInputElement>(
-        ".code-search input, .code-goto-line input",
+        "[data-code-search] input, [data-code-goto-line] input",
       )
       ?.focus();
   }
@@ -449,7 +450,7 @@
   {/if}
   {#if diffStyle === "split"}
     <div
-      class="grid shrink-0 grid-cols-2 border-b bg-muted/40 font-mono text-[11px] text-muted-foreground"
+      class="grid shrink-0 grid-cols-2 border-b bg-muted/40 font-mono text-xs text-muted-foreground"
     >
       <span class="truncate border-r px-3 py-1">修改前</span><span
         class="truncate px-3 py-1">修改后</span
@@ -459,7 +460,7 @@
   <div class="relative min-h-0 min-w-0 flex-1">
     <div
       bind:this={host}
-      class="code-diff-reader h-full overflow-x-hidden overflow-y-auto overscroll-contain outline-none [contain:strict] [overflow-anchor:none]"
+      class="code-diff-reader h-full overflow-x-hidden overflow-y-auto overscroll-contain outline-none contain-strict [overflow-anchor:none]"
       tabindex="-1"
       aria-label="只读代码"
     ></div>

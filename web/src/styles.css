@@ -6,6 +6,23 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Bottom padding that also clears the home indicator. */
+@utility pb-safe-4 {
+  padding-bottom: max(--spacing(4), var(--safe-bottom));
+}
+
+/* Terminal preview of --preview-lines lines plus its padding. */
+@utility h-preview {
+  height: calc(var(--preview-lines) * 1lh + 1rem);
+}
+
+/* shadcn-svelte marks direction-bound icons (submenu chevrons) with this. */
+@utility cn-rtl-flip {
+  &:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
+    scale: -1 1;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -101,12 +118,6 @@
 .workspace-page {
   background: var(--background);
 }
-.workspace-empty {
-  min-height: 18rem;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-xl);
-  background: var(--card);
-}
 .workspace-page [data-slot="collapsible-trigger"] {
   min-height: 44px;
 }
@@ -142,7 +153,8 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100dvh;
+  /* The visual viewport height, which excludes an open soft keyboard. */
+  height: var(--viewport-height, 100dvh);
   overflow: hidden;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -405,6 +417,7 @@
   [data-slot="input"],
   [data-slot="input-group-control"],
   [data-slot="command-input"],
+  [data-slot="native-select"],
   [data-slot="textarea"] {
     font-size: 1rem;
   }

@@ -45,6 +45,7 @@ release: web
 
 check: web format-check
 	$(PNPM) --dir web lint
+	$(PNPM) --dir web check:arch
 	$(GO) vet ./...
 	golangci-lint run ./...
 

@@ -33,7 +33,8 @@
         if (filePaste(event)) open = false;
       }}
       bind:value={text}
-      class="max-h-[50dvh] min-h-40 overflow-y-auto font-mono"
+      mono
+      class="max-h-[50dvh] min-h-40 overflow-y-auto"
       autocapitalize="off"
       autocorrect="off"
       spellcheck={false}

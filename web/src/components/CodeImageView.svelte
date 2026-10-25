@@ -318,11 +318,11 @@
         {src}
         alt={basename(doc.path)}
         draggable="false"
-        class="absolute top-0 left-0 max-w-none origin-top-left object-contain"
+        class="absolute top-0 left-0 h-(--image-height) w-(--image-width) max-w-none origin-top-left transform-(--image-transform) object-contain"
         class:invisible={phase !== "ready"}
-        style:width={`${base.width}px`}
-        style:height={`${base.height}px`}
-        style:transform={`translate(${x}px, ${y}px) scale(${scale})`}
+        style:--image-width={`${base.width}px`}
+        style:--image-height={`${base.height}px`}
+        style:--image-transform={`translate(${x}px, ${y}px) scale(${scale})`}
         onload={loaded}
         onerror={() =>
           fail("图片无法解码：文件可能已损坏，或当前浏览器不支持该格式")}

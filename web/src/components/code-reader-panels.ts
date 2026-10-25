@@ -25,10 +25,9 @@ import {
   selectMatches,
   setSearchQuery,
 } from "@codemirror/search";
-import CodeSearchPanel, {
-  type SearchSpec,
-} from "./components/CodeSearchPanel.svelte";
-import CodeGotoLine from "./components/CodeGotoLine.svelte";
+import type { SearchSpec } from "../code-search";
+import CodeSearchPanel from "./CodeSearchPanel.svelte";
+import CodeGotoLine from "./CodeGotoLine.svelte";
 
 function spec(query: SearchQuery): SearchSpec {
   return {
@@ -156,7 +155,7 @@ function gotoPanel(view: EditorView): Panel {
 
 export const openGotoLine: Command = (view) => {
   if (view.state.field(gotoOpen, false))
-    focusInput(view.dom.querySelector<HTMLElement>(".code-goto-line")!);
+    focusInput(view.dom.querySelector<HTMLElement>("[data-code-goto-line]")!);
   else view.dispatch({ effects: toggleGoto.of(true) });
   return true;
 };

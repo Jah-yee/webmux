@@ -2,17 +2,16 @@
   import { onMount, tick } from "svelte";
   import type { CodeChange } from "../schemas";
   import { Button } from "$lib/components/ui/button";
-  import {
-    IconAlertTriangle,
-    IconSquareLetterA,
-    IconSquareLetterC,
-    IconSquareLetterD,
-    IconSquareLetterM,
-    IconSquareLetterR,
-    IconSquareLetterT,
-    IconSquareLetterU,
-    IconSquareLetterX,
-  } from "@tabler/icons-svelte";
+  import { ListButton } from "$lib/components/ui/list-button";
+  import IconAlertTriangle from "~icons/tabler/alert-triangle";
+  import IconSquareLetterA from "~icons/tabler/square-letter-a";
+  import IconSquareLetterC from "~icons/tabler/square-letter-c";
+  import IconSquareLetterD from "~icons/tabler/square-letter-d";
+  import IconSquareLetterM from "~icons/tabler/square-letter-m";
+  import IconSquareLetterR from "~icons/tabler/square-letter-r";
+  import IconSquareLetterT from "~icons/tabler/square-letter-t";
+  import IconSquareLetterU from "~icons/tabler/square-letter-u";
+  import IconSquareLetterX from "~icons/tabler/square-letter-x";
   let {
     entries,
     total,
@@ -146,15 +145,15 @@
   aria-label="修改列表"
 >
   <div
-    class="relative"
-    style:height={`${rows.length * rowHeight}px`}
+    class="relative h-(--list-height)"
+    style:--list-height={`${rows.length * rowHeight}px`}
+    style:--row-height={`${rowHeight}px`}
     role="presentation"
   >
     {#each rows.slice(start, end) as row, offset (row.key)}
       <div
-        class="absolute left-0 right-0"
-        style:top={`${(start + offset) * rowHeight}px`}
-        style:height={`${rowHeight}px`}
+        class="absolute top-(--row-top) right-0 left-0 h-(--row-height)"
+        style:--row-top={`${(start + offset) * rowHeight}px`}
         data-row-index={start + offset}
         role="listitem"
       >
@@ -165,8 +164,9 @@
             change.oldPath === change.newPath
               ? change.newPath
               : `${change.oldPath} → ${change.newPath}`}
-          <button
-            class="flex h-full w-full min-w-0 items-center gap-1.5 rounded px-2 text-left text-xs hover:bg-muted"
+          <ListButton
+            variant="row"
+            class="flex h-full w-full min-w-0 items-center"
             title={`${status.label} ${path}`}
             aria-label={`${status.label} ${path}`}
             onclick={() => onopen(change)}
@@ -174,7 +174,8 @@
             ><status.icon
               class={`size-4 shrink-0 ${status.color}`}
               aria-hidden="true"
-            /><span class="truncate">{basename(change.newPath)}</span></button
+            /><span class="truncate">{basename(change.newPath)}</span
+            ></ListButton
           >
         {:else}<h3 class="px-2 py-1 text-xs font-medium">{row.label}</h3>{/if}
       </div>

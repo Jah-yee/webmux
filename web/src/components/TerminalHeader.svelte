@@ -7,6 +7,7 @@
   import IconUpload from "~icons/tabler/upload";
   import { navigate, sessionStatusText } from "../api";
   import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { Fullscreen } from "../hooks/fullscreen.svelte";
   import type { SessionInfo } from "../schemas";
@@ -61,7 +62,7 @@
     showFontSize: () => void;
     close: () => void;
   } = $props();
-  let fileInput: HTMLInputElement;
+  let fileInput = $state<HTMLInputElement | null>(null);
   const connectionText = $derived(
     t.connection === "connected"
       ? "已连接"
@@ -135,17 +136,18 @@
     aria-label="上传文件"
     title="上传文件"
     disabled={uploadDisabled}
-    onclick={() => fileInput.click()}
+    onclick={() => fileInput?.click()}
     ><IconUpload class="size-4" aria-hidden="true" /></Button
   >
-  <input
-    bind:this={fileInput}
+  <Input
+    bind:ref={fileInput}
     type="file"
     class="hidden"
     aria-label="选择上传文件"
-    onchange={() => {
-      const files = Array.from(fileInput.files ?? []);
-      fileInput.value = "";
+    onchange={(event) => {
+      const input = event.currentTarget;
+      const files = Array.from(input.files ?? []);
+      input.value = "";
       void upload(files);
     }}
   />
@@ -214,7 +216,7 @@
       <DropdownMenu.Item
         class="sm:hidden"
         disabled={uploadDisabled}
-        onSelect={() => fileInput.click()}>上传文件</DropdownMenu.Item
+        onSelect={() => fileInput?.click()}>上传文件</DropdownMenu.Item
       >
       <DropdownMenu.Item
         class="sm:hidden"

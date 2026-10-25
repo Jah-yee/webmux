@@ -2,7 +2,7 @@ import { createTwoFilesPatch } from "diff";
 import { processFile } from "@pierre/diffs";
 import { FileDiffSchema, type DiffResult } from "./code-diff-model";
 
-export const DIFF_BUDGET_MS = 250;
+const DIFF_BUDGET_MS = 250;
 
 function lineCount(text: string): number {
   return text ? text.split("\n").length - Number(text.endsWith("\n")) : 0;

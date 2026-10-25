@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { IconSearch, IconTerminal2 } from "@tabler/icons-svelte";
+  import IconSearch from "~icons/tabler/search";
+  import IconTerminal2 from "~icons/tabler/terminal-2";
   import { Button } from "$lib/components/ui/button";
   import * as Empty from "$lib/components/ui/empty";
 
@@ -18,7 +19,7 @@
 </script>
 
 {#if filtered}
-  <Empty.Root class="workspace-empty">
+  <Empty.Root variant="card" class="min-h-72">
     <Empty.Header>
       <Empty.Media variant="icon"><IconSearch /></Empty.Media>
       <Empty.Title>没有匹配的会话</Empty.Title>
@@ -31,7 +32,7 @@
     </Empty.Content>
   </Empty.Root>
 {:else}
-  <Empty.Root class="workspace-empty">
+  <Empty.Root variant="card" class="min-h-72">
     <Empty.Header>
       <Empty.Media variant="icon"><IconTerminal2 /></Empty.Media>
       <Empty.Title>还没有会话</Empty.Title>

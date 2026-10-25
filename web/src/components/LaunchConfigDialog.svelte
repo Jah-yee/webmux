@@ -1,11 +1,9 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import {
-    IconEye,
-    IconEyeOff,
-    IconPlus,
-    IconTrash,
-  } from "@tabler/icons-svelte";
+  import IconEye from "~icons/tabler/eye";
+  import IconEyeOff from "~icons/tabler/eye-off";
+  import IconPlus from "~icons/tabler/plus";
+  import IconTrash from "~icons/tabler/trash";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -250,7 +248,8 @@
               bind:value={command}
               rows={3}
               placeholder="claude --resume 或 bash -lc 'npm run dev'"
-              class="max-h-[30dvh] font-mono"
+              mono
+              class="max-h-[30dvh]"
               autocapitalize="off"
               autocorrect="off"
               spellcheck={false}
@@ -281,7 +280,8 @@
               <div class="grid min-w-0 gap-1">
                 <div class="flex min-w-0 flex-wrap items-center gap-2">
                   <Input
-                    class="min-w-0 flex-1 basis-32 font-mono"
+                    mono
+                    class="min-w-0 flex-1 basis-32"
                     aria-label={`变量名 ${index + 1}`}
                     bind:value={envRow.name}
                     placeholder="NAME"
@@ -291,11 +291,10 @@
                     spellcheck={false}
                     aria-invalid={!!rowErrors?.name}
                   />
-                  <div
-                    class="flex min-w-0 flex-[2] basis-48 items-center gap-1"
-                  >
+                  <div class="flex min-w-0 flex-2 basis-48 items-center gap-1">
                     <Input
-                      class="min-w-0 flex-1 font-mono"
+                      mono
+                      class="min-w-0 flex-1"
                       type={revealed[envRow.key] ? "text" : "password"}
                       aria-label={`变量值 ${index + 1}`}
                       bind:value={envRow.value}

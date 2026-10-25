@@ -1,10 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import {
-    IconAlertTriangle,
-    IconCircleCheck,
-    IconInfoCircle,
-  } from "@tabler/icons-svelte";
+  import IconAlertTriangle from "~icons/tabler/alert-triangle";
+  import IconCircleCheck from "~icons/tabler/circle-check";
+  import IconInfoCircle from "~icons/tabler/info-circle";
   import { cn } from "$lib/utils";
 
   let {
@@ -41,7 +39,7 @@
   {:else}
     <IconInfoCircle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
   {/if}
-  <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+  <div class="min-w-0 flex-1 wrap-anywhere">
     {@render children()}
   </div>
 </div>

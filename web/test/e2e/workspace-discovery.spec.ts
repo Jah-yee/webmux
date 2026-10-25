@@ -122,7 +122,7 @@ test("search and status filters compose and follow live session changes", async 
     created.push(await response.json());
   }
   await page.goto("/");
-  const rows = page.locator(".session-row");
+  const rows = page.locator("[data-session-id]");
   await expect(rows).toHaveCount(3);
   const search = page.getByRole("searchbox", { name: "搜索会话" });
   const filters = page.getByRole("group", { name: "按会话状态筛选" });

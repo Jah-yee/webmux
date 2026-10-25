@@ -1,6 +1,12 @@
 import { SearchQuery } from "@codemirror/search";
 import { Text } from "@codemirror/state";
-import type { SearchSpec } from "./components/CodeSearchPanel.svelte";
+
+export type SearchSpec = {
+  search: string;
+  caseSensitive: boolean;
+  regexp: boolean;
+  wholeWord: boolean;
+};
 
 /** Matching stops here; the status then reads `n / 5000+`. */
 export const MATCH_LIMIT = 5000;

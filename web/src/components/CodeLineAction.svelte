@@ -24,7 +24,7 @@
 
 <Button
   size="icon"
-  class="size-9 border border-border shadow-sm"
+  raised
   aria-label={label}
   title={tooltip ? label : undefined}
   {disabled}

@@ -1,13 +1,10 @@
 <script lang="ts">
-  import {
-    IconBolt,
-    IconCornerDownLeft,
-    IconPlus,
-    IconSettings,
-  } from "@tabler/icons-svelte";
+  import IconBolt from "~icons/tabler/bolt";
+  import IconCornerDownLeft from "~icons/tabler/corner-down-left";
+  import IconPlus from "~icons/tabler/plus";
+  import IconSettings from "~icons/tabler/settings";
   import { Button } from "$lib/components/ui/button";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { coarseTouchMinHeight } from "$lib/touch-targets";
   import type { QuickCommand } from "../schemas";
   import { commandPreview } from "../quickCommands";
 
@@ -49,7 +46,7 @@
     class="max-h-[min(60dvh,24rem)] w-72 max-w-[calc(100vw-1rem)]"
     {onCloseAutoFocus}
   >
-    <DropdownMenu.Label class="font-medium text-foreground"
+    <DropdownMenu.Label variant="title"
       >{target === "draft" ? "插入草稿" : "发送到终端"}</DropdownMenu.Label
     >
     {#if blocked}
@@ -62,7 +59,7 @@
       {@const preview = commandPreview(cmd)}
       {@const enter = target === "terminal" && cmd.enter}
       <DropdownMenu.Item
-        class="min-h-9 {coarseTouchMinHeight}"
+        class="min-h-9 any-pointer-coarse:min-h-11"
         disabled={blocked}
         aria-label={[cmd.name, preview].filter(Boolean).join("：") +
           (enter ? "（并回车）" : "")}
@@ -86,12 +83,12 @@
           把常用命令或提示词存起来，在这里一键发送。
         </p>
       </div>
-      <DropdownMenu.Item class={coarseTouchMinHeight} onSelect={manage}
+      <DropdownMenu.Item class="any-pointer-coarse:min-h-11" onSelect={manage}
         ><IconPlus aria-hidden="true" />添加快捷指令…</DropdownMenu.Item
       >
     {/each}
     <DropdownMenu.Separator />
-    <DropdownMenu.Item class={coarseTouchMinHeight} onSelect={manage}
+    <DropdownMenu.Item class="any-pointer-coarse:min-h-11" onSelect={manage}
       ><IconSettings aria-hidden="true" />管理快捷指令…</DropdownMenu.Item
     >
   </DropdownMenu.Content>

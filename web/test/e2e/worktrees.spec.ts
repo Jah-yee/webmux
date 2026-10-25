@@ -121,7 +121,7 @@ test("repository → two worktrees → shared PTYs → guarded force removal ret
   await writeFile(join(first.path, ".env"), "SECRET=local\n");
   await page.goto("/");
   await expand(repo);
-  await expect(page.locator(".session-link")).toHaveCount(3);
+  await expect(page.locator("[data-session-link]")).toHaveCount(3);
   const route = `/api/repositories/${repos[0].id}/worktrees/${alpha.id}`;
   const preview = await (
     await request.post(route + "/removal-preview", { data: {} })
@@ -349,7 +349,7 @@ test("multiple repositories keep every session visible through local failure, co
     entries.push(await response.json());
   }
   await page.goto("/");
-  await expect(page.locator(".session-link")).toHaveCount(4);
+  await expect(page.locator("[data-session-link]")).toHaveCount(4);
   for (const item of entries)
     await expect(
       page.getByRole("link", { name: item.title, exact: true }),
@@ -390,7 +390,7 @@ test("multiple repositories keep every session visible through local failure, co
   await expect(
     failed.getByText("已不可用工作区", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".session-link")).toHaveCount(4);
+  await expect(page.locator("[data-session-link]")).toHaveCount(4);
   await failed.getByRole("button", { name: /仓库菜单/ }).click();
   await page.getByRole("menuitem", { name: "从列表移除仓库" }).click();
   await page.getByRole("button", { name: "确认移除登记" }).click();

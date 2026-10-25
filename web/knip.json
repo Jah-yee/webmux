@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["scripts/*.{ts,mjs}"],
+  "project": ["src/**/*.{ts,svelte}", "scripts/**/*.{ts,mjs}", "test/**/*.ts"],
+  "ignore": ["src/lib/components/ui/**"],
+  "ignoreDependencies": ["shadcn-svelte", "tw-animate-css"],
+  "rules": {
+    "files": "error",
+    "duplicates": "error",
+    "dependencies": "error",
+    "exports": "error",
+    "types": "error"
+  }
+}

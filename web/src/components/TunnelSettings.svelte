@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { IconCheck, IconCopy, IconExternalLink } from "@tabler/icons-svelte";
+  import IconCheck from "~icons/tabler/check";
+  import IconCopy from "~icons/tabler/copy";
+  import IconExternalLink from "~icons/tabler/external-link";
   import { Badge, type BadgeVariant } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
@@ -108,7 +110,7 @@ hostname = "term.example.com"`;
         </div>
         {#if tunnel.state === "ready"}
           {#if tunnel.publicUrl}
-            <p class="min-w-0 text-sm [overflow-wrap:anywhere]">
+            <p class="min-w-0 text-sm wrap-anywhere">
               公网地址：<code>{tunnel.publicUrl}</code>
             </p>
           {:else}
@@ -133,7 +135,7 @@ hostname = "term.example.com"`;
         {/if}
         {#if tunnel.named}
           {#if tunnel.hostname}
-            <p class="min-w-0 text-sm [overflow-wrap:anywhere]">
+            <p class="min-w-0 text-sm wrap-anywhere">
               公共主机名：<code>{tunnel.hostname}</code>
             </p>
           {:else}

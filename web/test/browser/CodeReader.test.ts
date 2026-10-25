@@ -52,7 +52,7 @@ test("renders HTML and control-looking content as code text", async () => {
     .toMatchTextContent(new RegExp("window.codeExecuted"));
   expect(
     document.querySelector(
-      '.code-reader img[src="invalid"], .code-reader [onerror], .code-reader script',
+      '[data-code-reader] img[src="invalid"], [data-code-reader] [onerror], [data-code-reader] script',
     ),
   ).toBeNull();
   expect(

@@ -20,7 +20,7 @@ test("workspace UI audit: touch targets, overflow and session discovery", async 
     expect(response.status()).toBe(201);
   }
   await page.goto("/");
-  await expect(page.locator(".session-row")).toHaveCount(3);
+  await expect(page.locator("[data-session-id]")).toHaveCount(3);
   const measurements = [];
   const directory = process.env.WEBMUX_UI_AUDIT_DIR
     ? resolve(process.env.WEBMUX_UI_AUDIT_DIR)

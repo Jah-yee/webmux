@@ -1,4 +1,4 @@
-export const terminalFontFamily = "Maple Mono NF CN";
+const terminalFontFamily = "Maple Mono NF CN";
 
 // The generic is sans-serif so a missing glyph cannot fall through to a serif
 // CJK face such as SimSun. The two spellings resolve to the same faces; xterm

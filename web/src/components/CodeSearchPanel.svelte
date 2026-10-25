@@ -1,21 +1,11 @@
-<script module lang="ts">
-  export type SearchSpec = {
-    search: string;
-    caseSensitive: boolean;
-    regexp: boolean;
-    wholeWord: boolean;
-  };
-</script>
-
 <script lang="ts">
+  import type { SearchSpec } from "../code-search";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import {
-    IconArrowDown,
-    IconArrowUp,
-    IconSelectAll,
-    IconX,
-  } from "@tabler/icons-svelte";
+  import IconArrowDown from "~icons/tabler/arrow-down";
+  import IconArrowUp from "~icons/tabler/arrow-up";
+  import IconSelectAll from "~icons/tabler/select-all";
+  import IconX from "~icons/tabler/x";
 
   let {
     query,
@@ -47,7 +37,7 @@
   }
 </script>
 
-<div class="code-search flex flex-wrap items-center gap-1 p-1">
+<div data-code-search class="flex flex-wrap items-center gap-1 p-1">
   <Input
     bind:value={spec.search}
     {...{ "main-field": "true" }}
@@ -70,8 +60,8 @@
         aria-label={option.label}
         title={option.label}
         aria-pressed={spec[option.key]}
-        class="font-mono text-xs"
-        onclick={() => toggle(option.key)}>{option.text}</Button
+        onclick={() => toggle(option.key)}
+        ><span class="font-mono text-xs">{option.text}</span></Button
       >
     {/each}
     <Button

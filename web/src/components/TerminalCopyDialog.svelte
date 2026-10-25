@@ -26,7 +26,8 @@
       aria-label="复制内容"
       readonly
       value={text}
-      class="max-h-[50dvh] min-h-40 overflow-y-auto font-mono"
+      mono
+      class="max-h-[50dvh] min-h-40 overflow-y-auto"
     />
     <Dialog.Footer
       ><Button

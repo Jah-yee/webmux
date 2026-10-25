@@ -38,7 +38,8 @@
   >
     <Command.Root
       label="可添加的 worktree"
-      class="h-auto min-w-0 border"
+      variant="outline"
+      class="h-auto min-w-0"
       filter={(value, search, keywords) =>
         [value, ...(keywords ?? [])].some((text) =>
           text.toLowerCase().includes(search.trim().toLowerCase()),

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { IconFolder, IconArrowUp, IconHome } from "@tabler/icons-svelte";
+  import IconFolder from "~icons/tabler/folder";
+  import IconArrowUp from "~icons/tabler/arrow-up";
+  import IconHome from "~icons/tabler/home";
   import { api } from "../api";
   import { DirectoriesSchema } from "../schemas";
   import { Button } from "$lib/components/ui/button";
@@ -94,7 +96,8 @@
     {/snippet}
   </Popover.Trigger>
   {#if browsed}<Popover.Content
-      class="directory-picker w-[min(90vw,520px)] gap-0 overflow-hidden p-0"
+      data-directory-picker
+      class="w-[min(90vw,520px)] gap-0 overflow-hidden p-0"
       align="end"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
@@ -153,7 +156,8 @@
         />
         <ScrollArea
           type="always"
-          class="directory-scroll mx-2 mb-2 min-h-0 flex-1 overflow-hidden"
+          data-directory-scroll
+          class="mx-2 mb-2 min-h-0 flex-1 overflow-hidden"
           scrollbarYClasses="bg-muted/50 [&_[data-slot=scroll-area-thumb]]:bg-muted-foreground"
         >
           <Command.List class="max-h-none overflow-visible pr-3">
@@ -196,7 +200,7 @@
 </Popover.Root>
 
 <style>
-  :global(.directory-picker) {
+  :global([data-directory-picker]) {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -206,13 +210,13 @@
     );
   }
 
-  :global(.directory-picker [data-slot="command-input-wrapper"]) {
+  :global([data-directory-picker] [data-slot="command-input-wrapper"]) {
     margin: 0.5rem;
     padding: 0;
     flex-shrink: 0;
   }
 
-  :global(.directory-scroll [data-slot="scroll-area-viewport"]) {
+  :global([data-directory-scroll] [data-slot="scroll-area-viewport"]) {
     max-height: min(45dvh, 320px);
   }
 </style>

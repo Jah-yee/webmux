@@ -20,6 +20,9 @@
         destructive:
           "bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30",
         link: "text-primary underline-offset-4 hover:underline",
+        // A ghost button whose resting text recedes until hovered.
+        quiet:
+          "text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground",
       },
       size: {
         default:
@@ -32,6 +35,14 @@
           "size-(--control-xs) rounded-md [&_svg:not([class*='size-'])]:size-3",
         "icon-sm": "size-(--control-sm) rounded-md",
         "icon-lg": "size-(--control-lg)",
+        // Narrow layouts: the touch size below `sm`, the regular size above.
+        "icon-touch": "size-(--control-touch) sm:size-(--control-default)",
+        "sm-touch":
+          "h-(--control-touch) sm:h-(--control-default) gap-1.5 rounded-md px-4 text-xs has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+      },
+      // Floats above content, e.g. an overlay action on a terminal or code.
+      raised: {
+        true: "border-border shadow-md",
       },
     },
     defaultVariants: {
@@ -47,6 +58,7 @@
     WithElementRef<HTMLAnchorAttributes> & {
       variant?: ButtonVariant;
       size?: ButtonSize;
+      raised?: boolean;
     };
 </script>
 
@@ -55,6 +67,7 @@
     class: className,
     variant = "default",
     size = "default",
+    raised = false,
     ref = $bindable(null),
     href = undefined,
     type = "button",
@@ -68,7 +81,7 @@
   <a
     bind:this={ref}
     data-slot="button"
-    class={cn(buttonVariants({ variant, size }), className)}
+    class={cn(buttonVariants({ variant, size, raised }), className)}
     href={disabled ? undefined : href}
     aria-disabled={disabled}
     role={disabled ? "link" : undefined}
@@ -81,7 +94,7 @@
   <button
     bind:this={ref}
     data-slot="button"
-    class={cn(buttonVariants({ variant, size }), className)}
+    class={cn(buttonVariants({ variant, size, raised }), className)}
     {type}
     {disabled}
     {...restProps}

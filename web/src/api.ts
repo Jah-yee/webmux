@@ -172,13 +172,13 @@ export function navigate(path: string) {
   history.pushState(null, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
-export const statusText = {
+const statusText = {
   running: "运行中",
   waiting: "可能在等你",
   idle: "空闲",
   exited: "已退出",
 };
-export const attentionText = {
+const attentionText = {
   question: "需要回答",
   permission: "等待授权",
   done: "已完成",

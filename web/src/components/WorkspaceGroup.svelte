@@ -1,11 +1,9 @@
 <script lang="ts">
   import type { SessionInfo, Worktree } from "../schemas";
-  import {
-    IconDots,
-    IconFolder,
-    IconGitBranch,
-    IconPlus,
-  } from "@tabler/icons-svelte";
+  import IconDots from "~icons/tabler/dots";
+  import IconFolder from "~icons/tabler/folder";
+  import IconGitBranch from "~icons/tabler/git-branch";
+  import IconPlus from "~icons/tabler/plus";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";

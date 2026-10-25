@@ -1,0 +1,18 @@
+{
+  "path": ["src"],
+  "minTokens": 50,
+  "minLines": 5,
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/src/lib/components/ui/**",
+    "**/src/fonts.css",
+    "**/src/fonts-terminal.css",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.stories.*",
+    "**/*.d.ts"
+  ],
+  "reporters": ["console"],
+  "absolute": false
+}

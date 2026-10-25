@@ -81,7 +81,8 @@
     {#if !t.atBottom && !t.restoring && visible}<Button
         variant="secondary"
         size="sm"
-        class="absolute right-3 bottom-3 z-10 border shadow-md sm:hidden"
+        raised
+        class="absolute right-3 bottom-3 z-10 sm:hidden"
         aria-label="回到最新"
         onmousedown={(event) => event.preventDefault()}
         onclick={() => t.scrollToBottom()}

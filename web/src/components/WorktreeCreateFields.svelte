@@ -177,7 +177,8 @@
       <Label for="existing-branch">已有本地分支</Label>
       <Command.Root
         label="已有本地分支"
-        class="h-auto min-w-0 border"
+        variant="outline"
+        class="h-auto min-w-0"
         filter={(value, search) =>
           value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0}
         disableInitialScroll

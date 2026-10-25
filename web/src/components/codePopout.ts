@@ -5,8 +5,8 @@
 // ordinary same-origin popup.
 
 import { mount, unmount } from "svelte";
-import PopoutEventRoot from "./components/PopoutEventRoot.svelte";
-import { isStandalone, popoutOffered } from "./capabilities";
+import PopoutEventRoot from "./PopoutEventRoot.svelte";
+import { isStandalone, popoutOffered } from "../capabilities";
 
 type DocumentPictureInPicture = {
   requestWindow(options?: { width?: number; height?: number }): Promise<Window>;

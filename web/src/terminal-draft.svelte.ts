@@ -6,7 +6,7 @@ import {
 } from "./draftStorage";
 import type { ScratchEntry, SubmissionProgress } from "./schemas";
 
-export interface DraftSubmission {
+interface DraftSubmission {
   readonly id: string;
   state: SubmissionProgress;
   readonly at: number;

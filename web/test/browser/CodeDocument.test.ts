@@ -61,7 +61,9 @@ test("unchanged content cannot navigate to invisible lines and retains whole-fil
   await userEvent.keyboard("{Control>}f{/Control}");
   await userEvent.keyboard("{Control>}{Alt>}g{/Alt}{/Control}");
   await userEvent.keyboard("{F3}");
-  expect(document.querySelector(".code-search, .code-goto-line")).toBeNull();
+  expect(
+    document.querySelector("[data-code-search], [data-code-goto-line]"),
+  ).toBeNull();
   await send();
   await expect
     .poll(() =>

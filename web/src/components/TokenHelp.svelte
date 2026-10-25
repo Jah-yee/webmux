@@ -22,13 +22,15 @@
     aria-label="共享 Token 说明"
     align="start"
     collisionPadding={16}
-    class="w-[min(20rem,calc(100vw-2rem))] space-y-2 leading-relaxed"
+    class="w-[min(20rem,calc(100vw-2rem))] space-y-2"
     trapFocus={false}
     onOpenAutoFocus={(event) => event.preventDefault()}
     onCloseAutoFocus={(event) => event.preventDefault()}
   >
-    <p>Token 是这台 WebMux 的访问凭证，相当于共享密码。</p>
-    <p>
+    <p class="leading-relaxed">
+      Token 是这台 WebMux 的访问凭证，相当于共享密码。
+    </p>
+    <p class="leading-relaxed">
       通过 <code>webmux config init</code>
       初始化配置时会自动生成，默认保存在服务所在机器的：
       <code class="block max-w-full break-all"
@@ -36,7 +38,7 @@
       >
       重启后继续使用。请查看其中的 <code>token</code> 值并填入输入框。
     </p>
-    <p>
+    <p class="leading-relaxed">
       用 <code>webmux config path</code> 查看默认路径；若启动时指定了
       <code>--config</code> 或 <code>--token</code>，以实际启动配置为准。
     </p>

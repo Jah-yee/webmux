@@ -3,10 +3,10 @@ import type { LaunchConfigSummary } from "./schemas";
 
 // Client-side mirror of the server limits; the server stays authoritative.
 export const LAUNCH_CONFIGS_LIMIT = 100;
-export const LAUNCH_NAME_MAX = 64;
-export const LAUNCH_ARGS_MAX = 128;
+const LAUNCH_NAME_MAX = 64;
+const LAUNCH_ARGS_MAX = 128;
 export const LAUNCH_ENV_MAX = 64;
-export const LAUNCH_VALUE_BYTES = 8192;
+const LAUNCH_VALUE_BYTES = 8192;
 const envName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const encoder = new TextEncoder();
 const bytes = (value: string) => encoder.encode(value).length;
@@ -30,7 +30,7 @@ export type LaunchConfigsState =
   | { status: "unavailable"; error: string };
 
 /** Error for one env variable name, or "" when valid. */
-export function envNameError(name: string): string {
+function envNameError(name: string): string {
   if (!name) return "请输入变量名";
   if (!envName.test(name))
     return "变量名只能包含字母、数字和下划线，且不能以数字开头";

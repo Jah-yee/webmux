@@ -19,6 +19,7 @@
   import type { z } from "zod";
   import { nodeId } from "../code-reference";
   import { Button } from "$lib/components/ui/button";
+  import { ListButton } from "$lib/components/ui/list-button";
   import IconLayoutSidebarLeftCollapse from "~icons/tabler/layout-sidebar-left-collapse";
   import IconLayoutSidebarLeftExpand from "~icons/tabler/layout-sidebar-left-expand";
   import IconPhoto from "~icons/tabler/photo";
@@ -30,7 +31,7 @@
   import { EditorView } from "@codemirror/view";
   import CodeDocumentView from "./CodeDocumentView.svelte";
   import type { TextInsertion } from "../terminal-draft.svelte";
-  import { popoutAvailable, popOut, type Popout } from "../codePopout";
+  import { popoutAvailable, popOut, type Popout } from "./codePopout";
   let {
     id,
     visible,
@@ -559,7 +560,7 @@
         >
       </div>
       <div
-        class="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:thin]"
+        class="flex min-w-0 flex-1 overflow-x-auto scrollbar-thin"
         role="tablist"
         aria-label="文件标签"
       >
@@ -572,22 +573,22 @@
             tab.diff?.old.mediaType,
           ].some((type) => type?.startsWith("image/"))}
           <div class="flex shrink-0 items-center border-r first:border-l">
-            <button
+            <ListButton
+              variant="tab"
               role="tab"
               aria-selected={active === tab.key}
               aria-label={`${path} · ${meta}`}
               title={path}
-              class="px-2 py-1.5 text-xs whitespace-nowrap aria-selected:font-medium aria-selected:text-foreground"
               onclick={() => activate(tab.key)}
               >{#if image}<IconPhoto
                   class="mr-1 inline size-3.5 align-[-0.125em]"
                   aria-hidden="true"
-                />{/if}{path.slice(path.lastIndexOf("/") + 1)} · {meta}</button
+                />{/if}{path.slice(path.lastIndexOf("/") + 1)} · {meta}</ListButton
             >
-            <button
+            <ListButton
+              variant="tab-close"
               aria-label={`关闭 ${path}`}
-              class="px-2"
-              onclick={() => close(tab.key)}>×</button
+              onclick={() => close(tab.key)}>×</ListButton
             >
           </div>{/each}
       </div>

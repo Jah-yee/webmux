@@ -46,6 +46,13 @@
   const keepFocus = (event: MouseEvent) => event.preventDefault();
 </script>
 
+{#snippet sendKey(label: string, input: string)}<Button
+    variant="outline"
+    size="sm"
+    onmousedown={keepFocus}
+    onclick={() => send(input)}>{label}</Button
+  >{/snippet}
+
 <aside class="soft-keys shrink-0 border-t bg-card" aria-label="终端软键">
   <div class="soft-row">
     <Button
@@ -66,12 +73,10 @@
         onclick={() => send(symbol)}>{symbol}</Button
       >
     {/each}
-    {#each keys.slice(0, 2) as [label, input] (label)}<Button
-        variant="outline"
-        size="sm"
-        onmousedown={keepFocus}
-        onclick={() => send(input)}>{label}</Button
-      >{/each}
+    {#each keys.slice(0, 2) as [label, input] (label)}{@render sendKey(
+        label,
+        input,
+      )}{/each}
     {#each ["ctrl", "alt"] as key (key)}
       <Button
         variant={modifiers[key as keyof Modifiers] ? "default" : "outline"}
@@ -82,18 +87,14 @@
         >{key === "ctrl" ? "Ctrl" : "Alt"}</Button
       >
     {/each}
-    {#each keys.slice(2) as [label, input] (label)}<Button
-        variant="outline"
-        size="sm"
-        onmousedown={keepFocus}
-        onclick={() => send(input)}>{label}</Button
-      >{/each}
-    {#each combinations as [label, input] (label)}<Button
-        variant="outline"
-        size="sm"
-        onmousedown={keepFocus}
-        onclick={() => send(input)}>{label}</Button
-      >{/each}
+    {#each keys.slice(2) as [label, input] (label)}{@render sendKey(
+        label,
+        input,
+      )}{/each}
+    {#each combinations as [label, input] (label)}{@render sendKey(
+        label,
+        input,
+      )}{/each}
   </div>
   {#if trailing}
     <Separator orientation="vertical" class="mx-1.5 h-6 self-center" />

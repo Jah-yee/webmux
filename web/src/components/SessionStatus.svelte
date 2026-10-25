@@ -27,7 +27,7 @@
   data-tone={variant}
 >
   <span
-    class="mt-[0.3125rem] size-1.5 shrink-0 rounded-full bg-current"
+    class="mt-1.25 size-1.5 shrink-0 rounded-full bg-current"
     aria-hidden="true"
   ></span>
   <span class="min-w-0 break-words"

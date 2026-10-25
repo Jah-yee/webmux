@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { IconSearch } from "@tabler/icons-svelte";
+  import IconSearch from "~icons/tabler/search";
   import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
+  import * as InputGroup from "$lib/components/ui/input-group";
   import type { SessionInfo } from "../schemas";
   import { countSessions, type StatusFilter } from "../session-status";
 
@@ -61,12 +61,11 @@
 <svelte:window onkeydown={searchShortcut} />
 
 <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-  <div class="relative min-w-0 flex-1">
-    <IconSearch
-      class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-      aria-hidden="true"
-    />
-    <Input
+  <InputGroup.Root class="min-w-0 md:flex-1">
+    <InputGroup.Addon>
+      <IconSearch aria-hidden="true" />
+    </InputGroup.Addon>
+    <InputGroup.Input
       type="search"
       aria-label="搜索会话"
       aria-keyshortcuts="/"
@@ -80,13 +79,11 @@
           onclear();
         }
       }}
-      class="h-9 bg-card pl-9 pr-9 text-base md:text-sm"
     />
-    <kbd
-      class="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 rounded border px-1 text-xs text-muted-foreground md:block"
-      aria-hidden="true">/</kbd
-    >
-  </div>
+    <InputGroup.Addon align="inline-end" class="hidden md:flex">
+      <kbd class="border px-1" aria-hidden="true">/</kbd>
+    </InputGroup.Addon>
+  </InputGroup.Root>
   <div
     class="session-filters flex flex-wrap gap-x-1"
     role="group"
@@ -95,8 +92,8 @@
     {#each filters as filter (filter.id)}
       <Button
         variant="ghost"
-        size="sm"
-        class="min-h-9 gap-1.5 px-2"
+        size="xs"
+        class="min-h-9"
         aria-pressed={statusFilter === filter.id}
         onclick={() => (statusFilter = filter.id)}
       >
