@@ -5,6 +5,7 @@ import {
   test,
   expect,
   createShell,
+  expectConnected,
   headerAction,
   quote,
   recordInput,
@@ -265,6 +266,10 @@ test("drafts survive navigation and reload, remain session-local and stop persis
     page.getByText("本机保存了 0 个会话的草稿，0 条暂存"),
   ).toBeVisible();
   await page.goto(`/s/${a}`);
+  // Wait for reattach and replay, as createShell does, instead of clicking the
+  // toolbar while the restored session is still settling.
+  await expectConnected(page);
+  await expect(page.locator(".restore-overlay")).toBeHidden();
   await expect(mode(page)).toHaveAttribute("aria-pressed", "false");
   await mode(page).click();
   await expect(draft(page)).toHaveValue("");

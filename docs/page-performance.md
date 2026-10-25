@@ -26,7 +26,7 @@ pnpm --dir web exec vite build --manifest
 - 关闭、释放或处于退避中的连接忽略迟到事件；普通 `pageshow` 不替换健康连接，前台和 bfcache 恢复仍会续接。
 - Svelte/TypeScript、Oxlint、Oxfmt、前端架构守卫、生产构建、216 个单元测试与 178 个 Chromium 组件测试通过。
 - continuity、launch-configs、workspace-discovery、worktrees、quick-commands 和 page-stability 共 60 个 E2E 通过，2 个原有平台条件跳过；发布截图使用 `demo-host`。
-- 16 个性能 E2E 通过，22 份阶段报告均无意外布局偏移，最高交互耗时为 72ms。新增 120 卡片场景使用独立单 worker、4 倍 CPU 降速，校验 60 次输出更新、排序、搜索、清除筛选、节点复用和移除、隐藏卡片关闭菜单，要求意外布局偏移为 0、交互 ≤200ms。
+- 16 个性能 E2E 通过，22 份阶段报告均无意外布局偏移，最高交互耗时为 72ms。新增 120 卡片场景使用独立单 worker、4 倍 CPU 降速，校验 60 次输出更新、排序、搜索、清除筛选、节点复用和移除、隐藏卡片关闭菜单，要求意外布局偏移为 0、交互 ≤300ms。
 
 ```sh
 pnpm --dir web check

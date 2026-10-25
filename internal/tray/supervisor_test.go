@@ -366,6 +366,24 @@ func (h *harness) state(want State) Snapshot {
 	return h.wait(string(want), func(s Snapshot) bool { return s.State == want })
 }
 
+// advanceReach advances fake time until the next reachability probe reports
+// want. The loop arms that timer only once an in-flight probe settles, so a
+// single advance can run before the timer exists.
+func (h *harness) advanceReach(want State) Snapshot {
+	h.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.clock.Advance(ReachInterval)
+		snap := h.sup.Snapshot()
+		if snap.State == want {
+			return snap
+		}
+		if time.Now().After(deadline) {
+			h.t.Fatalf("timed out waiting for %s; last %s %q (calls %v)", want, snap.State, snap.Reason, h.service.calls)
+		}
+	}
+}
+
 // settle advances fake time in small steps until a start has settled, so
 // timers the loop arms asynchronously are never skipped.
 func (h *harness) settle() {
@@ -727,16 +745,14 @@ func TestSupervisorUnhealthyAndUnreachable(t *testing.T) {
 	h.mu.Lock()
 	h.reach = errors.New("connection refused")
 	h.mu.Unlock()
-	h.clock.Advance(ReachInterval)
-	snap := h.state(StateUnreachable)
+	snap := h.advanceReach(StateUnreachable)
 	if !strings.Contains(snap.Reason, "Windows 无法访问 127.0.0.1:7681") || !snap.Actions().Stop {
 		t.Fatalf("unreachable %+v", snap)
 	}
 	h.mu.Lock()
 	h.reach = nil
 	h.mu.Unlock()
-	h.clock.Advance(ReachInterval)
-	h.state(StateRunning)
+	h.advanceReach(StateRunning)
 
 	service.mu.Lock()
 	service.statusErr = context.DeadlineExceeded

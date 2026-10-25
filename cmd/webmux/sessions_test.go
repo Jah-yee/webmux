@@ -30,7 +30,9 @@ func (f *fixture) ptyStart(t *testing.T, args ...string) *ptyRun {
 		t.Fatal(err)
 	}
 	r := &ptyRun{t: t, tty: tty, done: make(chan int, 1)}
+	drained := make(chan struct{})
 	go func() {
+		defer close(drained)
 		buf := make([]byte, 4096)
 		for {
 			n, err := tty.Read(buf)
@@ -44,6 +46,7 @@ func (f *fixture) ptyStart(t *testing.T, args ...string) *ptyRun {
 	}()
 	go func() {
 		_ = cmd.Wait()
+		<-drained
 		r.done <- cmd.ProcessState.ExitCode()
 	}()
 	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = tty.Close() })

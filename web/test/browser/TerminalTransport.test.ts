@@ -1,6 +1,6 @@
 // Send-queue backpressure, PTY geometry, control, device replies, session
 // frames, submissions and invalid server frames.
-import { expect, test, vi } from "vitest";
+import { expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte/pure";
 import type { SubmissionProgress } from "../../src/schemas";
@@ -320,7 +320,7 @@ test("submissions carry the run generation and follow acknowledgements across re
   document.title = title;
 });
 
-test("an exited session refuses input, stays closed and resyncs from the retained buffer", async () => {
+test("an exited session refuses input and manual resync restores final output without reopening input", async () => {
   observeGlyphPixels(true);
   const title = document.title;
   const { socket, api } = await openTerminalApi();
@@ -336,23 +336,36 @@ test("an exited session refuses input, stays closed and resyncs from the retaine
     .element(page.getByRole("status", { name: "Terminal connection" }))
     .toHaveTextContent("exited");
 
-  const fetched = vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(
-      new Response(new TextEncoder().encode("retained after exit\r\n")),
-    );
   await page
     .getByRole("button", { name: "Resync terminal", exact: true })
     .click();
-  await expectDomText("retained after exit");
-  expect(fetched).toHaveBeenCalledTimes(1);
-  expect(String(fetched.mock.calls[0][0])).toContain(
-    "/sessions/terminal-render-fixture/buffer",
+  const recovered = await reconnected(2);
+  recovered.open();
+  const final = "retained after exit\r\n";
+  recovered.receive(
+    4,
+    JSON.stringify({
+      generation,
+      mode: "reset",
+      start: 0,
+      end: new TextEncoder().encode(final).length,
+      truncated: false,
+    }),
   );
-  expect(sockets).toEqual([socket]);
-  expect(framesOf(socket, 0)).toEqual([]);
-  expect(framesOf(socket, 2)).toEqual([]);
-  expect(framesOf(socket, 3)).toEqual([]);
+  recovered.receive(1, final);
+  recovered.receive(3, JSON.stringify({ exitCode: 3 }));
+  recovered.drop(4410);
+  await expectDomText("retained after exit");
+  await expect
+    .element(page.getByRole("status", { name: "Terminal connection" }))
+    .toHaveTextContent("exited");
+  expect(api.exitCode).toBe(3);
+  expect(api.ready).toBe(false);
+  expect(api.paste("after resync")).toBe(false);
+  expect(api.submit("submission-4", "after resync", true, () => {})).toBe(
+    false,
+  );
+  expect(inputText(socket) + inputText(recovered)).toBe("");
   document.title = title;
 });
 

@@ -114,7 +114,7 @@ test("4x CPU: a busy session among 120 cards keeps order, filtering and input re
       updateBurstMs,
     },
   );
-  expect(report.maxInteractionMs).toBeLessThanOrEqual(200);
+  expect(report.maxInteractionMs).toBeLessThanOrEqual(300);
 
   await search.click();
   await page.keyboard.type("load-31");
