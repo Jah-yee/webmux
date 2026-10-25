@@ -82,7 +82,7 @@ test("masks env values by default and validates variable names", async () => {
   await expect.element(save()).toBeEnabled();
 });
 
-test("saves a full custom command with argument boundaries intact", async () => {
+test("the Bashrc checkbox saves a normal command without expanding its arguments", async () => {
   const onsaved = vi.fn();
   const requests = serve({
     "/api/launch-configs": (method, body) =>
@@ -94,7 +94,10 @@ test("saves a full custom command with argument boundaries intact", async () => 
   await page.getByLabelText("名称").fill("Open Code");
   await page
     .getByLabelText("启动命令")
-    .fill(`bash -ic 'exec opencode "$@"' opencode`);
+    .fill(`opencode --continue 'a b' '' '$HOME'`);
+  await page
+    .getByRole("checkbox", { name: "加载 ~/.bashrc", exact: true })
+    .click();
   await save().click();
   await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
   expect(requests.at(-1)).toEqual({
@@ -102,11 +105,56 @@ test("saves a full custom command with argument boundaries intact", async () => 
     path: "/api/launch-configs",
     body: {
       name: "Open Code",
-      cmd: ["bash", "-ic", 'exec opencode "$@"', "opencode"],
+      cmd: [
+        "bash",
+        "-ic",
+        'exec -- "$@"',
+        "webmux",
+        "opencode",
+        "--continue",
+        "a b",
+        "",
+        "$HOME",
+      ],
       env: {},
     },
   });
 });
+
+test.each([true, false])(
+  "editing a wrapped config keeps Bash loading %s without losing argv or env",
+  async (enabled) => {
+    const argv = ["codex", "--resume", "a b", "", "$HOME"];
+    const wrapped = ["bash", "-ic", 'exec -- "$@"', "webmux", ...argv];
+    const onsaved = vi.fn();
+    const requests = serve({
+      "/api/launch-configs/abcdefg2": (method, body) =>
+        method === "GET"
+          ? Response.json({ ...saved, cmd: wrapped })
+          : Response.json({ ...saved, ...(body as object) }),
+    });
+    await render(LaunchConfigDialog, {
+      open: true,
+      configId: saved.id,
+      onsaved,
+    });
+    const checkbox = page.getByRole("checkbox", {
+      name: "加载 ~/.bashrc",
+      exact: true,
+    });
+    await expect.element(checkbox).toBeChecked();
+    await expect
+      .element(page.getByLabelText("启动命令"))
+      .toHaveValue("codex --resume 'a b' '' '$HOME'");
+    if (!enabled) await checkbox.click();
+    await save().click();
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
+    expect(requests.at(-1)).toMatchObject({
+      method: "PUT",
+      body: { cmd: enabled ? wrapped : argv, env: saved.env },
+    });
+  },
+);
 
 test("editing only the name keeps every env variable in the PUT body", async () => {
   const loaded = Promise.withResolvers<Response>();

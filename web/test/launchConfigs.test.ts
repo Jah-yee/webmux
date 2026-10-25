@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { joinArgs, parseArgs, quoteArg } from "../src/api";
-import { validateLaunchDraft } from "../src/launchConfigs";
+import { launchCommandDraft, validateLaunchDraft } from "../src/launchConfigs";
 import { LaunchConfigSchema, LaunchConfigsSchema } from "../src/schemas";
 
 describe("quoteArg / joinArgs", () => {
@@ -138,6 +138,60 @@ describe("validateLaunchDraft", () => {
         })),
       ).errors.env,
     ).toBeTruthy();
+  });
+
+  test("Bash loading keeps quoted, empty and shell-looking arguments literal", () => {
+    const argv = [
+      "opencode",
+      "two words",
+      "",
+      "$HOME",
+      "$(touch sentinel)",
+      "; exit 9",
+    ];
+    const result = validateLaunchDraft("Open Code", joinArgs(argv), [], true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected valid Bash launch");
+    expect(result.value.cmd).toEqual([
+      "bash",
+      "-ic",
+      'exec -- "$@"',
+      "webmux",
+      ...argv,
+    ]);
+    const restored = launchCommandDraft(result.value.cmd);
+    expect(restored.loadBashrc).toBe(true);
+    expect(parseArgs(restored.command)).toEqual(argv);
+    expect(
+      validateLaunchDraft("Open Code", restored.command, [], true),
+    ).toEqual(result);
+    const direct = validateLaunchDraft(
+      "Open Code",
+      restored.command,
+      [],
+      false,
+    );
+    expect(direct.ok && direct.value.cmd).toEqual(argv);
+  });
+
+  test("Bash loading cannot hide an empty command or bypass the stored argv limit", () => {
+    for (const command of ["", "''", "echo 'unfinished"])
+      expect(validateLaunchDraft("Agent", command, [], true).ok).toBe(false);
+    expect(
+      validateLaunchDraft("Agent", Array(124).fill("arg").join(" "), [], true)
+        .ok,
+    ).toBe(true);
+    expect(
+      validateLaunchDraft("Agent", Array(125).fill("arg").join(" "), [], true)
+        .ok,
+    ).toBe(false);
+  });
+
+  test("editing preserves a user-written Bash script that is not the checkbox wrapper", () => {
+    const argv = ["bash", "-ic", 'exec opencode "$@"', "opencode"];
+    const restored = launchCommandDraft(argv);
+    expect(restored.loadBashrc).toBe(false);
+    expect(parseArgs(restored.command)).toEqual(argv);
   });
 });
 

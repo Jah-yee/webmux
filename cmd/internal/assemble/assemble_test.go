@@ -76,7 +76,7 @@ func TestSavedLaunchConfigLoadsBashrcAndForwardsArguments(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, agent), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	saved, err := launches.Create(launch.Input{Name: "Open Code", Cmd: []string{"bash", "-ic", `exec opencode "$@"`, "opencode", "--resume", "two words", "", "$HOME"}})
+	saved, err := launches.Create(launch.Input{Name: "Open Code", Cmd: []string{"bash", "-ic", `exec -- "$@"`, "webmux", "opencode", "--resume", "two words", "", "$HOME"}})
 	if err != nil {
 		t.Fatal(err)
 	}

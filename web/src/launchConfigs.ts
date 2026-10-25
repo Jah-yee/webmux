@@ -1,4 +1,4 @@
-import { parseArgs } from "./api";
+import { joinArgs, parseArgs } from "./api";
 import type { LaunchConfigSummary } from "./schemas";
 
 // Client-side mirror of the server limits; the server stays authoritative.
@@ -10,6 +10,7 @@ const LAUNCH_VALUE_BYTES = 8192;
 const envName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const encoder = new TextEncoder();
 const bytes = (value: string) => encoder.encode(value).length;
+const BASHRC_PREFIX = ["bash", "-ic", 'exec -- "$@"', "webmux"] as const;
 
 export type EnvRow = { key: number; name: string; value: string };
 export type LaunchConfigInput = {
@@ -29,6 +30,17 @@ export type LaunchConfigsState =
   | { status: "ready"; configs: LaunchConfigSummary[] }
   | { status: "unavailable"; error: string };
 
+/** Restore only our exact wrapper; arbitrary user-written shell commands stay intact. */
+export function launchCommandDraft(cmd: readonly string[]) {
+  const loadBashrc =
+    cmd.length > BASHRC_PREFIX.length &&
+    BASHRC_PREFIX.every((arg, index) => cmd[index] === arg);
+  return {
+    command: joinArgs(loadBashrc ? cmd.slice(BASHRC_PREFIX.length) : cmd),
+    loadBashrc,
+  };
+}
+
 /** Error for one env variable name, or "" when valid. */
 function envNameError(name: string): string {
   if (!name) return "请输入变量名";
@@ -46,6 +58,7 @@ export function validateLaunchDraft(
   name: string,
   command: string,
   rows: readonly EnvRow[],
+  loadBashrc = false,
 ):
   | { ok: true; value: LaunchConfigInput; errors: LaunchDraftErrors }
   | { ok: false; errors: LaunchDraftErrors } {
@@ -59,10 +72,15 @@ export function validateLaunchDraft(
   try {
     cmd = parseArgs(command);
     if (!cmd.length || !cmd[0]) errors.command = "请输入可执行程序及参数";
-    else if (cmd.length > LAUNCH_ARGS_MAX)
-      errors.command = `命令最多 ${LAUNCH_ARGS_MAX} 个参数`;
-    else if (cmd.some((arg) => bytes(arg) > LAUNCH_VALUE_BYTES))
-      errors.command = `单个参数不能超过 ${LAUNCH_VALUE_BYTES} 字节`;
+    else {
+      if (loadBashrc) cmd = [...BASHRC_PREFIX, ...cmd];
+      if (cmd.length > LAUNCH_ARGS_MAX)
+        errors.command = loadBashrc
+          ? `加载 .bashrc 后命令最多 ${LAUNCH_ARGS_MAX} 个参数（包含 Bash 启动参数）`
+          : `命令最多 ${LAUNCH_ARGS_MAX} 个参数`;
+      else if (cmd.some((arg) => bytes(arg) > LAUNCH_VALUE_BYTES))
+        errors.command = `单个参数不能超过 ${LAUNCH_VALUE_BYTES} 字节`;
+    }
   } catch (err) {
     errors.command = (err as Error).message;
   }
