@@ -12,6 +12,10 @@
         text: "",
         // A file or change in a navigation list.
         row: "gap-1.5 rounded px-2 py-1 text-left text-xs hover:bg-muted",
+        "file-tree":
+          "flex min-h-7 w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-xs outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground aria-[current=page]:ring-1 aria-[current=page]:ring-inset aria-[current=page]:ring-ring/50 disabled:opacity-50",
+        "file-tree-root":
+          "flex min-h-8 w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
         // The body of a list item whose actions sit beside it.
         content:
           "gap-1 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",

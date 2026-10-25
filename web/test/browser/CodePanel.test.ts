@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import Harness from "./CodePanelHarness.svelte";
+import { nodeId } from "../../src/code-reference";
 const now = "2026-10-14T00:00:00Z";
 function file(n: number, version = "original") {
   return {
@@ -566,4 +567,247 @@ test("a refused pop-out window keeps the panel in place and says why", async () 
   await expect
     .element(page.getByLabelText("只读代码"))
     .toMatchTextContent(new RegExp("original file 0"));
+});
+
+test("checks all loaded tree branches within the server's 30-directory limit", async () => {
+  serve();
+  const server = globalThis.fetch;
+  const names = Array.from({ length: 31 }, (_, n) => `folder-${n}`);
+  const batches: string[][] = [];
+  const loaded = new Set<string>();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), location.href);
+      if (url.pathname.endsWith("/tree")) {
+        const path = atob(url.searchParams.get("nodeId") ?? "");
+        loaded.add(path);
+        return Response.json({
+          children: path
+            ? []
+            : names.map((name) => ({
+                nodeId: btoa(name),
+                path: name,
+                name,
+                kind: "directory",
+                gitStatus: "",
+                ignored: false,
+                referenceable: false,
+                mediaType: "",
+              })),
+          nextCursor: "",
+          limited: false,
+          complete: true,
+          contentVersion: "tree",
+          checkedAt: now,
+        });
+      }
+      if (url.pathname.endsWith("/check")) {
+        const body = JSON.parse(String(init?.body));
+        const directories = Object.keys(body.directories);
+        batches.push(directories);
+        if (directories.length > 30)
+          return Response.json(
+            { error: "too many directories" },
+            { status: 400 },
+          );
+      }
+      return server(input, init);
+    }),
+  );
+  await render(Harness);
+  for (const name of names)
+    await page.getByRole("button", { name, exact: true }).click();
+  await expect.poll(() => loaded.size).toBe(32);
+  batches.length = 0;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await expect.poll(() => new Set(batches.flat()).size).toBe(32);
+  expect(batches.every((batch) => batch.length <= 30)).toBe(true);
+});
+
+test("collapsing during a path search cannot replace the root with search hits", async () => {
+  serve();
+  const server = globalThis.fetch;
+  const delayed = Promise.withResolvers<Response>();
+  let searched = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>((input, init) => {
+      if (new URL(String(input), location.href).pathname.endsWith("/files")) {
+        searched = true;
+        return delayed.promise;
+      }
+      return server(input, init);
+    }),
+  );
+  render(Harness);
+  await page.getByRole("button", { name: "file-0.txt", exact: true }).query();
+  await page.getByRole("button", { name: "切换路径搜索" }).click();
+  await page.getByRole("textbox", { name: "搜索文件路径" }).fill("nested");
+  await page.getByRole("button", { name: "搜索路径", exact: true }).click();
+  await expect.poll(() => searched).toBe(true);
+  await expect
+    .element(page.getByRole("button", { name: "刷新文件树", exact: true }))
+    .toBeDisabled();
+  await page.getByRole("button", { name: "全部折叠", exact: true }).click();
+  delayed.resolve(
+    Response.json({
+      children: [
+        {
+          nodeId: btoa("nested/hit.txt"),
+          path: "nested/hit.txt",
+          name: "hit.txt",
+          kind: "file",
+          gitStatus: "",
+          ignored: false,
+          referenceable: true,
+          mediaType: "",
+        },
+      ],
+      nextCursor: "",
+      limited: false,
+      complete: true,
+      contentVersion: "search",
+      checkedAt: now,
+    }),
+  );
+  await expect
+    .element(page.getByRole("button", { name: "刷新文件树", exact: true }))
+    .toBeEnabled();
+  await expect
+    .element(page.getByRole("button", { name: "file-0.txt", exact: true }))
+    .toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: "hit.txt", exact: true }))
+    .not.toBeInTheDocument();
+});
+
+function serveExplorer() {
+  serve();
+  const server = globalThis.fetch;
+  let revision = "v1";
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input, init) => {
+      const url = new URL(String(input), location.href);
+      if (url.pathname.endsWith("/context")) {
+        const response = await server(input, init);
+        return Response.json({
+          ...(await response.json()),
+          diffAvailable: true,
+          ignoreAvailable: true,
+        });
+      }
+      if (url.pathname.endsWith("/changes"))
+        return Response.json({
+          entries: [],
+          nextCursor: "",
+          total: 0,
+          contentVersion: "changes",
+          checkedAt: now,
+          limited: false,
+          complete: true,
+        });
+      if (url.pathname.endsWith("/tree")) {
+        const path = atob(url.searchParams.get("nodeId") ?? "");
+        const names = path ? [`docs/${revision}.txt`] : ["docs"];
+        return Response.json({
+          children: names.map((name) => ({
+            nodeId: btoa(name),
+            path: name,
+            name: name.split("/").at(-1),
+            kind: path ? "file" : "directory",
+            gitStatus: "",
+            ignored: false,
+            referenceable: !!path,
+            mediaType: "",
+          })),
+          nextCursor: "",
+          limited: false,
+          complete: true,
+          contentVersion: path ? revision : "root",
+          checkedAt: now,
+        });
+      }
+      return server(input, init);
+    }),
+  );
+  return {
+    refresh: () => {
+      revision = "v2";
+    },
+  };
+}
+
+test("expanded branches survive hiding navigation, changing tabs and ignore scope", async () => {
+  serveExplorer();
+  render(Harness);
+  await page.getByRole("button", { name: "docs", exact: true }).click();
+  const child = page.getByRole("button", {
+    name: "v1.txt",
+    exact: true,
+    includeHidden: true,
+  });
+  await expect.element(child).toBeVisible();
+  await page.getByRole("button", { name: "收起导航", exact: true }).click();
+  await expect.element(child).not.toBeVisible();
+  await page.getByRole("button", { name: "文件导航", exact: true }).click();
+  await expect.element(child).toBeVisible();
+  await page.getByRole("tab", { name: "修改", exact: true }).click();
+  await expect.element(child).not.toBeVisible();
+  await page.getByRole("tab", { name: "文件", exact: true }).click();
+  await expect.element(child).toBeVisible();
+  await page.getByRole("button", { name: "文件导航选项", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "显示忽略项" }).click();
+  await expect.element(child).toBeVisible();
+  await expect
+    .element(page.getByRole("button", { name: "docs", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+});
+
+test("a directory check from before refresh cannot restore a stale update warning", async () => {
+  const explorer = serveExplorer();
+  const server = globalThis.fetch;
+  const delayed = Promise.withResolvers<Response>();
+  let checking = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>((input, init) => {
+      const url = new URL(String(input), location.href);
+      if (
+        url.pathname.endsWith("/check") &&
+        JSON.parse(String(init?.body)).directories[nodeId("docs")] === "v1"
+      ) {
+        checking = true;
+        return delayed.promise;
+      }
+      return server(input, init);
+    }),
+  );
+  render(Harness);
+  await page.getByRole("button", { name: "docs", exact: true }).click();
+  await expect
+    .element(page.getByRole("button", { name: "v1.txt", exact: true }))
+    .toBeVisible();
+  document.dispatchEvent(new Event("visibilitychange"));
+  await expect.poll(() => checking).toBe(true);
+  explorer.refresh();
+  await page.getByRole("button", { name: "刷新文件树", exact: true }).click();
+  await expect
+    .element(page.getByRole("button", { name: "v2.txt", exact: true }))
+    .toBeVisible();
+  delayed.resolve(
+    Response.json({
+      snapshots: {},
+      directories: { [nodeId("docs")]: "updated" },
+      changes: "unchanged",
+      checkedAt: now,
+    }),
+  );
+  const rendered = Promise.withResolvers<void>();
+  requestAnimationFrame(() => requestAnimationFrame(() => rendered.resolve()));
+  await rendered.promise;
+  await expect
+    .element(page.getByText("目录已更新或检测失败", { exact: true }))
+    .not.toBeInTheDocument();
 });

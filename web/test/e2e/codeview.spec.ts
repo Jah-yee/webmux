@@ -278,8 +278,11 @@ test("frozen Git diff, ignored navigation and complete source documents", async 
   await expect(
     page.getByRole("button", { name: ".env", exact: true }),
   ).toHaveCount(0);
-  await page.getByLabel("显示忽略项").check();
-  await expect(page.getByRole("button", { name: /.env · 忽略/ })).toBeVisible();
+  await page.getByRole("button", { name: "文件导航选项", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "显示忽略项" }).click();
+  await expect(
+    page.getByRole("button", { name: ".env", exact: true }),
+  ).toBeVisible();
   await page.getByRole("tab", { name: "修改", exact: true }).click();
   const captured = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith("/code/diff"),
@@ -376,6 +379,7 @@ test("main and linked worktrees bind their own roots and reject cross-session sn
   await writeFile(join(linked, "src/clean.txt"), "linked source\n");
   const first = await createShell(page, "Main root", join(main, "src"));
   await showCode(page);
+  await page.getByRole("button", { name: "切换路径搜索", exact: true }).click();
   await page.getByLabel("搜索文件路径").fill("clean");
   await page.getByRole("button", { name: "搜索路径", exact: true }).click();
   await page
@@ -393,6 +397,7 @@ test("main and linked worktrees bind their own roots and reject cross-session sn
   ).json();
   const second = await createShell(page, "Linked root", join(linked, "src"));
   await showCode(page);
+  await page.getByRole("button", { name: "切换路径搜索", exact: true }).click();
   await page.getByLabel("搜索文件路径").fill("clean");
   await page.getByRole("button", { name: "搜索路径", exact: true }).click();
   await page
@@ -430,6 +435,7 @@ test("large change lists remain browsable and late files can compare, update and
   }
   const id = await createShell(page, "Large changes", workDir);
   await showCode(page);
+  await page.getByRole("button", { name: "切换路径搜索", exact: true }).click();
   await page.getByLabel("搜索文件路径").fill("file-1204");
   await page.getByRole("button", { name: "搜索路径", exact: true }).click();
   await page
@@ -680,4 +686,54 @@ test("images preview, download byte-identical, isolate SVG and compare Git sides
   await expect(info).toContainText("PNG · 32 × 32");
   expect(git(workDir, "status", "--porcelain")).toContain(" M pic.png");
   expect(leaks).toEqual([]);
+});
+
+test("file explorer preserves sibling branches, refreshes children and locates nested directories", async ({
+  page,
+  workDir,
+}) => {
+  await mkdir(join(workDir, "docs/guides"), { recursive: true });
+  await mkdir(join(workDir, "web"));
+  await writeFile(join(workDir, "README.md"), "root readme\n");
+  await writeFile(join(workDir, "docs/architecture.md"), "architecture\n");
+  await writeFile(
+    join(workDir, "docs/guides/setup.md"),
+    "nested setup guide\n",
+  );
+  await writeFile(join(workDir, "web/App.svelte"), "app\n");
+  await createShell(page, "File explorer", workDir);
+  await showCode(page);
+  await page.getByRole("button", { name: "docs", exact: true }).click();
+  await page.getByRole("button", { name: "web", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "architecture.md", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "App.svelte", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "README.md", exact: true }),
+  ).toBeVisible();
+  await writeFile(join(workDir, "docs/new.md"), "new document\n");
+  await page.getByRole("button", { name: "刷新文件树", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "new.md", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "App.svelte", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "全部折叠", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "new.md", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "按路径打开", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "定位文件路径", exact: true })
+    .fill("docs/guides");
+  await page.getByRole("button", { name: "打开", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "setup.md", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "setup.md", exact: true }).click();
+  await expect.poll(() => visibleCode(page)).toContain("nested setup guide");
 });
