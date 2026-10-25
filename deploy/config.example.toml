@@ -50,6 +50,7 @@ bell_attention = true
 
 # Save custom launch configurations in Settings → 启动配置.
 # Their complete argv and optional environment are stored separately in
-# <state_dir>/launch-configs.json; a new installation has no launch commands.
+# <state_dir>/launch-configs.json. A new installation seeds Shell, Claude Code,
+# Codex CLI, Gemini CLI, Open Code and omp there; edit or delete them freely.
 # Commands run directly, without an implicit shell. To load ~/.bashrc for
 # Open Code, save argv ["bash", "-ic", "exec opencode \"$@\"", "opencode"].

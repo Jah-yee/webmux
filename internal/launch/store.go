@@ -37,6 +37,9 @@ type Service struct {
 	path    string
 	lock    *os.File
 	configs []Config
+	// fresh reports that launch-configs.json did not exist at Open and has not
+	// been written since; only then does Seed fill it.
+	fresh bool
 	// broken is the unavailability reason; nil when the store works.
 	broken error
 }
@@ -44,7 +47,7 @@ type Service struct {
 // Open loads the store. It never fails: a lock conflict, an unreadable
 // directory or a corrupt file leaves the service unavailable and the file
 // untouched until the server restarts. A missing file is an empty list and is
-// not created until the first write.
+// not created until the first write or Seed.
 func Open(stateDir string) *Service {
 	s := &Service{}
 	dir, err := pathutil.Expand(stateDir)
@@ -85,6 +88,7 @@ func (s *Service) load() error {
 	s.lock = lock
 	data, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
+		s.fresh = true
 		return nil
 	}
 	if err != nil {
@@ -267,6 +271,43 @@ func (s *Service) Create(in Input) (Config, error) {
 	return c.clone(), nil
 }
 
+// Seed creates launch-configs.json with ins when the file did not exist at
+// Open, so a new installation starts with ready-made configs. Once the file
+// exists, including as an empty list after the user deleted every config,
+// Seed does nothing.
+func (s *Service) Seed(ins []Input) error {
+	if err := s.lockAvailable(); err != nil {
+		return err
+	}
+	defer s.mu.Unlock()
+	if !s.fresh {
+		return nil
+	}
+	now := time.Now().UTC()
+	configs := make([]Config, 0, len(ins))
+	for _, in := range ins {
+		in, err := normalize(in)
+		if err != nil {
+			return err
+		}
+		if slices.ContainsFunc(configs, func(c Config) bool { return c.Name == in.Name }) {
+			return ErrDuplicate
+		}
+		id, err := newID(func(id string) bool {
+			return slices.ContainsFunc(configs, func(c Config) bool { return c.ID == id })
+		})
+		if err != nil {
+			return err
+		}
+		configs = append(configs, Config{ID: id, Name: in.Name, Cmd: in.Cmd, Env: in.Env, CreatedAt: now, UpdatedAt: now})
+	}
+	if err := s.saveLocked(configs); err != nil {
+		return err
+	}
+	s.configs = configs
+	return nil
+}
+
 // Update replaces name, cmd and env of id; id and createdAt are kept.
 func (s *Service) Update(id string, in Input) (Config, error) {
 	in, err := normalize(in)
@@ -331,5 +372,6 @@ func (s *Service) saveLocked(configs []Config) error {
 	if err != nil {
 		return fmt.Errorf("保存启动配置: %w", err)
 	}
+	s.fresh = false
 	return nil
 }

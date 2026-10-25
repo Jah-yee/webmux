@@ -292,6 +292,8 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	defer launches.Close()
 	if err := launches.Unavailable(); err != nil {
 		slog.Warn("launch configs unavailable", "error", err)
+	} else if err := launches.Seed(launch.Presets(os.Getenv("SHELL"))); err != nil {
+		slog.Warn("seed default launch configs", "error", err)
 	}
 	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)
 	defer workspaces.Close()

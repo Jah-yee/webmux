@@ -53,6 +53,55 @@ func TestFirstOpenIsEmptyAndCreatesNoFile(t *testing.T) {
 	}
 }
 
+func TestSeedFillsOnlyANewFile(t *testing.T) {
+	names := func(s *Service) []string {
+		t.Helper()
+		list, err := s.List()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, c := range list {
+			out = append(out, c.Name)
+		}
+		return out
+	}
+	dir := t.TempDir()
+	s := Open(dir)
+	if err := s.Seed(Presets("/bin/zsh")); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Shell", "Claude Code", "Codex CLI", "Gemini CLI", "Open Code", "omp"}
+	if got := names(s); !reflect.DeepEqual(got, want) {
+		t.Fatalf("seeded %v", got)
+	}
+	// A second Seed in the same process does not duplicate the presets.
+	if err := s.Seed(Presets("")); err != nil || len(names(s)) != len(want) {
+		t.Fatalf("reseeded %v %v", names(s), err)
+	}
+	list, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range list {
+		if err := s.Delete(c.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	// The user deleted every preset: an existing empty file is not reseeded.
+	s = open(t, dir)
+	if err := s.Seed(Presets("")); err != nil || len(names(s)) != 0 {
+		t.Fatalf("seeded existing file %v %v", names(s), err)
+	}
+	// A user's first write wins over a later Seed.
+	other := open(t, t.TempDir())
+	mustCreate(t, other, Input{Name: "mine", Cmd: []string{"bash"}})
+	if err := other.Seed(Presets("")); err != nil || !reflect.DeepEqual(names(other), []string{"mine"}) {
+		t.Fatalf("seed after create %v %v", names(other), err)
+	}
+}
+
 func TestReopenPersists(t *testing.T) {
 	dir := t.TempDir()
 	s := Open(dir)
