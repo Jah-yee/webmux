@@ -39,75 +39,185 @@ import (
 // and review the testdata/wire diff together with the schema change.
 var updateWire = flag.Bool("update", false, "re-record internal/api/testdata/wire snapshots")
 
-// wireIDKeys name fields whose values are random or derived from time. The
-// first value seen under one of them becomes a stable placeholder everywhere
-// it appears later, including map keys and request paths.
-var wireIDKeys = map[string]bool{
-	"id": true, "generation": true, "contextId": true, "snapshotId": true,
-	"changeId": true, "confirmationId": true, "contentVersion": true,
-	"changes": true, "worktreeId": true, "repositoryId": true, "clientId": true,
-	"publicKey": true, "head": true, "oid": true, "oldOid": true, "newOid": true,
-	"nextCursor": true, "defaultBase": true,
+// Rules are scoped to a recorded endpoint/frame and its schema path. An ID or
+// timestamp in user content is data, even when it equals a dynamic field.
+type wireRules map[string]string
+
+func wireSchema(name string) wireRules {
+	rules := wireRules{}
+	add := func(prefix, kind string, fields ...string) {
+		for _, field := range fields {
+			rules[prefix+"/"+field] = kind
+		}
+	}
+	sessionFields := func(prefix string) {
+		add(prefix, "id", "id", "generation", "workspace/repositoryId", "workspace/worktreeId")
+		add(prefix, "time", "createdAt", "lastActiveAt", "attention/since", "reportedCwd/since")
+		add(prefix, "path", "cwd", "reportedCwd/path", "workspace/worktreePath")
+	}
+	worktreeFields := func(prefix string) {
+		add(prefix, "id", "id", "repositoryId")
+		add(prefix, "path", "path", "error")
+	}
+	repositoryFields := func(prefix string) {
+		add(prefix, "id", "id")
+		add(prefix, "time", "checkedAt")
+		add(prefix, "path", "anchorPath", "commonDir", "error")
+		worktreeFields(prefix + "/worktrees/*")
+	}
+	documentFields := func(prefix string) {
+		add(prefix, "path", "absolutePath")
+	}
+	switch name {
+	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get",
+		"ws-terminal-state", "ws-terminal-state-exited":
+		sessionFields("")
+	case "sessions-list", "sessions-list-empty":
+		sessionFields("/*")
+	case "ws-sessions-created", "ws-sessions-updated":
+		sessionFields("/session")
+	case "ws-sessions-snapshot", "ws-sessions-snapshot-empty":
+		sessionFields("/sessions/*")
+	case "ws-sessions-removed":
+		add("", "id", "id")
+	case "ws-terminal-position-live", "ws-terminal-position-reset":
+		add("", "id", "generation")
+	case "ws-terminal-control-initial", "ws-terminal-control-observer", "ws-terminal-control-claimed", "ws-terminal-control-uncontrolled":
+		add("/controller", "time", "since")
+		// Explicit client query parameters stay literal; the anonymous exited
+		// session's controller, when present, has a server-generated ID.
+		if name == "ws-terminal-control-uncontrolled" {
+			add("/controller", "id", "clientId")
+		}
+	case "config":
+		add("", "path", "defaultCwd")
+		add("", "hostname", "hostname")
+	case "fs-dirs-default", "fs-dirs-prefix", "fs-dirs-empty":
+		rules["/*"] = "path"
+	case "error-400-fs-dirs":
+		add("", "path", "error")
+	case "upload":
+		add("", "upload", "path")
+	case "launch-create", "launch-create-no-env", "launch-get", "launch-update":
+		add("", "id", "id")
+		add("", "time", "createdAt", "updatedAt")
+	case "launch-list", "launch-list-empty":
+		add("/*", "id", "id")
+		add("/*", "time", "createdAt", "updatedAt")
+	case "repository-register", "repository-register-again", "repository-worktrees":
+		repositoryFields("")
+	case "repositories", "repositories-empty":
+		repositoryFields("/*")
+	case "repository-branches":
+		add("", "path", "defaultParent", "branches/*/worktreePaths/*")
+	case "worktree-create":
+		worktreeFields("")
+	case "worktree-removal-preview":
+		add("", "id", "confirmationId")
+		add("", "time", "expiresAt")
+		worktreeFields("/worktree")
+		sessionFields("/sessions/*")
+	case "code-context":
+		add("", "id", "contextId")
+		add("", "path", "rootPath")
+	case "code-tree", "code-files":
+		add("", "time", "checkedAt")
+	case "code-file", "code-snapshot-file":
+		add("", "id", "snapshotId")
+		add("", "time", "checkedAt")
+		documentFields("/document")
+	case "code-changes":
+		add("", "id", "nextCursor")
+		add("", "time", "checkedAt")
+	case "code-diff":
+		add("", "id", "snapshotId")
+		add("", "time", "checkedAt")
+		documentFields("/old")
+		documentFields("/new")
+	case "code-check":
+		add("", "time", "checkedAt")
+		rules["/snapshots"] = "snapshotKeys"
+	case "push-status", "push-status-quick-tunnel", "push-status-disabled":
+		add("", "id", "publicKey")
+	case "push-subscribe", "push-subscribe-gone":
+		add("", "id", "id")
+	case "push-test":
+		add("", "id", "removed/*")
+	}
+	return rules
 }
 
-var (
-	wireTime   = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
-	wireUpload = regexp.MustCompile(`webmux-upload-\d+`)
-)
+var wireUpload = regexp.MustCompile(`^webmux-upload-\d+$`)
 
 type wireNormalizer struct {
-	// hostname is replaced only as the value of a "hostname" field: a short
-	// machine name could otherwise match unrelated text.
 	hostname string
 	literal  []string
+	paths    map[string]string
 	names    map[string]string
 	counts   map[string]int
 }
 
 func newWireNormalizer() *wireNormalizer {
-	return &wireNormalizer{names: map[string]string{}, counts: map[string]int{}}
+	return &wireNormalizer{paths: map[string]string{}, names: map[string]string{}, counts: map[string]int{}}
 }
 
-// path replaces a temporary or host-specific literal wherever it occurs.
 func (n *wireNormalizer) path(value, name string) {
 	if value == "" {
 		return
 	}
-	if _, ok := n.names[value]; ok {
+	if _, ok := n.paths[value]; ok {
 		return
 	}
-	n.names[value] = name
+	n.paths[value] = name
 	n.literal = append(n.literal, value)
 	sort.Slice(n.literal, func(i, j int) bool { return len(n.literal[i]) > len(n.literal[j]) })
 }
 
-func (n *wireNormalizer) id(key, value string) {
+func (n *wireNormalizer) id(key, value string) string {
 	if value == "" {
-		return
+		return value
 	}
-	if _, ok := n.names[value]; ok {
-		return
+	if name, ok := n.names[value]; ok {
+		return name
 	}
 	n.counts[key]++
-	n.path(value, fmt.Sprintf("<%s#%d>", key, n.counts[key]))
+	name := fmt.Sprintf("<%s#%d>", key, n.counts[key])
+	n.names[value] = name
+	return name
 }
 
-func (n *wireNormalizer) text(s string) string {
-	if s == "0001-01-01T00:00:00Z" {
-		return "<zero-time>"
-	}
-	if wireTime.MatchString(s) {
-		return "<time>"
-	}
+// Only complete registered path prefixes are replaced, and only in schema
+// fields opted in above. In particular, error text never substitutes IDs.
+func (n *wireNormalizer) pathText(s string) string {
 	for _, literal := range n.literal {
-		s = strings.ReplaceAll(s, literal, n.names[literal])
+		var out strings.Builder
+		for {
+			at := strings.Index(s, literal)
+			if at < 0 {
+				out.WriteString(s)
+				break
+			}
+			end := at + len(literal)
+			before := at == 0 || strings.ContainsRune(" \t\n\"'(:", rune(s[at-1]))
+			after := end == len(s) || strings.ContainsRune("/ \t\n\"'):;", rune(s[end]))
+			out.WriteString(s[:at])
+			if before && after {
+				out.WriteString(n.paths[literal])
+			} else {
+				out.WriteString(literal)
+			}
+			s = s[end:]
+		}
+		s = out.String()
 	}
-	return wireUpload.ReplaceAllString(s, "webmux-upload-<n>")
+	return s
 }
 
-// learn registers identifier values in sorted key order so placeholder
-// numbering does not depend on map iteration.
-func (n *wireNormalizer) learn(v any) {
+func (n *wireNormalizer) normalize(name string, v any) any {
+	return n.value(wireSchema(name), "", v)
+}
+
+func (n *wireNormalizer) value(rules wireRules, path string, v any) any {
 	switch v := v.(type) {
 	case map[string]any:
 		keys := make([]string, 0, len(v))
@@ -115,39 +225,49 @@ func (n *wireNormalizer) learn(v any) {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		for _, key := range keys {
-			if s, ok := v[key].(string); ok && wireIDKeys[key] && !wireTime.MatchString(s) {
-				n.id(key, s)
-			}
-			n.learn(v[key])
-		}
-	case []any:
-		for _, item := range v {
-			n.learn(item)
-		}
-	}
-}
-
-func (n *wireNormalizer) value(v any) any {
-	switch v := v.(type) {
-	case map[string]any:
 		out := make(map[string]any, len(v))
-		for key, item := range v {
-			if key == "hostname" && item == n.hostname && n.hostname != "" {
-				out[key] = "<hostname>"
-				continue
+		for _, key := range keys {
+			if rules[path] == "snapshotKeys" {
+				out[n.id("snapshotId", key)] = v[key]
+			} else {
+				out[key] = n.value(rules, path+"/"+key, v[key])
 			}
-			out[n.text(key)] = n.value(item)
 		}
 		return out
 	case []any:
 		out := make([]any, len(v))
 		for i, item := range v {
-			out[i] = n.value(item)
+			out[i] = n.value(rules, path+"/*", item)
 		}
 		return out
 	case string:
-		return n.text(v)
+		switch rules[path] {
+		case "id":
+			key := path[strings.LastIndex(path, "/")+1:]
+			if path == "/removed/*" {
+				key = "id"
+			}
+			return n.id(key, v)
+		case "time":
+			if parsed, err := time.Parse(time.RFC3339Nano, v); err == nil {
+				if parsed.IsZero() {
+					return "<zero-time>"
+				}
+				return "<time>"
+			}
+		case "hostname":
+			if n.hostname != "" && v == n.hostname {
+				return "<hostname>"
+			}
+		case "path":
+			return n.pathText(v)
+		case "upload":
+			parts := strings.Split(n.pathText(v), "/")
+			if len(parts) == 3 && parts[0] == "<tmp>" && wireUpload.MatchString(parts[1]) {
+				parts[1] = "webmux-upload-<n>"
+			}
+			return strings.Join(parts, "/")
+		}
 	}
 	return v
 }
@@ -177,13 +297,12 @@ func (w *wireRecorder) record(name string, status int, body []byte) any {
 		if err := json.Unmarshal(body, &decoded); err != nil {
 			w.t.Fatalf("%s: response is not JSON: %v: %q", name, err, body)
 		}
-		w.norm.learn(decoded)
 	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(wireRecord{Status: status, Body: w.norm.value(decoded)}); err != nil {
+	if err := encoder.Encode(wireRecord{Status: status, Body: w.norm.normalize(name, decoded)}); err != nil {
 		w.t.Fatal(err)
 	}
 	got := buffer.Bytes()
@@ -282,6 +401,7 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 	}
 	hostname, _ := os.Hostname()
 	rec.norm.path(root, "<repo>")
+	rec.norm.path(root+".worktrees", "<repo>.worktrees")
 	rec.norm.path(home, "<home>")
 	rec.norm.path(tmp, "<tmp>")
 	rec.norm.hostname = hostname
@@ -470,8 +590,25 @@ func str(v any, key string) string {
 }
 
 func TestWireSnapshots(t *testing.T) {
-	rec := &wireRecorder{t: t, norm: newWireNormalizer(), seen: map[string]bool{}}
-	f := newWireFixture(t, rec)
+	for _, group := range []struct {
+		name string
+		run  func(*wireFixture)
+	}{
+		{"sessions-terminal", wireSessions},
+		{"basics-errors-fs-upload", wireBasics},
+		{"launch", wireLaunch},
+		{"workspace", wireWorkspace},
+		{"codeview", wireCodeview},
+		{"push", wirePush},
+	} {
+		t.Run(group.name, func(t *testing.T) {
+			rec := &wireRecorder{t: t, norm: newWireNormalizer(), seen: map[string]bool{}}
+			group.run(newWireFixture(t, rec))
+		})
+	}
+}
+
+func wireSessions(f *wireFixture) {
 
 	// Session list events: the empty snapshot, then one session's life.
 	list := f.dial("/ws/sessions")
@@ -494,10 +631,6 @@ func TestWireSnapshots(t *testing.T) {
 	f.event(list, "ws-sessions-removed", func(e map[string]any) bool { return e["type"] == "removed" })
 	_ = list.CloseNow()
 
-	// REST basics.
-	f.call("health", "GET", "/api/health", nil, 200)
-	f.call("presets", "GET", "/api/presets", nil, 200)
-	f.call("config", "GET", "/api/config", nil, 200)
 	f.call("sessions-list-empty", "GET", "/api/sessions", nil, 200)
 	running := f.call("session-create", "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh", "-c", "sleep 60"}, "name": "wire", "env": map[string]string{"WIRE": "1"}}, 201)
 	runningID := str(running, "id")
@@ -524,13 +657,38 @@ func TestWireSnapshots(t *testing.T) {
 	f.frame(live, "ws-terminal-submission-received", 5, func(p map[string]any) bool { return p["state"] == "received" })
 	f.frame(live, "ws-terminal-submission-written", 5, func(p map[string]any) bool { return p["state"] == "written" })
 	_ = live.CloseNow()
+	// Closing the socket does not join the server's detach goroutine.
+	// Record the settled client count, not a scheduler-dependent intermediate.
+	current, err := f.manager.Get(runningID)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for current.Info().Clients != 0 {
+		select {
+		case <-ticker.C:
+		case <-f.ctx.Done():
+			f.t.Fatal("terminal clients did not detach")
+		}
+	}
 
 	// The non-empty list snapshot.
 	again := f.dial("/ws/sessions")
 	f.event(again, "ws-sessions-snapshot", func(e map[string]any) bool { return e["type"] == "snapshot" })
 	_ = again.CloseNow()
+	f.call("session-delete-close", "DELETE", "/api/sessions/"+runningID, nil, 204)
+}
+
+func wireBasics(f *wireFixture) {
+	t := f.t
+	// REST basics.
+	f.call("health", "GET", "/api/health", nil, 200)
+	f.call("presets", "GET", "/api/presets", nil, 200)
+	f.call("config", "GET", "/api/config", nil, 200)
 
 	// Session errors.
+	runningID := f.startSession()
 	f.call("error-400-session-json", "POST", "/api/sessions", `{"cwd":`, 400)
 	f.call("error-400-session-conflict", "POST", "/api/sessions", map[string]any{"configId": "abcdefgh", "cmd": []string{"/bin/sh"}}, 400)
 	f.call("error-400-session-config-empty", "POST", "/api/sessions", map[string]any{"configId": ""}, 400)
@@ -560,6 +718,9 @@ func TestWireSnapshots(t *testing.T) {
 	tooLarge := httptest.NewRecorder()
 	f.server.Config.Handler.ServeHTTP(tooLarge, oversized)
 	f.record("error-413-upload", tooLarge.Code, tooLarge.Body.Bytes())
+}
+
+func wireLaunch(f *wireFixture) {
 
 	// Launch configs.
 	f.call("launch-list-empty", "GET", "/api/launch-configs", nil, 200)
@@ -576,6 +737,9 @@ func TestWireSnapshots(t *testing.T) {
 	f.call("session-create-from-config", "POST", "/api/sessions", map[string]any{"configId": str(shell, "id"), "cwd": f.root}, 201)
 	f.call("error-404-session-config", "POST", "/api/sessions", map[string]any{"configId": "zzzzzzzz"}, 404)
 	f.call("launch-delete", "DELETE", "/api/launch-configs/"+launchID, nil, 204)
+}
+
+func wireWorkspace(f *wireFixture) {
 
 	// Repositories and worktrees.
 	f.call("repositories-empty", "GET", "/api/repositories", nil, 200)
@@ -587,7 +751,7 @@ func TestWireSnapshots(t *testing.T) {
 	f.call("repository-worktrees", "GET", base+"/worktrees", nil, 200)
 	f.call("repository-branches", "GET", base+"/branches", nil, 200)
 	linked := filepath.Join(filepath.Dir(f.root), "linked")
-	rec.norm.path(linked, "<linked>")
+	f.norm.path(linked, "<linked>")
 	tree := f.call("worktree-create", "POST", base+"/worktrees", map[string]string{"path": linked, "mode": "new", "branch": "linked", "base": "HEAD"}, 201)
 	treeID := str(tree, "id")
 	f.call("error-400-worktree", "POST", base+"/worktrees", map[string]string{"path": filepath.Join(filepath.Dir(f.root), "bad"), "mode": "new", "branch": "--force", "base": "HEAD"}, 400)
@@ -597,6 +761,10 @@ func TestWireSnapshots(t *testing.T) {
 	preview := f.call("worktree-removal-preview", "POST", treeURL+"/removal-preview", map[string]any{}, 200)
 	f.call("error-409-worktree-remove", "POST", treeURL+"/remove", map[string]any{"confirmationId": str(preview, "confirmationId"), "mode": "safe"}, 409)
 	f.call("repository-unregister", "DELETE", base, nil, 204)
+}
+
+func wireCodeview(f *wireFixture) {
+	runningID := f.startSession()
 
 	// Code view.
 	code := "/api/sessions/" + runningID + "/code"
@@ -622,6 +790,10 @@ func TestWireSnapshots(t *testing.T) {
 	f.call("error-404-code-session", "GET", "/api/sessions/missing/code/context", nil, 404)
 	f.call("error-409-code-context", "GET", code+"/tree?contextId=wrong", nil, 409)
 	f.call("error-410-code-snapshot", "GET", code+"/snapshots/unknown/file?side=new", nil, 410)
+}
+
+func wirePush(f *wireFixture) {
+	t := f.t
 
 	// Push.
 	f.call("push-status", "GET", "/api/push", nil, 200)
@@ -633,12 +805,21 @@ func TestWireSnapshots(t *testing.T) {
 	f.call("push-test", "POST", "/api/push/test", nil, 200)
 	f.call("push-unsubscribe", "DELETE", "/api/push/subscriptions/"+str(subscribed, "id"), nil, 204)
 
-	f.call("session-delete-close", "DELETE", "/api/sessions/"+runningID, nil, 204)
+}
+
+// These groups need a live session, not the sessions group's lifecycle or IDs.
+func (f *wireFixture) startSession() string {
+	f.t.Helper()
+	item, err := f.manager.Create(f.root, "custom", []string{"/bin/sh", "-c", "sleep 60"}, nil, "wire", nil)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return item.Info().ID
 }
 
 func (f *wireFixture) pushURL(t *testing.T, path string) string {
 	t.Helper()
-	for literal, name := range f.norm.names {
+	for literal, name := range f.norm.paths {
 		if name == "<push-service>" {
 			return literal + path
 		}

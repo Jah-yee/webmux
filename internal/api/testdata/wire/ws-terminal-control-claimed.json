@@ -3,7 +3,7 @@
     "colorSchemeReports": false,
     "cols": 80,
     "controller": {
-      "clientId": "<clientId#3>",
+      "clientId": "wire-client-2",
       "label": "Observer",
       "since": "<time>"
     },

@@ -8,13 +8,13 @@
     "error": "",
     "hasIgnored": false,
     "hasUntracked": false,
-    "head": "<head#1>",
-    "id": "<id#11>",
+    "head": "a68d89230002fd397674cf37275eb2c7ca18d0a7",
+    "id": "<id#3>",
     "kind": "linked",
     "lockReason": "",
     "locked": false,
     "path": "<linked>",
     "prunable": false,
-    "repositoryId": "<id#9>"
+    "repositoryId": "<id#1>"
   }
 }

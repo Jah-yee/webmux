@@ -4,7 +4,7 @@
     "checkedAt": "<time>",
     "document": {
       "absolutePath": "<repo>/a.txt",
-      "contentVersion": "<contentVersion#5>",
+      "contentVersion": "c9b0fb1fa00b3a5ce714c876c35bb18f21eed970d33d9093a3cbd7cf0c9db3dc",
       "downloadable": true,
       "kind": "text",
       "lineCount": 2,

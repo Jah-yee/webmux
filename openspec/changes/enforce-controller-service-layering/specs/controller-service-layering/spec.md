@@ -46,7 +46,7 @@ Service 包 SHALL NOT 导入 Controller 包、`cmd/` 下的包、WebSocket 库�
 
 ### Requirement: Controller 不直接执行 I/O 与业务规则
 
-Controller 包的非测试源码 SHALL NOT 导入 `os/exec`、`syscall`、`golang.org/x/sys` 系列、PTY 库或 `internal/statefile`，SHALL NOT 调用读取、创建、修改或删除文件系统条目的 `os` 函数。Controller SHALL NOT 调用 Service 包的包级函数（包括构造函数与校验函数），只能调用注入的 Service 实例的方法，并可引用 Service 包导出的类型、常量与哨兵错误。
+Controller 包的非测试源码 SHALL NOT 导入 `os/exec`、`syscall`、`golang.org/x/sys` 系列、PTY 库或 `internal/statefile`，SHALL NOT 调用读取、创建、修改或删除文件系统条目的 `os` 函数。Controller 的构造、状态访问与 I/O SHALL 通过注入的 Service 实例；Service 包级纯函数仅在清单中登记并附理由后 MAY 调用。登记 SHALL 指向实际存在且被 Controller 使用的 Service 包级函数，不得以方法或变量代替。Controller MAY 引用 Service 导出的类型、常量与哨兵错误。
 
 规则 SHALL 基于类型解析来识别被调用的函数，使用导入别名、点导入或函数值变量都不能绕过。
 
@@ -65,16 +65,31 @@ Controller 包的非测试源码 SHALL NOT 导入 `os/exec`、`syscall`、`golan
 - **WHEN** Controller 调用 `s.Workspace.CreateSession(...)` 并用 `errors.Is` 比较 Service 导出的哨兵错误
 - **THEN** 架构测试不报告违规
 
+#### Scenario: handler 调用已登记的纯校验函数
+
+- **WHEN** Controller 调用清单中附理由登记的 `push.Validate`
+- **THEN** 架构测试不报告违规；未登记的函数、构造和状态访问仍 SHALL 被拒绝
+
+#### Scenario: 纯函数登记失效
+
+- **WHEN** 登记函数不存在、不再被 Controller 使用或登记理由为空
+- **THEN** 架构测试 SHALL 报告 R0
+
 ### Requirement: Service 不感知 HTTP 传输
 
 Service 包的非测试源码 SHALL NOT 引用服务端 HTTP 符号，包括 `http.ResponseWriter`、`http.Handler`、`http.HandlerFunc`、`http.ServeMux`、`http.Server`、`http.Error`、`http.Redirect`、`http.MaxBytesReader`，也 SHALL NOT 声明以 `*http.Request` 作为参数的函数或方法。需要发起出站 HTTP 请求的 Service 包 SHALL 在清单中显式登记，并且只能使用客户端符号。
 
-Service 包中实现 `error` 的类型 SHALL NOT 包含底层类型为整数的字段；Service 包 SHALL NOT 声明返回 `int` 的 `Status` 函数或方法。错误到 HTTP 状态码的映射 SHALL 只在 Controller 中进行。
+Service 包中实现 `error` 的类型 SHALL NOT 包含底层为整数且名为 `Status`、`StatusCode`、`HTTPStatus` 或 `HTTPStatusCode` 的字段（不区分大小写）。同名函数或方法以错误为接收者或参数并返回整数时 SHALL 被拒绝；显式 HTTP 状态函数或方法始终 SHALL 被拒绝。错误到 HTTP 状态码的映射 SHALL 只在 Controller 中进行。业务大小、行号、退出码等整数字段和非错误对象的 `Status() int` SHALL 被允许。
 
 #### Scenario: Service 错误携带状态码
 
 - **WHEN** Service 包的错误类型含有 `Status int` 字段
 - **THEN** 架构测试失败
+
+#### Scenario: Service 错误携带业务整数
+
+- **WHEN** Service 错误包含文件大小、行号、退出码或持续时间，且不含 HTTP 状态字段
+- **THEN** 架构测试 SHALL 不报告 R7；非错误对象的领域 `Status() int` 同样允许
 
 #### Scenario: 已登记的出站客户端
 
@@ -90,9 +105,19 @@ Service 包中实现 `error` 的类型 SHALL NOT 包含底层类型为整数的�
 
 Controller 与 Hub 写入 HTTP 响应体的每个 JSON 值、写入 WebSocket 的每个 JSON 载荷（包括 `/ws/sessions` 文本帧，以及 `/ws/s/{id}` 二进制控制帧中类型字节之后的 JSON 部分），以及从请求体或入站控制帧解码的每个目标，SHALL 是 `internal/contract` 中声明的类型，或由这些类型组成的切片、映射与指针。Service 包中声明的类型 SHALL NOT 出现在这些编码值或解码目标的类型中，包括嵌套字段。`internal/contract` SHALL NOT 导入任何 Service 包或 Controller 包。
 
-Service 包 SHALL NOT 自行编码对客户端可见的 JSON 载荷：Service 包 SHALL NOT 声明 `MarshalJSON` 方法，也 SHALL NOT 调用 JSON 编码函数，除非该调用所在的函数已在分层清单中登记并注明理由（出站协议载荷或内部摘要）。经共享持久化包写入磁盘的 JSON 不属于此限制。终端输出与回放快照等原始二进制载荷不受此限制。
+Service 包 SHALL NOT 自行编码对客户端可见的 JSON 载荷：Service 包 SHALL NOT 声明 `MarshalJSON` 方法；JSON 编码器仅 MAY 在清单中附理由登记的函数体内直接调用（出站协议载荷或内部摘要）。检查 SHALL 覆盖整个源码，包含包级初始化；编码器函数值、方法值或方法表达式别名 SHALL 被拒绝，即使位于已登记函数体内。经共享持久化包写入磁盘的 JSON 不属于此限制。终端输出与回放快照等原始二进制载荷不受此限制。
 
 在服务器外解码这些 JSON 的 Go 客户端 SHALL 使用同一批线上类型，而不是 Service 类型。
+
+#### Scenario: 包级初始化和函数值不能绕过 R9
+
+- **WHEN** Service 在包级变量初始化中调用 `json.Marshal`，或保存 `json.Marshal` / `(*json.Encoder).Encode` 的函数值供稍后调用
+- **THEN** 架构测试 SHALL 报告 R9
+
+#### Scenario: 内部终端消息不满足单载荷约束
+
+- **WHEN** 消息为空、同时含多个载荷、原始帧没有 0/1 前缀，或控制消息无法编码
+- **THEN** Hub SHALL 以 1011 关闭当前连接，不记录载荷，不终止持久会话；有效消息仍保持输出、控制、回放和退出顺序
 
 #### Scenario: 直接回传 Service 类型
 
@@ -136,6 +161,13 @@ Service 包 SHALL NOT 自行编码对客户端可见的 JSON 载荷：Service �
 ### Requirement: 永久线上快照
 
 仓库 SHALL 保留一组永久的线上 JSON 快照测试，覆盖每个 REST 端点的成功与错误响应、`/ws/sessions` 的每种事件，以及 `/ws/s/{id}` 的每种 JSON 控制帧。快照 SHALL 先在变更前的实现上录制。任何线上 JSON 形状的变化 SHALL 导致这些测试失败；有意的协议变更 SHALL 通过显式的重新录制命令更新快照，并让快照文件的差异出现在评审中。
+
+归一化 SHALL 按端点或帧的明确 JSON 路径，仅处理已知动态字段。业务正文、时间外观的字符串、确定性 Git OID、版本摘要和固定输入 SHALL 保留。临时路径替换 SHALL 限于路径字段及明确错误路径，并检查路径边界。会话/终端、基础/文件系统/上传、启动配置、工作区、代码视图、推送场景 SHALL 各自拥有独立夹具、期限和归一化状态，并可单独运行。
+
+#### Scenario: 业务正文与动态字段值相同
+
+- **WHEN** 正文、标题或错误文本包含与随机 ID、时间或临时路径相同的文本
+- **THEN** 未被该端点明确声明为动态字段的值 SHALL 保留，不因其他字段的归一化而改变
 
 #### Scenario: 无意改变字段
 

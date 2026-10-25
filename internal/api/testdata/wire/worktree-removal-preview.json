@@ -20,8 +20,8 @@
         "createdAt": "<time>",
         "cwd": "<linked>",
         "exitCode": null,
-        "generation": "<generation#4>",
-        "id": "<id#12>",
+        "generation": "<generation#1>",
+        "id": "<id#4>",
         "lastActiveAt": "<time>",
         "preset": "custom",
         "preview": "",
@@ -30,8 +30,8 @@
         "status": "running",
         "title": "linked",
         "workspace": {
-          "repositoryId": "<id#9>",
-          "worktreeId": "<id#11>",
+          "repositoryId": "<id#1>",
+          "worktreeId": "<id#3>",
           "worktreePath": "<linked>"
         }
       }
@@ -44,14 +44,14 @@
       "error": "",
       "hasIgnored": false,
       "hasUntracked": false,
-      "head": "<head#1>",
-      "id": "<id#11>",
+      "head": "a68d89230002fd397674cf37275eb2c7ca18d0a7",
+      "id": "<id#3>",
       "kind": "linked",
       "lockReason": "",
       "locked": false,
       "path": "<linked>",
       "prunable": false,
-      "repositoryId": "<id#9>"
+      "repositoryId": "<id#1>"
     }
   }
 }

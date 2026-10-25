@@ -3,20 +3,20 @@
   "body": {
     "bases": [
       {
-        "head": "<head#1>",
+        "head": "a68d89230002fd397674cf37275eb2c7ca18d0a7",
         "name": "refs/heads/main"
       }
     ],
     "branches": [
       {
-        "head": "<head#1>",
+        "head": "a68d89230002fd397674cf37275eb2c7ca18d0a7",
         "name": "main",
         "worktreePaths": [
           "<repo>"
         ]
       }
     ],
-    "defaultBase": "<head#1>",
+    "defaultBase": "a68d89230002fd397674cf37275eb2c7ca18d0a7",
     "defaultParent": "<repo>.worktrees"
   }
 }

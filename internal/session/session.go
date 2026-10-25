@@ -225,16 +225,8 @@ func (s *Session) infoLocked() Info {
 func (s *Session) Buffer() []byte        { return s.ring.Snapshot() }
 func (s *Session) Done() <-chan struct{} { return s.done }
 
-// rawFrame prefixes raw bytes with their protocol type byte.
-func rawFrame(kind byte, p []byte) Message {
-	frame := make([]byte, len(p)+1)
-	frame[0] = kind
-	copy(frame[1:], p)
-	return Message{Frame: frame}
-}
 func (s *Session) stateLocked() Message {
-	info := s.infoLocked()
-	return Message{Info: &info}
+	return infoMessage(s.infoLocked())
 }
 func (s *Session) sendLocked(sub *Subscriber, m Message) {
 	if sub.failed {
@@ -287,8 +279,6 @@ func (s *Session) AttachClient(o AttachOptions) *Subscriber {
 // Position precedes replayed bytes. "append" continues a terminal at Start
 // with the bytes up to End sent as ordinary output; "reset" is followed by a
 // full snapshot covering Start to End.
-func positionMessage(p Position) Message { return Message{Position: &p} }
-
 type Position struct {
 	Generation string
 	Mode       string
@@ -311,21 +301,20 @@ func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held []Mess
 			position.Mode, position.Start = "append", resume.Offset
 			s.sendLocked(sub, positionMessage(position))
 			if len(tail) > 1 {
-				s.sendLocked(sub, Message{Frame: tail})
+				s.sendLocked(sub, frameMessage(tail))
 			}
 		}
 	}
 	if position.Mode == "reset" {
 		s.sendLocked(sub, positionMessage(position))
-		s.sendLocked(sub, Message{Frame: s.ring.snapshotWithPrefix([]byte{1})})
+		s.sendLocked(sub, frameMessage(s.ring.snapshotWithPrefix([]byte{1})))
 	}
 	s.sendLocked(sub, s.stateLocked())
 	for _, m := range held {
 		s.sendLocked(sub, m)
 	}
 	if s.info.ExitCode != nil {
-		code := *s.info.ExitCode
-		s.sendLocked(sub, Message{Exit: &code})
+		s.sendLocked(sub, exitMessage(*s.info.ExitCode))
 	}
 }
 
@@ -439,7 +428,7 @@ func (s *Session) read() {
 				s.info.Status = StatusRunning
 			}
 			if len(s.subs) > 0 {
-				s.broadcastLocked(rawFrame(0, p))
+				s.broadcastLocked(outputMessage(p))
 				// After the output that toggled it, so the mode applies from there.
 				if s.preview.colorSchemeReports != reports {
 					s.broadcastLocked(s.controlLocked())
@@ -480,7 +469,7 @@ func (s *Session) wait() {
 	s.info.ReportedCwd = nil
 	s.info.ExitCode = &code
 	s.broadcastLocked(s.stateLocked())
-	s.broadcastLocked(Message{Exit: &code})
+	s.broadcastLocked(exitMessage(code))
 	close(s.done)
 	s.mu.Unlock()
 	slog.Info("session exited", "id", s.info.ID, "exitCode", code)

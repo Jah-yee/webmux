@@ -38,6 +38,10 @@ type manifest struct {
 	// outbound lists service packages that send HTTP requests, with the
 	// reason. They may use net/http client symbols only.
 	outbound map[string]string
+	// pure lists stateless service package functions controllers may call,
+	// with a reviewable reason. Constructors and stateful functions remain
+	// forbidden; purity is a reviewed contract, not inferred from a name.
+	pure map[string]string
 	// contract is the wire type package.
 	contract string
 	// wireScope are the packages whose JSON values must be contract types.
@@ -181,6 +185,7 @@ func (p *program) sorted() []violation {
 // check runs every rule and returns the sorted violations.
 func (p *program) check() []violation {
 	p.checkManifest()
+	p.checkPureFunctions()
 	for _, rel := range p.relPaths() {
 		pkg := p.pkgs[rel]
 		l := p.layerOf(rel)
@@ -302,6 +307,44 @@ var osFilesystem = map[string]bool{
 	"Truncate": true, "CopyFS": true, "DirFS": true,
 }
 
+// Pure registrations must name real package functions in services, explain
+// their stateless contract, and still be used by a controller.
+func (p *program) checkPureFunctions() {
+	used := map[string]bool{}
+	for rel, pkg := range p.pkgs {
+		if p.layerOf(rel) != controller {
+			continue
+		}
+		for _, obj := range pkg.TypesInfo.Uses {
+			if fn, ok := obj.(*types.Func); ok && fn.Pkg() != nil {
+				used[p.sinkKey(fn.Origin())] = true
+			}
+		}
+	}
+	for key, reason := range p.m.pure {
+		rel, name, _ := strings.Cut(key, ".")
+		if strings.TrimSpace(reason) == "" {
+			p.reportPackage(rel, "R0", "document why this function is pure", "pure registration %s has no reason", key)
+		}
+		if p.m.layers[rel] != service {
+			p.reportPackage(rel, "R0", "only service functions need pure registrations", "pure registration %s is not in a service package", key)
+			continue
+		}
+		pkg := p.pkgs[rel]
+		var fn *types.Func
+		if pkg != nil {
+			fn, _ = pkg.Types.Scope().Lookup(name).(*types.Func)
+		}
+		if fn == nil {
+			p.reportPackage(rel, "R0", "remove the stale entry from the pure registrations", "registered pure function %s is not a package function", key)
+			continue
+		}
+		if !used[key] {
+			p.reportPackage(rel, "R0", "remove the stale entry from the pure registrations", "registered pure function %s is not used by a controller", key)
+		}
+	}
+}
+
 // R4 filesystem access and R5 service package-level functions in a
 // controller. Every use of the function object counts, so calls through an
 // alias, a dot import or a function value are all reported.
@@ -320,7 +363,7 @@ func (p *program) checkControllerUses(pkg *packages.Package) {
 		switch {
 		case path == "os" && osFilesystem[fn.Name()]:
 			p.report(id.Pos(), "R4", "move the filesystem work into a service method (for example internal/files)", "controller uses os.%s", fn.Name())
-		case p.pkgLayer(path) == service:
+		case p.pkgLayer(path) == service && strings.TrimSpace(p.m.pure[p.sinkKey(fn)]) == "":
 			p.report(id.Pos(), "R5", "call a method of the injected service; construct services in cmd/", "controller uses service function %s.%s", fn.Pkg().Name(), fn.Name())
 		}
 	}
@@ -399,8 +442,22 @@ func isInteger(t types.Type) bool {
 	return ok && basic.Info()&types.IsInteger != 0
 }
 
-// R7: services report error kinds, never HTTP statuses: no integer field in
-// an error type and no Status function or method returning an integer.
+func isError(t types.Type) bool {
+	return types.Implements(t, errorInterface) || types.Implements(types.NewPointer(t), errorInterface)
+}
+
+func isHTTPStatusName(name string) bool {
+	switch strings.ToLower(name) {
+	case "status", "statuscode", "httpstatus", "httpstatuscode":
+		return true
+	}
+	return false
+}
+
+// R7: errors carry domain data, not HTTP statuses. Reject explicitly named
+// integer status fields and status-returning error methods/mappers. Explicit
+// HTTPStatus/HTTPStatusCode helpers are transport concerns regardless of their
+// inputs; domain integers and non-error Status methods remain allowed.
 func (p *program) checkServiceErrors(pkg *packages.Package) {
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
@@ -416,7 +473,7 @@ func (p *program) checkServiceErrors(pkg *packages.Package) {
 						continue
 					}
 					t := obj.Type()
-					if !types.Implements(t, errorInterface) && !types.Implements(types.NewPointer(t), errorInterface) {
+					if !isError(t) {
 						continue
 					}
 					st, ok := t.Underlying().(*types.Struct)
@@ -424,18 +481,34 @@ func (p *program) checkServiceErrors(pkg *packages.Package) {
 						continue
 					}
 					for i := range st.NumFields() {
-						if field := st.Field(i); isInteger(field.Type()) {
-							p.report(field.Pos(), "R7", "wrap a sentinel error kind and map it to a status in internal/api/errors.go", "error type %s has integer field %s", ts.Name.Name, field.Name())
+						if field := st.Field(i); isHTTPStatusName(field.Name()) && isInteger(field.Type()) {
+							p.report(field.Pos(), "R7", "wrap a sentinel error kind and map it to a status in internal/api/errors.go", "error type %s has HTTP status field %s", ts.Name.Name, field.Name())
 						}
 					}
 				}
 			case *ast.FuncDecl:
-				if decl.Name.Name != "Status" {
+				if !isHTTPStatusName(decl.Name.Name) {
 					continue
 				}
 				sig, _ := pkg.TypesInfo.Defs[decl.Name].Type().(*types.Signature)
-				if sig != nil && sig.Results().Len() == 1 && isInteger(sig.Results().At(0).Type()) {
-					p.report(decl.Name.Pos(), "R7", "return an error kind; the controller owns HTTP statuses", "service declares Status returning an integer")
+				if sig == nil {
+					continue
+				}
+				errorStatus := strings.HasPrefix(strings.ToLower(decl.Name.Name), "http")
+				if recv := sig.Recv(); recv != nil {
+					errorStatus = errorStatus || isError(recv.Type())
+				}
+				for i := range sig.Params().Len() {
+					errorStatus = errorStatus || isError(sig.Params().At(i).Type())
+				}
+				if !errorStatus {
+					continue
+				}
+				for i := range sig.Results().Len() {
+					if isInteger(sig.Results().At(i).Type()) {
+						p.report(decl.Name.Pos(), "R7", "return an error kind; the controller owns HTTP statuses", "service declares error status mapper %s returning an integer", decl.Name.Name)
+						break
+					}
 				}
 			}
 		}
@@ -666,12 +739,22 @@ func (p *program) checkContractTypes(pkg *packages.Package) {
 var jsonEncoders = map[string]bool{"Marshal": true, "MarshalIndent": true, "(*Encoder).Encode": true}
 
 // R9: services do not encode client-visible JSON. They declare no
-// MarshalJSON and encode only in registered functions. Persistence goes
-// through internal/statefile, a shared package outside this rule.
+// MarshalJSON and call encoders directly only in registered function bodies.
+// Every source reference is checked, including package initializers and
+// aliases, which could otherwise escape the registered function.
+// Persistence goes through internal/statefile, outside this rule.
 func (p *program) checkServiceJSON(pkg *packages.Package) {
 	info := pkg.TypesInfo
 	used := map[string]bool{}
+	called := map[*ast.Ident]bool{}
+	owners := map[*ast.Ident]string{}
 	for _, file := range pkg.Syntax {
+		ast.Inspect(file, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				called[calleeIdent(call.Fun)] = true
+			}
+			return true
+		})
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok {
@@ -683,31 +766,35 @@ func (p *program) checkServiceJSON(pkg *packages.Package) {
 			if fn.Body == nil {
 				continue
 			}
-			key := ""
-			if obj, ok := info.Defs[fn.Name].(*types.Func); ok {
-				key = p.sinkKey(obj)
-			}
-			_, registered := p.m.encoders[key]
+			key := p.sinkKey(info.Defs[fn.Name].(*types.Func))
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				id, ok := n.(*ast.Ident)
-				if !ok {
-					return true
+				if id, ok := n.(*ast.Ident); ok {
+					owners[id] = key
 				}
-				callee, ok := info.Uses[id].(*types.Func)
-				if !ok || callee.Pkg() == nil || callee.Pkg().Path() != "encoding/json" {
-					return true
-				}
-				name := strings.TrimPrefix(p.sinkKey(callee.Origin()), "encoding/json.")
-				if !jsonEncoders[name] {
-					return true
-				}
-				if registered {
-					used[key] = true
-					return true
-				}
-				p.report(id.Pos(), "R9", "return data and let the controller encode a contract type, or register the function in layers_test.go", "service function %s calls json.%s", fn.Name.Name, name)
 				return true
 			})
+		}
+	}
+	for id, obj := range info.Uses {
+		callee, ok := obj.(*types.Func)
+		if !ok || callee.Pkg() == nil || callee.Pkg().Path() != "encoding/json" {
+			continue
+		}
+		name := strings.TrimPrefix(p.sinkKey(callee.Origin()), "encoding/json.")
+		if !jsonEncoders[name] {
+			continue
+		}
+		key := owners[id]
+		_, registered := p.m.encoders[key]
+		switch {
+		case !called[id]:
+			p.report(id.Pos(), "R9", "call JSON encoders directly inside registered functions", "json.%s used as a function value", name)
+		case registered:
+			used[key] = true
+		case key == "":
+			p.report(id.Pos(), "R9", "encode JSON only inside registered functions", "package initializer calls json.%s", name)
+		default:
+			p.report(id.Pos(), "R9", "return data and let the controller encode a contract type, or register the function in layers_test.go", "service function %s calls json.%s", key, name)
 		}
 	}
 	for key := range p.m.encoders {

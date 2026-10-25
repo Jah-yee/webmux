@@ -40,10 +40,8 @@ func (s *Session) controlLocked() Message {
 		controller := *s.control
 		state.Controller = &controller
 	}
-	return Message{Control: &state}
+	return controlMessage(state)
 }
-
-func submissionMessage(status SubmissionStatus) Message { return Message{Submission: &status} }
 
 func (s *Session) setControlLocked(sub *Subscriber) {
 	s.control = &Controller{ClientID: sub.client, Label: sub.label, Since: time.Now()}

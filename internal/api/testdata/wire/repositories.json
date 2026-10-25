@@ -7,7 +7,7 @@
       "checkedAt": "<time>",
       "commonDir": "<repo>/.git",
       "error": "",
-      "id": "<id#9>",
+      "id": "<id#1>",
       "name": "repo",
       "worktrees": [
         {
@@ -18,14 +18,14 @@
           "error": "",
           "hasIgnored": false,
           "hasUntracked": true,
-          "head": "<head#1>",
-          "id": "<id#10>",
+          "head": "a68d89230002fd397674cf37275eb2c7ca18d0a7",
+          "id": "<id#2>",
           "kind": "main",
           "lockReason": "",
           "locked": false,
           "path": "<repo>",
           "prunable": false,
-          "repositoryId": "<id#9>"
+          "repositoryId": "<id#1>"
         }
       ]
     }

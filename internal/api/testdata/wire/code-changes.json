@@ -2,22 +2,22 @@
   "status": 200,
   "body": {
     "checkedAt": "<time>",
-    "contentVersion": "<contentVersion#4>",
+    "contentVersion": "d3473c96774b72be5547678830356f66f22d00dc08b355f0accce839167b1da8",
     "entries": [
       {
-        "changeId": "<changeId#1>",
+        "changeId": "8f13b8b6cb4cd6c86bcc4d55bc08a846f5854f4452727e911d46776001b5747f",
         "group": "unstaged",
         "newMode": "100644",
-        "newOid": "<newOid#1>",
+        "newOid": "0000000000000000000000000000000000000000",
         "newPath": "a.txt",
         "nodeId": "YS50eHQ",
         "oldMode": "100644",
-        "oldOid": "<oldOid#1>",
+        "oldOid": "814f4a422927b82f5f8a43f8fab6d3839e3983f2",
         "oldPath": "a.txt",
         "status": "M"
       },
       {
-        "changeId": "<changeId#2>",
+        "changeId": "eeb30a86c939619f0bb2c6bba2d1593c566ac692fd32549693dc7f1efc3f1ec7",
         "group": "untracked",
         "newMode": "100644",
         "newOid": "",

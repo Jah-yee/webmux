@@ -43,19 +43,19 @@
 
 ### D3 规则编号与检查方式
 
-| ID | 检查 |
-|---|---|
-| R0 | 清单完整：多出或缺失的包 |
-| R1 | 按层检查禁止导入：Service 不得导入 Controller、`cmd/`、`coder/websocket`、`net/http/httptest`；共享层不得导入 Controller/Service；服务器外客户端不得导入 Controller/Service。都没有例外 |
-| R2 | 只有 `cmd/` 能导入 `internal/api` |
-| R3 | Controller 不得导入 `os/exec`、`syscall`、`golang.org/x/sys/...`、`creack/pty`、`internal/statefile` |
-| R4 | Controller 不得调用 `os` 文件系统函数（`ReadDir`、`Stat`、`Lstat`、`Open*`、`Create*`、`Mkdir*`、`Remove*`、`Rename`、`Chmod`、`Chown`、`ReadFile`、`WriteFile`、`Symlink`、`Link`、`Readlink`、`Truncate`）。判断依据是被调对象为 `os` 包的 `*types.Func` |
-| R5 | Controller 中，被调对象是 Service 包的包级 `*types.Func`（无接收者）时报告；方法调用、类型转换、哨兵变量引用不报告 |
-| R6 | Service 引用了服务端 HTTP 符号，或函数签名的参数含 `*http.Request`；已登记的出站包按客户端符号白名单放行 |
-| R7 | Service 中实现 `error` 的具名类型含有底层为整数的字段；或声明了返回 `int` 的 `Status` 函数或方法 |
-| R8 | 线上类型：见 D4 |
-| R9 | Service 声明了 `MarshalJSON`，或在未登记的函数中调用 `json.Marshal`/`MarshalIndent`/`(*json.Encoder).Encode` |
-| R10 | `internal/contract` 不得导入 Service/Controller（R1 的特例，单独编号以便报告清楚） |
+| ID  | 检查                                                                                                                                                                                                                                                       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R0  | 清单完整：多出或缺失的包                                                                                                                                                                                                                                   |
+| R1  | 按层检查禁止导入：Service 不得导入 Controller、`cmd/`、`coder/websocket`、`net/http/httptest`；共享层不得导入 Controller/Service；服务器外客户端不得导入 Controller/Service。都没有例外                                                                    |
+| R2  | 只有 `cmd/` 能导入 `internal/api`                                                                                                                                                                                                                          |
+| R3  | Controller 不得导入 `os/exec`、`syscall`、`golang.org/x/sys/...`、`creack/pty`、`internal/statefile`                                                                                                                                                       |
+| R4  | Controller 不得调用 `os` 文件系统函数（`ReadDir`、`Stat`、`Lstat`、`Open*`、`Create*`、`Mkdir*`、`Remove*`、`Rename`、`Chmod`、`Chown`、`ReadFile`、`WriteFile`、`Symlink`、`Link`、`Readlink`、`Truncate`）。判断依据是被调对象为 `os` 包的 `*types.Func` |
+| R5  | Controller 使用 Service 包级函数时报告，除非函数在 `pure` 表中附理由登记；登记必须真实存在并被 Controller 使用，构造、状态访问与 I/O 不得登记为纯函数                                                                                                      |
+| R6  | Service 引用了服务端 HTTP 符号，或函数签名的参数含 `*http.Request`；已登记的出站包按客户端符号白名单放行                                                                                                                                                   |
+| R7  | Service 错误中整数 Status/StatusCode/HTTPStatus/HTTPStatusCode 字段（不分大小写），错误相关整数状态方法或函数，以及显式 HTTP 状态方法或函数；不禁止业务整数和非错误对象的领域 Status                                                                       |
+| R8  | 线上类型：见 D4                                                                                                                                                                                                                                            |
+| R9  | Service 声明 MarshalJSON，或未在登记函数体中直接调用 JSON 编码器；检查包括包级初始化及函数值/方法值别名，登记函数也不得保存编码器别名                                                                                                                      |
+| R10 | `internal/contract` 不得导入 Service/Controller（R1 的特例，单独编号以便报告清楚）                                                                                                                                                                         |
 
 每条违规记录为 `位置 [Rn] 消息 — 修复提示`，统一收集后由一个 `t.Errorf` 按文件和行号排序输出。
 
@@ -120,7 +120,7 @@ type Message struct {
 
 - `configId`：`workspace.Service.CreateSession` 改为接收 `workspace.SessionInput`（含 `ConfigID *string`）。互斥规则、`launch.Service.Get` 解析和 `session.ValidateEnv` 都在 Service 内，顺序保持"先校验，再做任何文件系统或 Git 操作"。`workspace.New` 增加 `*launch.Service` 参数，允许 nil，nil 时 `configId` 返回 `launch.ErrUnavailable`，即原来的 503 语义。
 - `internal/files`：`Service{defaultCwd}` 提供 `Complete(prefix)`、`Mkdir(path)`、`StoreUpload(name, io.Reader, limit) (*Upload, error)`。`uploadFilename` 校验、临时目录 0700、文件 0600、`O_EXCL`、按 `limit` 的有界复制、失败清理都迁过去；`Upload.Discard()` 让 Controller 在之后的检查失败时删除已落盘文件。Controller 保留 multipart 读取、用请求上下文包装读取器以支持取消、请求体大小限制和状态码映射。`files` 的错误同样用哨兵错误（`ErrInvalid`、`ErrTooLarge`、`ErrRead`、`ErrInternal`），`ErrRead` 保留读取错误本身，Controller 据此区分 408/413/400。
-- `push.Validate` 改为 `push.Service.CheckSubscription` 方法，`Register` 内部继续校验。实现时发现直接并入一次 `Subscribe` 调用会改变错误优先级：现有顺序是"推送不可用 409 → 订阅格式 400 → 来源 409 → 保存"，来源判断依赖请求，只能留在 Controller，所以校验保留为单独的方法调用，满足 R5，顺序与状态码不变。
+- `push.Validate` 保持包级纯校验函数，在 `pure` 中登记理由，不再用无状态的 `CheckSubscription` 方法包装。`Register` 内部继续校验。Controller 保持"推送不可用 409 → 订阅格式 400 → 来源 409 → 保存"的顺序，来源判断仍留在 Controller。
 - `codeview.New` 由 `cmd/webmux/main.go` 和 `cmd/baseline` 构造。`api.New` 的可变参数 `codes ...*codeview.Service` 改为必填，`files.Service` 也通过参数注入。参数过多时改为 `api.Deps` 结构体，以免位置参数继续增长。
 - `ManagerHint` 移到 `internal/runtime`。`api/local.go` 和 `client/stop.go` 都改用新位置。
 - `os.Hostname()` 不属于 R4 的文件系统函数，保留在 Controller 中。
@@ -132,9 +132,10 @@ type Message struct {
 ### D9 线上兼容的验证
 
 - 在改动开始前，先新增 `internal/api` 的线上快照测试：用固定时钟或归一化时间字段的夹具，对每个 REST 端点、`/ws/sessions` 事件和每种终端 JSON 帧录制 JSON，存到 `internal/api/testdata/wire/*.json`。改动全程这些快照必须保持不变。快照是对前端 Zod 契约的回归保护，作为永久测试保留。
-- 有意的协议变更通过 `go test ./internal/api -run TestWireSnapshots -update` 重新录制，快照文件的差异进入评审。快照比较前把 JSON 规范化（排序键、缩进），失败时输出端点和 JSON 差异。归一化只替换时间、随机 ID 和临时路径，不放宽字段集合、`null` 或空集合的比较。
+- 有意的协议变更通过 `go test ./internal/api -run TestWireSnapshots -update` 重新录制，差异进入评审。按端点/帧的明确 JSON 路径归一化时间、随机 ID 和临时路径，不全局替换业务正文或字段名，保留确定性 Git OID、摘要和固定输入；路径替换检查边界。六组场景各自持有夹具、期限和归一化状态，可单独运行。异步 detach 完成后才记录客户端计数，不将竞态归一化。
 - 现有 HTTP 级测试（`launch_test`、`router_test`、`upload_test`、`workspace_test`、`code_test`、`push_test`、`continuity_test`）保持断言不变，只把解码目标改为 contract 类型。
 - 前端 Vitest 与 Playwright E2E 不改代码，直接运行，作为端到端兼容的证据。
+- `session.Message` 集中构造且恰有一个载荷，原始帧只允许带 0/1 前缀；Hub 校验失败或编码失败时关闭连接（1011），不记录载荷。输出仍只复制一次并共享，回放不增加复制。聚合循环的 pending 使用值加布尔标记，避免接收变量取地址逃逸；真实 PTY → Session → Attach → WebSocket 基准验证连续输出、控制边界和大块输出。
 
 ## Risks / Trade-offs
 

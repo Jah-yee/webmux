@@ -12,8 +12,8 @@
     "createdAt": "<time>",
     "cwd": "<linked>",
     "exitCode": null,
-    "generation": "<generation#4>",
-    "id": "<id#12>",
+    "generation": "<generation#1>",
+    "id": "<id#4>",
     "lastActiveAt": "<time>",
     "preset": "custom",
     "preview": "",
@@ -22,8 +22,8 @@
     "status": "running",
     "title": "linked",
     "workspace": {
-      "repositoryId": "<id#9>",
-      "worktreeId": "<id#11>",
+      "repositoryId": "<id#1>",
+      "worktreeId": "<id#3>",
       "worktreePath": "<linked>"
     }
   }

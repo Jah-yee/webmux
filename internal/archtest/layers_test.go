@@ -50,6 +50,9 @@ var webmux = manifest{
 	outbound: map[string]string{
 		"internal/push": "delivers Web Push messages to browser push services",
 	},
+	pure: map[string]string{
+		"internal/push.Validate": "validates subscription strings without service state or I/O, before the controller checks Origin",
+	},
 	contract:  "internal/contract",
 	wireScope: []string{"internal/api", "internal/wire", "internal/hub"},
 	// The controller's JSON boundary: their values are checked where they

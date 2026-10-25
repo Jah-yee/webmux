@@ -2,14 +2,14 @@
   "status": 200,
   "body": {
     "change": {
-      "changeId": "<changeId#1>",
+      "changeId": "8f13b8b6cb4cd6c86bcc4d55bc08a846f5854f4452727e911d46776001b5747f",
       "group": "unstaged",
       "newMode": "100644",
-      "newOid": "<newOid#1>",
+      "newOid": "0000000000000000000000000000000000000000",
       "newPath": "a.txt",
       "nodeId": "YS50eHQ",
       "oldMode": "100644",
-      "oldOid": "<oldOid#1>",
+      "oldOid": "814f4a422927b82f5f8a43f8fab6d3839e3983f2",
       "oldPath": "a.txt",
       "status": "M"
     },
@@ -17,7 +17,7 @@
     "kind": "text",
     "new": {
       "absolutePath": "<repo>/a.txt",
-      "contentVersion": "<contentVersion#5>",
+      "contentVersion": "c9b0fb1fa00b3a5ce714c876c35bb18f21eed970d33d9093a3cbd7cf0c9db3dc",
       "downloadable": true,
       "kind": "text",
       "lineCount": 2,
@@ -33,13 +33,13 @@
     },
     "old": {
       "absolutePath": "<repo>/a.txt",
-      "contentVersion": "<contentVersion#6>",
+      "contentVersion": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8",
       "downloadable": true,
       "kind": "text",
       "lineCount": 2,
       "mediaType": "",
       "nodeId": "YS50eHQ",
-      "oid": "<oldOid#1>",
+      "oid": "814f4a422927b82f5f8a43f8fab6d3839e3983f2",
       "path": "a.txt",
       "reason": "",
       "referenceable": true,

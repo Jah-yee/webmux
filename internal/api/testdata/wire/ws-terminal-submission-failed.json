@@ -1,7 +1,7 @@
 {
   "body": {
     "error": "generation",
-    "id": "<id#4>",
+    "id": "stale-generation",
     "state": "failed"
   }
 }

@@ -23,6 +23,11 @@ func (h Handler) Run() error {
 	check := s.Validate // want R5
 	_ = check("x")
 	_ = s.Generic(1) // want R5
+	_ = s.Pure("x")
+	pure := s.Pure
+	_ = pure("x")
+	s.NoReason() // want R5
+	s.Save()     // want R5
 	// Compliant: methods, types, sentinels, constants and non-filesystem os.
 	_ = h.Service.Do("x")
 	_ = s.Report{}.Devices

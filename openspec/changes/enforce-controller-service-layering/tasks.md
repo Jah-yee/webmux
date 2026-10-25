@@ -23,7 +23,7 @@
 - [x] 4.1 新增 `internal/files`：`Complete`（排序、隐藏文件优先级、符号链接判断与原实现一致）、`Mkdir`、`StoreUpload`（文件名校验、临时目录 0700、文件 0600、`O_EXCL`、失败清理），带哨兵错误；把 `router_test`/`upload_test` 中的纯逻辑边界补成包内单元测试
 - [x] 4.2 `internal/api` 的 `dirs`、`mkdir`、`upload` 改为调用注入的 `files.Service`；Controller 只保留 multipart 读取、上下文取消、大小限制和状态码映射
 - [x] 4.3 `workspace.Service.CreateSession` 改为接收 `SessionInput`（含 `ConfigID`），把 `configId` 互斥规则、`launch.Service.Get` 和 `session.ValidateEnv` 迁入 Service，保持"校验先于任何文件系统和 Git 操作"；`workspace.New` 增加 `*launch.Service` 参数（nil 时返回 `launch.ErrUnavailable`）；为 `configId` 规则补包内测试
-- [x] 4.4 把 `push.Validate` 改为 `push.Service.CheckSubscription` 方法（保持"不可用 → 格式 → 来源"的错误优先级），`api/push.go` 不再调用包级函数
+- [x] 4.4 保留包级纯校验 `push.Validate` 并在 R5 的 `pure` 表中附理由登记，移除 `CheckSubscription` 包装；保持"不可用 → 格式 → 来源"的错误优先级
 - [x] 4.5 `codeview.Service` 和 `files.Service` 改由 `cmd/webmux/main.go`、`cmd/baseline` 构造并注入；`api.New`/`api.NewLocal` 改用 `api.Deps` 结构体，删除可变参数 `codes`；迁移所有调用点，包括 `internal/tray/forward` 测试和 `internal/api` 测试
 - [x] 4.6 把 `ManagerHint` 移到 `internal/runtime`，`api/local.go` 与 `client/stop.go` 改用新位置
 
@@ -59,3 +59,10 @@
 - [x] 8.5 `internal/attach` 的 6 号帧与 3 号帧解码改用 `contract.ControlState`/`contract.ExitFrame`，1 号帧编码改用 `contract.TerminalResize`；`internal/tray` 的 `Watch` 改为解码 `contract.SessionEvent`；`internal/wslclient` 测试改用 contract 类型
 - [x] 8.6 在 archtest 中把 R8 汇点扩展到 `internal/hub`（含 `hub.jsonFrame`），加入 R9，fixture 增加对应违规样例
 - [x] 8.7 archtest 全绿、线上快照不变；`continuity_test` 与回放相关测试在 `-race` 下通过；运行 `go test -race ./...`、`make test-unit`、`make test-browser`、`make test-e2e`、`make check`；更新 `docs/architecture.md` 的 R8/R9 与终端帧编码归属，并同步 `US-L05`
+
+## 9. 合并后加固
+
+- [x] 9.1 R9 检查整个源码及编码器别名，补包级初始化与函数值回归；R7 允许业务整数，仅拦截 HTTP 状态语义；R5 登记 `push.Validate` 并检查过期纯函数条目
+- [x] 9.2 聚合 pending 改用值加布尔标记；集中构造 `Message`，校验单载荷及原始帧前缀，异常以 1011 关闭连接；补真实 WebSocket 顺序、非法消息和共享缓冲回归
+- [x] 9.3 快照按明确字段归一化，保留业务值并检查路径边界；拆成六组独立夹具，保留 95 份快照；等待异步 detach 后记录客户端数
+- [x] 9.4 运行真实 PTY/WebSocket 前后分配基准、生产协议烟测、Go race 全套和六组独立快照；同步架构、协议与 US-D02 / US-L04 / US-L05，未宣称本次运行前端浏览器或真机验收

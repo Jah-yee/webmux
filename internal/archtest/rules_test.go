@@ -27,7 +27,16 @@ var fixture = manifest{
 		"internal/contract":  shared,
 		"internal/wirectl":   controller,
 	},
-	outbound:  map[string]string{"internal/svcout": "fixture outbound client"},
+	outbound: map[string]string{"internal/svcout": "fixture outbound client"},
+	pure: map[string]string{
+		"internal/svc.Pure":           "fixture stateless string validation",
+		"internal/svc.NoReason":       " \t",
+		"internal/svc.removedPure":    "stale missing function",
+		"internal/svc.UnusedPure":     "stale unused function",
+		"internal/svc.NotAFunction":   "invalid variable registration",
+		"internal/svc.(*Service).Do":  "invalid method registration",
+		"internal/shared.notAService": "registration outside a service",
+	},
 	contract:  "internal/contract",
 	wireScope: []string{"internal/wirectl"},
 	sinks: map[string]sink{
@@ -36,6 +45,7 @@ var fixture = manifest{
 	},
 	encoders: map[string]string{
 		"internal/svc.digest":            "fixture digest",
+		"internal/svc.registeredAlias":   "fixture direct call with rejected alias",
 		"internal/svc.(*Service).Encode": "fixture method",
 		"internal/svc.removed":           "stale registration",
 		"internal/shared.notAService":    "registration outside a service",
@@ -77,8 +87,24 @@ func TestRulesOnFixture(t *testing.T) {
 		}
 	}
 	got := map[string]string{}
+	messages := map[string]bool{}
 	for _, v := range p.check() {
 		got[fmt.Sprintf("%s:%d %s", v.file, v.line, v.rule)] = v.String()
+		messages[v.msg] = true
+	}
+	// Package-level R0 reports share a position; check each registration
+	// diagnostic so one invalid entry cannot mask another.
+	for _, msg := range []string{
+		"pure registration internal/svc.NoReason has no reason",
+		"registered pure function internal/svc.removedPure is not a package function",
+		"registered pure function internal/svc.UnusedPure is not used by a controller",
+		"registered pure function internal/svc.NotAFunction is not a package function",
+		"registered pure function internal/svc.(*Service).Do is not a package function",
+		"pure registration internal/shared.notAService is not in a service package",
+	} {
+		if !messages[msg] {
+			t.Errorf("registration violation not detected: %s", msg)
+		}
 	}
 	var missing, unexpected []string
 	for key := range want {

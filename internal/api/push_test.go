@@ -130,6 +130,9 @@ func TestPushAPI(t *testing.T) {
 	if code, out := call("POST", "/api/push/subscriptions", "https://abc.trycloudflare.com", "secret", device); code != http.StatusConflict || out["reason"] != pushQuickTunnel || !strings.Contains(out["error"].(string), "Named Tunnel") {
 		t.Fatalf("quick tunnel registration: %d %v", code, out)
 	}
+	if code, out := call("POST", "/api/push/subscriptions", "https://abc.trycloudflare.com", "secret", `{}`); code != http.StatusBadRequest || out["reason"] != nil {
+		t.Fatalf("malformed subscription must precede origin conflict: %d %v", code, out)
+	}
 	if code, _ := call("POST", "/api/push/subscriptions", loopback, "secret", browserSubscription(t, "http://push.example/x")); code != http.StatusBadRequest {
 		t.Fatalf("http endpoint: %d", code)
 	}
@@ -180,6 +183,7 @@ func TestPushAPIWhenDisabled(t *testing.T) {
 	}{
 		{"GET", "/api/push", "", http.StatusOK},
 		{"POST", "/api/push/subscriptions", browserSubscription(t, "https://push.example/x"), http.StatusConflict},
+		{"POST", "/api/push/subscriptions", `{}`, http.StatusConflict},
 		{"POST", "/api/push/test", "", http.StatusConflict},
 		{"DELETE", "/api/push/subscriptions/x", "", http.StatusConflict},
 	} {

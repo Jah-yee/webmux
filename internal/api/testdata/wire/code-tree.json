@@ -28,16 +28,6 @@
         "ignored": false,
         "kind": "directory",
         "mediaType": "",
-        "name": "made",
-        "nodeId": "bWFkZQ",
-        "path": "made",
-        "referenceable": true
-      },
-      {
-        "gitStatus": "",
-        "ignored": false,
-        "kind": "directory",
-        "mediaType": "",
         "name": "sub",
         "nodeId": "c3Vi",
         "path": "sub",
@@ -65,7 +55,7 @@
       }
     ],
     "complete": true,
-    "contentVersion": "<contentVersion#1>",
+    "contentVersion": "cafaf8da96e7601f7a95392142abb68d76d737912e1579c80e24c453943dbfa6",
     "limited": false,
     "nextCursor": ""
   }

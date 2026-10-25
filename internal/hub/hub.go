@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -78,29 +79,38 @@ type input struct {
 
 // jsonFrame encodes a JSON control frame. Its value is a contract type,
 // which archtest rule R8 checks at every call.
-func jsonFrame(kind byte, v any) []byte {
-	data, _ := json.Marshal(v)
-	return contract.Frame(kind, data)
+func jsonFrame(kind byte, v any) ([]byte, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return contract.Frame(kind, data), nil
 }
 
-// encode turns a typed session message into its frame; exit reports the
-// final frame after which the connection closes.
-func encode(m session.Message) (frame []byte, exit bool) {
+var errInvalidMessage = errors.New("invalid session message")
+
+// encode rejects malformed payloads instead of dropping them or choosing one
+// arbitrarily. Raw bytes remain shared; only typed control payloads are encoded.
+func encode(m session.Message) (frame []byte, exit bool, err error) {
+	if !m.Valid() {
+		return nil, false, errInvalidMessage
+	}
 	switch {
 	case m.Frame != nil:
-		return m.Frame, false
+		return m.Frame, false, nil
 	case m.Info != nil:
-		return jsonFrame(contract.FrameState, wire.Session(*m.Info)), false
+		frame, err = jsonFrame(contract.FrameState, wire.Session(*m.Info))
 	case m.Exit != nil:
-		return jsonFrame(contract.FrameExit, contract.ExitFrame{ExitCode: *m.Exit}), true
+		frame, err = jsonFrame(contract.FrameExit, contract.ExitFrame{ExitCode: *m.Exit})
+		exit = true
 	case m.Position != nil:
-		return jsonFrame(contract.FramePosition, wire.StreamPosition(*m.Position)), false
+		frame, err = jsonFrame(contract.FramePosition, wire.StreamPosition(*m.Position))
 	case m.Submission != nil:
-		return jsonFrame(contract.FrameSubmission, wire.SubmissionStatus(*m.Submission)), false
+		frame, err = jsonFrame(contract.FrameSubmission, wire.SubmissionStatus(*m.Submission))
 	case m.Control != nil:
-		return jsonFrame(contract.FrameControl, wire.ControlState(*m.Control)), false
+		frame, err = jsonFrame(contract.FrameControl, wire.ControlState(*m.Control))
 	}
-	return nil, false
+	return frame, exit, err
 }
 
 func write(ctx context.Context, c *websocket.Conn, kind websocket.MessageType, p []byte) error {
@@ -219,13 +229,20 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 		<-readerDone
 		<-inputDone
 	}()
-	var pending *session.Message
+	writeMessages(ctx, c, sub)
+}
+
+// writeMessages is the sole terminal data writer, including aggregation.
+func writeMessages(ctx context.Context, c *websocket.Conn, sub *session.Subscriber) {
+	var pending session.Message
+	var hasPending bool
 	var combinedBuffer []byte
 	for {
 		var m session.Message
-		if pending != nil {
-			m = *pending
-			pending = nil
+		if hasPending {
+			m = pending
+			pending = session.Message{}
+			hasPending = false
 		} else {
 			select {
 			case <-ctx.Done():
@@ -236,9 +253,10 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 			case m = <-sub.Out:
 			}
 		}
-		frame, exit := encode(m)
-		if frame == nil {
-			continue
+		frame, exit, err := encode(m)
+		if err != nil {
+			_ = c.Close(websocket.StatusInternalError, "invalid session message")
+			return
 		}
 		if m.Frame != nil && frame[0] == contract.FrameOutput {
 			if combinedBuffer == nil {
@@ -250,8 +268,8 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 			for len(combined) < 65537 {
 				select {
 				case next := <-sub.Out:
-					if next.Frame == nil || next.Frame[0] != contract.FrameOutput || len(combined)+len(next.Frame)-1 > 65537 {
-						pending = &next
+					if !next.Valid() || next.Frame == nil || next.Frame[0] != contract.FrameOutput || len(combined)+len(next.Frame)-1 > 65537 {
+						pending, hasPending = next, true
 						break aggregate
 					}
 					combined = append(combined, next.Frame[1:]...)

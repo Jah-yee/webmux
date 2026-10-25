@@ -10,7 +10,7 @@
       "envNames": [
         "API_KEY"
       ],
-      "id": "<id#6>",
+      "id": "<id#1>",
       "name": "Claude",
       "updatedAt": "<time>"
     },
@@ -22,7 +22,7 @@
       ],
       "createdAt": "<time>",
       "envNames": [],
-      "id": "<id#7>",
+      "id": "<id#2>",
       "name": "Shell",
       "updatedAt": "<time>"
     }

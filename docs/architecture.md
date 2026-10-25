@@ -83,35 +83,37 @@ flowchart LR
 
 | 规则 | 检查                                                                                                                                                                                                                                                                                          |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R0   | `internal/` 下每个包都在清单中，清单没有过期条目，出站与编码登记指向 Service 包                                                                                                                                                                                                               |
+| R0   | `internal/` 下每个包都在清单中，清单没有过期条目；出站与编码登记指向 Service 包；纯函数登记具有理由、真实包级函数及 Controller 使用点                                                                                                                                                         |
 | R1   | 依赖方向：Service 不导入 Controller、`cmd/`、WebSocket 库或 `net/http/httptest`；共享层与客户端不导入 Service 或 Controller                                                                                                                                                                   |
 | R2   | 只有 `cmd/` 导入 `internal/api`                                                                                                                                                                                                                                                               |
 | R3   | Controller 不导入 `os/exec`、`syscall`、`golang.org/x/sys/...`、PTY 库或 `internal/statefile`                                                                                                                                                                                                 |
 | R4   | Controller 不使用读写、创建或删除文件系统条目的 `os` 函数（`os.Hostname` 等不受限）                                                                                                                                                                                                           |
-| R5   | Controller 不使用 Service 包的包级函数（构造函数、校验函数），只调用注入实例的方法；可以引用 Service 的类型、常量与哨兵错误                                                                                                                                                                   |
+| R5   | Controller 的构造、状态和 I/O 操作只调用注入实例的方法；只允许显式登记并附理由的 Service 包级纯函数（目前为 `push.Validate`）；可以引用 Service 的类型、常量与哨兵错误                                                                                                                        |
 | R6   | Service 不使用服务端 HTTP 符号，不声明以 `*http.Request` 为参数的函数；只有登记为出站的 `push` 可以使用 HTTP 客户端符号                                                                                                                                                                       |
-| R7   | Service 的错误类型不含整数字段，也不声明返回整数的 `Status`；错误种类由 `internal/api/errors.go` 映射为状态码                                                                                                                                                                                 |
+| R7   | Service 错误不携带整数 `Status`/`StatusCode`/`HTTPStatus`/`HTTPStatusCode` 字段，不提供错误到整数状态的同名方法或函数；显式 HTTP 状态方法或函数始终禁止。允许大小、行号、退出码等业务整数及非错误对象的 `Status() int`；HTTP 状态映射归 `internal/api/errors.go`                              |
 | R8   | Controller 编解码的每个 JSON 值都是 `contract` 中的具名类型（可经指针、切片、映射）；汇点是 `encoding/json` 的编解码函数和登记的包装函数 `api.reply`/`decode`/`decodeOptional`/`serveCode`、`hub.jsonFrame`；接口类型的值只能出现在登记的包装函数内；`contract` 类型的字段不引用 Service 类型 |
-| R9   | Service 不声明 `MarshalJSON`，只在登记的函数中编码 JSON（Web Push 载荷与 VAPID 头、代码视图摘要）                                                                                                                                                                                             |
+| R9   | Service 不声明 `MarshalJSON`；JSON 编码器只能在登记函数体内直接调用（Web Push 载荷与 VAPID 头、代码视图摘要）。检查整个源码，包括包级初始化；禁止保存编码器函数值或方法值，即使位于登记函数中                                                                                                 |
 | R10  | `contract` 不导入 Service 或 Controller                                                                                                                                                                                                                                                       |
 
 **维护方式**
 
 - 新增 `internal/` 包时，在 `internal/archtest/layers_test.go` 的清单中归类；删除包时同时删除条目。
-- 例外只能写进清单的登记表（`outbound`、`sinks`、`encoders`），并附理由，评审时可见。依赖方向没有例外。
+- 例外只能写进清单的登记表（`outbound`、`sinks`、`encoders`、`pure`），并附理由，评审时可见。纯函数登记不能用于构造、状态访问或 I/O；缺失、未使用或指向非函数的条目使测试失败。依赖方向没有例外。
 - 每条规则由 `internal/archtest/testdata/fixture` 中带 `// want Rn` 注释的故意违规验证；修改规则时同步增加违规与合规样例。
 - Service 以哨兵错误报告错误种类（`workspace.ErrConflict`、`codeview.ErrGone`、`files.ErrTooLarge` 等），Controller 用 `errors.Is` 映射状态码，错误文本不变。
 - 线上类型集中在 `internal/contract`，转换集中在 `internal/wire`，并保持 nil 与空集合的区别（`null` 与 `[]`/`{}` 不同）。持久化类型（`workspace` 的仓库清单、`launch.Config`、`push` 存储）保留自己的 json 标签，但不直接上线。
 
 **线上快照**
 
-`internal/api/testdata/wire/*.json` 是每个 REST 端点、`/ws/sessions` 事件和终端 JSON 帧的规范化快照，只归一化时间、随机 ID 和临时路径。线上形状的任何变化都会让 `TestWireSnapshots` 失败并给出 JSON 差异。有意的协议变更同时修改 `web/src/schemas.ts` 并重新录制：
+`internal/api/testdata/wire/*.json` 是每个 REST 端点、`/ws/sessions` 事件和终端 JSON 帧的规范化快照。只按端点/帧的明确 JSON 路径处理动态时间、随机 ID、主机名及临时路径；业务正文、确定性 Git OID、版本摘要和固定输入保留，路径替换检查边界。六组场景各自持有夹具、期限和归一化状态，可用 `-run '^TestWireSnapshots$/codeview$'` 等单独运行。线上形状变化会给出 JSON 差异；有意的协议变更同时修改 `web/src/schemas.ts` 并重新录制：
 
 ```sh
 go test ./internal/api -run TestWireSnapshots -update
 ```
 
 快照文件的差异随变更一起评审。
+
+真实终端输出分配基准：`go test ./internal/hub -run '^$' -bench '^BenchmarkAttachOutput$' -benchmem`。覆盖连续输出、输出间的控制消息与大块输出，通过真实 PTY 和 WebSocket 校验字节及顺序；比较前后版本时使用同一份基准和参数，不能把短采样中的耗时波动直接解释为吞吐提升。
 
 ## 客户端与通讯方案
 
@@ -188,6 +190,7 @@ else                                        → running
 
 - Manager 与 Session 状态由各自的锁保护，锁不跨越阻塞的网络或 PTY 操作。
 - 共享的 PTY 输出块不可变；每个连接只有一个写 goroutine，负责合并输出（最多 64 KiB）、把状态、位置、提交与控制消息编码为 JSON 帧并写入 WebSocket。订阅者队列里是 `session.Message`：输出与快照仍是共享字节块，其余是类型化消息，入队位置与锁范围不变。
+- `Message` 由集中构造函数创建，必须恰有一个载荷；原始帧必须带 0/1 前缀，空快照仍保留前缀。Hub 在编码与合并前校验；非法消息或 JSON 编码失败以 1011 关闭当前连接，不记录载荷，也不结束持久会话。待发消息用值加布尔标记保存，避免 channel 接收变量因取地址而逃逸；控制消息、快照、超出合并上限的输出和退出消息保持顺序。
 - 订阅者队列有界，慢客户端被断开（关闭码 4408）后重连回放，而不会阻塞 PTY reader。
 - PTY 使用 Go netpoll 支持的非阻塞描述符；连接断开可取消阻塞中的输入写入，不影响持久会话。输入在等待写锁前后都会检查取消状态，单次写入最长 10 秒。
 
