@@ -3,8 +3,11 @@
 package session
 
 import (
+	"os"
 	"path"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 // state uses ps letters: R running, S sleeping, Z zombie. Other values, including
@@ -122,4 +125,24 @@ func timerWait(name string) bool {
 	}
 	// Darwin e_wmesg is 8 bytes with WMESGLEN 7, so nanosleep is stored as "nanosle".
 	return strings.Contains(name, "nanosleep") || strings.HasPrefix(name, "nanoslee") || name == "nanosle"
+}
+
+// resizePTYLocked pins the PTY descriptor against concurrent close/reuse.
+// TIOCSWINSZ lets the kernel notify only this terminal's foreground job.
+func (s *Session) resizePTYLocked(cols, rows uint16) error {
+	if s.terminal == nil {
+		return os.ErrInvalid
+	}
+	raw, err := s.terminal.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var resizeErr error
+	err = raw.Control(func(fd uintptr) {
+		resizeErr = unix.IoctlSetWinsize(int(fd), unix.TIOCSWINSZ, &unix.Winsize{Col: cols, Row: rows})
+	})
+	if err != nil {
+		return err
+	}
+	return resizeErr
 }

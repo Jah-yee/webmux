@@ -14,8 +14,7 @@ import (
 	"time"
 )
 
-func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
-
+func TestReplayDiscardsIncompleteHistoryAfterBufferWrap(t *testing.T) {
 	m := session.NewManager(session.Options{ScrollbackBytes: 4, DefaultCwd: t.TempDir()})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -36,12 +35,15 @@ func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = conn.CloseNow() }()
-	if position := readPosition(ctx, t, conn, "reset"); position.Start != 1 || position.End != 5 || !position.Truncated {
+	if position := readPosition(ctx, t, conn, "reset"); position.Start != 5 || position.End != 5 || !position.Truncated {
 		t.Fatalf("wrapped position: %+v", position)
 	}
 	kind, p, err := conn.Read(ctx)
-	if err != nil || kind != websocket.MessageBinary || !bytes.Equal(p, []byte{1, 'b', 'c', 'd', 'e'}) {
+	if err != nil || kind != websocket.MessageBinary || !bytes.Equal(p, []byte{1}) {
 		t.Fatalf("wrapped replay: kind=%v bytes=%v err=%v", kind, p, err)
+	}
+	if got := string(s.Buffer()); got != "bcde" {
+		t.Fatalf("diagnostic buffer changed: %q", got)
 	}
 }
 

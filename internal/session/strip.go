@@ -63,6 +63,70 @@ func (s *Preview) Feed(p []byte) string {
 	return s.snapshot()
 }
 
+// recoveryFrame restores a small set of persistent terminal modes on a fresh,
+// empty browser terminal. It never copies retained screen text or parser input.
+// Cursor position, attributes, margins, charsets and in-flight parser/synchronized
+// output state are deliberately not serialized; the program must redraw.
+func (s *Preview) recoveryFrame() []byte {
+	if s.screen == nil {
+		return []byte{1}
+	}
+	frame := make([]byte, 1, 128)
+	frame[0] = 1
+	if s.screen.Buffer() == s.screen.Buffers().Alt() {
+		frame = append(frame, "\x1b[?1049h"...)
+	}
+	core := s.screen.CoreService()
+	modes := &core.DecPrivateModes
+	if core.Modes.InsertMode {
+		frame = append(frame, "\x1b[4h"...)
+	}
+	if modes.ApplicationCursorKeys {
+		frame = append(frame, "\x1b[?1h"...)
+	}
+	if modes.ApplicationKeypad {
+		frame = append(frame, "\x1b[?66h"...)
+	}
+	if modes.BracketedPasteMode {
+		frame = append(frame, "\x1b[?2004h"...)
+	}
+	if modes.SendFocus {
+		frame = append(frame, "\x1b[?1004h"...)
+	}
+	if modes.Origin {
+		frame = append(frame, "\x1b[?6h"...)
+	}
+	if !modes.Wraparound {
+		frame = append(frame, "\x1b[?7l"...)
+	}
+	if modes.ReverseWraparound {
+		frame = append(frame, "\x1b[?45h"...)
+	}
+	if core.IsCursorHidden {
+		frame = append(frame, "\x1b[?25l"...)
+	}
+	switch s.screen.MouseService().ActiveProtocol() {
+	case "X10":
+		frame = append(frame, "\x1b[?9h"...)
+	case "VT200":
+		frame = append(frame, "\x1b[?1000h"...)
+	case "DRAG":
+		frame = append(frame, "\x1b[?1002h"...)
+	case "ANY":
+		frame = append(frame, "\x1b[?1003h"...)
+	}
+	switch s.screen.MouseService().ActiveEncoding() {
+	case "SGR":
+		frame = append(frame, "\x1b[?1006h"...)
+	case "SGR_PIXELS":
+		frame = append(frame, "\x1b[?1016h"...)
+	}
+	if s.colorSchemeReports {
+		frame = append(frame, "\x1b[?2031h"...)
+	}
+	return frame
+}
+
 func (s *Preview) snapshot() string {
 	var lines [maxPreviewLines]string
 	n := maxPreviewLines

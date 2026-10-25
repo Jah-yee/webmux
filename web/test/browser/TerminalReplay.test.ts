@@ -66,18 +66,22 @@ test("drained output waits for an already scheduled reconnect", async () => {
   expect(socket.sent.filter((frame) => frame[0] === 2)).toHaveLength(0);
 }, 20000);
 
-test("exit during output recovery restores the final retained buffer", async () => {
+test("exit during output recovery restores the final safe server replay", async () => {
   observeGlyphPixels(true);
   const resets = vi.spyOn(Terminal.prototype, "reset");
   const { socket } = await openTerminal();
-  const fetched = vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(
-      new Response(new TextEncoder().encode("final retained output\r\n")),
-    );
+  const fetched = vi.spyOn(globalThis, "fetch");
   const chunk = "x".repeat(32768);
   for (let i = 0; i < 160; i++) socket.receive(0, chunk);
   socket.receive(3, JSON.stringify({ exitCode: 0 }));
+  const finalSocket = await reconnected(2);
+  expect(new URL(finalSocket.url).searchParams.has("offset")).toBe(false);
+  finalSocket.open();
+  const final = "final retained output\r\n";
+  finalSocket.receive(4, position("reset", 0, byteLength(final)));
+  finalSocket.receive(1, final);
+  finalSocket.receive(3, JSON.stringify({ exitCode: 0 }));
+  finalSocket.drop(4410);
   await expectDomText("final retained output");
   const term = resets.mock.contexts.at(-1)!;
   const buffer = term.buffer.active;
@@ -88,7 +92,7 @@ test("exit during output recovery restores the final retained buffer", async () 
   );
   expect(buffer.cursorX).toBe(0);
   expect(buffer.cursorY).toBe(1);
-  expect(fetched).toHaveBeenCalledTimes(1);
+  expect(fetched).not.toHaveBeenCalled();
   expect(inputText(socket)).toBe("");
 }, 20000);
 
@@ -176,17 +180,14 @@ function restoration() {
 
 // Opens like the real server: a reset position, then its snapshot, so the
 // terminal knows the stream offset it can resume from.
-async function openSyncedTerminal(truncated = false) {
+async function openSyncedTerminal() {
   let api: TerminalController | undefined;
   await render(Harness, { expose: (terminal) => (api = terminal) });
   await expect.poll(() => sockets.length, { timeout: 5000 }).toBe(1);
   const socket = sockets[0];
   expect(new URL(socket.url).searchParams.has("generation")).toBe(false);
   socket.open();
-  socket.receive(
-    4,
-    position("reset", 0, byteLength(snapshot), generation, truncated),
-  );
+  socket.receive(4, position("reset", 0, byteLength(snapshot)));
   socket.receive(1, snapshot);
   socket.grantControl();
   await expect.element(restoration()).toHaveTextContent("ready");
@@ -235,8 +236,8 @@ test("a synced terminal resumes from its stream offset and appends only the miss
 
 test("a resume point from another run requests a fresh snapshot and forgets the old offset", async () => {
   observeGlyphPixels(true);
-  const { socket: first, api } = await openSyncedTerminal(true);
-  expect(api.historyTruncated).toBe(true);
+  const { socket: first, api } = await openSyncedTerminal();
+  expect(api.historyTruncated).toBe(false);
   first.receive(0, "old run output\r\n");
   await expectDomText("old run output");
   first.drop();
@@ -263,6 +264,115 @@ test("a resume point from another run requests a fresh snapshot and forgets the 
   expect(new URL(third.url).searchParams.has("offset")).toBe(false);
 });
 
+test("a truncated empty reset discards old screen and parser state, then resumes at the stream end", async () => {
+  observeGlyphPixels(true);
+  const { socket: first, api } = await openSyncedTerminal();
+  first.receive(0, "old history\r\n");
+  await expectDomText("old history");
+  api.findNext("old history", {
+    regex: false,
+    caseSensitive: false,
+    wholeWord: false,
+  });
+  await expect.poll(() => api.findResults?.resultCount).toBe(1);
+  // A reset must abandon an unfinished parser sequence from the old screen too.
+  first.receive(0, "\x1b]0;unfinished title");
+  first.drop();
+  const second = await reconnected(2);
+  second.open();
+  const end = 50000;
+  second.receive(4, position("reset", end, end, generation, true));
+  second.receive(1, "");
+  await expect.element(restoration()).toHaveTextContent("ready");
+  expect(domText()).not.toContain("old history");
+  expect(domText()).not.toContain(prompt);
+  expect(api.findResults).toBeNull();
+  expect(api.findReplayed).toBe(true);
+  expect(api.historyTruncated).toBe(true);
+
+  const live = "redrawn live screen\r\n";
+  second.receive(0, live);
+  await expectDomText("redrawn live screen");
+  await expect.poll(() => api.error, { timeout: 7000 }).toBe("");
+  expect(api.historyTruncated).toBe(true);
+  expect(domText()).toContain("redrawn live screen");
+  second.drop();
+  const third = await reconnected(3);
+  expect(new URL(third.url).searchParams.get("offset")).toBe(
+    String(end + byteLength(live)),
+  );
+  expect(new URL(third.url).searchParams.get("generation")).toBe(generation);
+  expect(inputText(second)).toBe("");
+}, 10000);
+
+test("a valid truncated append retains the screen without claiming discarded history", async () => {
+  observeGlyphPixels(true);
+  const { socket: first, api } = await openSyncedTerminal();
+  first.drop();
+  const second = await reconnected(2);
+  second.open();
+  const offset = byteLength(snapshot);
+  const tail = "retained append\r\n";
+  second.receive(
+    4,
+    position("append", offset, offset + byteLength(tail), generation, true),
+  );
+  second.receive(0, tail);
+  await expectDomText("retained append");
+  expect(domText()).toContain(prompt);
+  expect(api.historyTruncated).toBe(true);
+  expect(api.error).toBe("");
+  await expect.element(restoration()).toHaveTextContent("ready");
+});
+
+test.each([
+  [false, false],
+  [false, true],
+  [true, true],
+])(
+  "hidden exit recovery is safe (known truncation: %s, socket closed: %s)",
+  async (knownTruncated, closed) => {
+    observeGlyphPixels(true);
+    const { socket, api } = await openSyncedTerminal();
+    const fetched = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(new TextEncoder().encode("unsafe raw suffix\r\n")),
+      );
+    const hidden = vi.spyOn(Document.prototype, "hidden", "get");
+    hidden.mockReturnValue(true);
+    if (knownTruncated) {
+      socket.receive(4, position("reset", 50000, 50000, generation, true));
+      socket.receive(1, "");
+    } else {
+      // The ring wraps while hidden, after the last position this client saw.
+      socket.receive(0, "missed output before exit\r\n");
+    }
+    socket.receive(3, JSON.stringify({ exitCode: 0 }));
+    if (closed) socket.drop(4410);
+    expect(domText()).toContain(prompt);
+
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    const finalSocket = await reconnected(2);
+    expect(new URL(finalSocket.url).searchParams.has("offset")).toBe(false);
+    expect(sockets).toHaveLength(2);
+    finalSocket.open();
+    finalSocket.receive(4, position("reset", 60000, 60000, generation, true));
+    finalSocket.receive(1, "");
+    finalSocket.receive(3, JSON.stringify({ exitCode: 0 }));
+    finalSocket.drop(4410);
+    await expect.element(restoration()).toHaveTextContent("ready");
+    await expect.poll(domText).not.toContain(prompt);
+    expect(domText()).not.toContain("unsafe raw suffix");
+    expect(fetched).not.toHaveBeenCalled();
+    expect(api.error).toContain("已丢弃");
+    expect(api.error).toContain("进程已退出");
+    expect(api.error).not.toContain("已请求程序重绘");
+    expect(sockets).toHaveLength(2);
+  },
+);
+
 test("output and snapshots arriving while the page is hidden wait for the foreground replay", async () => {
   observeGlyphPixels(true);
   const { socket: first } = await openTerminal();
@@ -287,4 +397,36 @@ test("output and snapshots arriving while the page is hidden wait for the foregr
   second.receive(0, "live again\r\n");
   await expectDomText("live again");
   expect(domText()).not.toContain("missed while hidden");
+});
+
+test("manual resync after exit clears unsafe history using the final safe replay", async () => {
+  observeGlyphPixels(true);
+  const { socket, api } = await openSyncedTerminal();
+  socket.receive(0, "old exited screen\r\n");
+  await expectDomText("old exited screen");
+  socket.receive(3, JSON.stringify({ exitCode: 0 }));
+  socket.drop(4410);
+  const fetched = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(
+      new Response(new TextEncoder().encode("unsafe HTTP suffix\r\n")),
+    );
+
+  await page.getByRole("button", { name: "Resync terminal" }).click();
+  const finalSocket = await reconnected(2);
+  expect(new URL(finalSocket.url).searchParams.has("offset")).toBe(false);
+  finalSocket.open();
+  finalSocket.receive(4, position("reset", 60000, 60000, generation, true));
+  // Empty payload: only the type-1 snapshot marker is delivered.
+  finalSocket.receive(1, "");
+  finalSocket.receive(3, JSON.stringify({ exitCode: 0 }));
+  finalSocket.drop(4410);
+  await expect.element(restoration()).toHaveTextContent("ready");
+  await expect.poll(domText).not.toContain("old exited screen");
+  expect(domText()).not.toContain(prompt);
+  expect(domText()).not.toContain("unsafe HTTP suffix");
+  expect(fetched).not.toHaveBeenCalled();
+  expect(api.error).toContain("已丢弃");
+  expect(api.error).toContain("进程已退出");
+  expect(sockets).toHaveLength(2);
 });

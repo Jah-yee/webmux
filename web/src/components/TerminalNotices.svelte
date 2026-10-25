@@ -1,6 +1,7 @@
 <script lang="ts">
   import { navigate } from "../api";
   import { Button } from "$lib/components/ui/button";
+  import IconX from "~icons/tabler/x";
   import type { UploadProgress } from "../hooks/upload.svelte";
   import type { ControlState } from "../schemas";
   import type { TerminalDraft } from "../terminal-draft.svelte";
@@ -41,6 +42,11 @@
     dismissScratch: () => void;
     remove: () => void;
   } = $props();
+  const alertText = $derived([error, t.error].filter(Boolean).join(" "));
+  let dismissedError = $state("");
+  $effect(() => {
+    if (dismissedError && dismissedError !== alertText) dismissedError = "";
+  });
 </script>
 
 {#if !draft.enabled && !draft.scratchUpdatedWhileHidden && (draft.text || draft.updatedWhileHidden || draft.scratch.length)}
@@ -115,12 +121,20 @@
     >
   </div>
 {/if}
-{#if error || t.error}<p
+{#if alertText && alertText !== dismissedError}<div
     role="alert"
-    class="shrink-0 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+    class="flex shrink-0 items-start gap-2 bg-destructive/10 px-4 py-2 text-sm text-destructive"
   >
-    {error || t.error}
-  </p>{/if}
+    <span class="min-w-0 flex-1 wrap-anywhere">{alertText}</span>
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label="关闭提示"
+      title="关闭提示"
+      onclick={() => (dismissedError = alertText)}
+      ><IconX aria-hidden="true" /></Button
+    >
+  </div>{/if}
 {#if t.connection === "missing"}<div class="notice-warning">
     会话不存在或已被移除。<Button
       variant="outline"

@@ -28,6 +28,7 @@ export interface SocketConnection {
   // True means sent or coalesced for delivery on this socket (controls only).
   send(kind: number, payload: Uint8Array): boolean;
   close(): void;
+  // Explicit recovery may reopen an exited session for its final replay, not a missing one.
   reconnect(): void;
 }
 export function connect(
@@ -43,7 +44,7 @@ export function connect(
     controlTimer: number | undefined,
     attempt = 0,
     disposed = false,
-    finished = false;
+    finished: "exited" | "missing" | undefined;
   const controls = new Map<number, Uint8Array>();
   function clearControls() {
     clearTimeout(controlTimer);
@@ -110,8 +111,8 @@ export function connect(
       clearTimeout(stableTimer);
       clearControls();
       if (event.code === 4410 || event.code === 4404) {
-        finished = true;
-        onState(event.code === 4410 ? "exited" : "missing");
+        finished = event.code === 4410 ? "exited" : "missing";
+        onState(finished);
         return;
       }
       onState("reconnecting");
@@ -164,6 +165,10 @@ export function connect(
       window.removeEventListener("online", online);
       window.removeEventListener("pageshow", restored);
     },
-    reconnect: open,
+    reconnect() {
+      if (disposed || finished === "missing") return;
+      finished = undefined;
+      open();
+    },
   };
 }

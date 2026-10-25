@@ -94,6 +94,29 @@ it("does not reconnect after permanent close or disposal", () => {
   expect(Socket.instances).toHaveLength(2);
 });
 
+it("explicitly reopens an exited session for final replay without automatic retries", () => {
+  Socket.instances[0].fail(4410);
+  document.dispatchEvent(new Event("visibilitychange"));
+  window.dispatchEvent(new Event("online"));
+  vi.advanceTimersByTime(60000);
+  expect(Socket.instances).toHaveLength(1);
+
+  connection.reconnect();
+  expect(Socket.instances).toHaveLength(2);
+  Socket.instances[1].onopen?.();
+  Socket.instances[1].fail(4410);
+  vi.advanceTimersByTime(60000);
+  expect(Socket.instances).toHaveLength(2);
+});
+
+it("does not explicitly reopen a missing session", () => {
+  Socket.instances[0].fail(4404);
+  connection.reconnect();
+  document.dispatchEvent(new Event("visibilitychange"));
+  vi.advanceTimersByTime(60000);
+  expect(Socket.instances).toHaveLength(1);
+});
+
 it("ignores queued open and message callbacks after disposal", () => {
   connection.close();
   const message = vi.fn();

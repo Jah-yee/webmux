@@ -1,5 +1,4 @@
 import type { Terminal } from "@xterm/xterm";
-import { apiBuffer } from "../api";
 import {
   ControlStateSchema,
   ExitSchema,
@@ -21,6 +20,9 @@ import { osc52CopyText } from "../terminalClipboard";
 import { createOutputBudget } from "../terminal-output";
 
 const inputSendError = "终端输入未发送：连接不可用或发送队列已满，请重试。";
+// CAN aborts an unfinished control sequence without executing it. Send it as
+// bytes so xterm also abandons any incomplete UTF-8 prefix before the reset.
+const resetBoundary = new Uint8Array([0x18]);
 
 // What the session socket needs from the mounted terminal view.
 export interface TerminalSocketView {
@@ -52,10 +54,10 @@ export function createTerminalSocket(id: string) {
   let exitCode = $state<number | null>(null);
   let error = $state("");
   let historyTruncated = $state(false);
+  let discardedHistory = $state(false);
   let control = $state<ControlState>();
   let terminal: Terminal | undefined;
   let socket: SocketConnection | undefined;
-  let restoreBuffer: ((payload: Uint8Array) => void) | undefined;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const identity = clientIdentity();
@@ -86,10 +88,11 @@ export function createTerminalSocket(id: string) {
     let exited = false;
     let restoreFrame = 0;
     let restoreVersion = 0;
+    let recoveryNoticeTimer: number | undefined;
     terminal = term;
     // Snapshots replay output whose OSC 52 copies already ran when it was
-    // live. xterm parses writes and runs their callbacks in order, so an
-    // empty write's callback opens the replay window exactly where the
+    // live. xterm parses writes and runs their callbacks in order, so the
+    // reset boundary's callback opens the replay window exactly where the
     // snapshot starts and the snapshot's callback closes it.
     let replaying = false;
     const output = createOutputBudget(
@@ -105,7 +108,9 @@ export function createTerminalSocket(id: string) {
       const version = ++restoreVersion;
       cancelAnimationFrame(restoreFrame);
       restoring = true;
-      term.write("", () => {
+      // Public reset() resets the screen, not xterm's pending parser sequence.
+      // Parse CAN first, then reset away the old screen before replay/live bytes.
+      term.write(resetBoundary, () => {
         if (disposed) return;
         term.reset();
         view.resetFind();
@@ -121,7 +126,6 @@ export function createTerminalSocket(id: string) {
         });
       });
     };
-    restoreBuffer = restore;
     const sendSize = () => {
       if (controlling() && view.isVisible() && term.cols > 0 && term.rows > 0)
         ws.send(
@@ -212,6 +216,13 @@ export function createTerminalSocket(id: string) {
         } else if (frame[0] === 1) {
           const position = resetPosition;
           resetPosition = undefined;
+          if (position?.truncated) {
+            discardedHistory = true;
+            clearTimeout(recoveryNoticeTimer);
+            recoveryNoticeTimer = window.setTimeout(() => {
+              discardedHistory = false;
+            }, 5000);
+          }
           // A hidden page keeps its terminal and resume point unchanged.
           if (document.hidden) stale = true;
           else {
@@ -266,6 +277,13 @@ export function createTerminalSocket(id: string) {
             );
         }
         if (state === "connecting" || state === "reconnecting") {
+          // The ring may have wrapped since the last position was received.
+          // Exited recovery must obtain the server's final safe reset, not raw HTTP bytes.
+          if (exited && stale) {
+            synced = false;
+            stale = false;
+            exited = false;
+          }
           // A synced terminal stays visible and is extended in place.
           if (!synced) restoring = true;
           schemeReports = false;
@@ -299,20 +317,13 @@ export function createTerminalSocket(id: string) {
       },
     );
     function restoreExited() {
-      void apiBuffer(id)
-        .then((payload) => {
-          if (!disposed) {
-            stale = false;
-            synced = false;
-            restore(payload);
-          }
-        })
-        .catch((err) => {
-          if (!disposed) error = (err as Error).message;
-        });
+      if (disposed) return;
+      // Force a reset even if this terminal used to have a valid resume point.
+      synced = false;
+      ws.reconnect();
     }
     const visible = () => {
-      // Live sessions reattach in connect(); exited sessions cannot reopen that socket.
+      // Live sessions reattach automatically; exited ones need explicit recovery.
       if (!document.hidden && stale && exited) {
         restoreExited();
       }
@@ -331,6 +342,8 @@ export function createTerminalSocket(id: string) {
       dispose() {
         disposed = true;
         cancelAnimationFrame(restoreFrame);
+        clearTimeout(recoveryNoticeTimer);
+        discardedHistory = false;
         document.removeEventListener("visibilitychange", visible);
         resize.dispose();
         oscClipboard.dispose();
@@ -340,7 +353,6 @@ export function createTerminalSocket(id: string) {
         terminal = undefined;
         socket = undefined;
         synced = false;
-        restoreBuffer = undefined;
       },
     };
   }
@@ -359,7 +371,13 @@ export function createTerminalSocket(id: string) {
       return exitCode;
     },
     get error() {
-      return error;
+      const recovery = discardedHistory
+        ? "终端历史不完整，已丢弃无法安全恢复的历史。" +
+          (exitCode === null
+            ? "已请求程序重绘；若仍空白或显示异常，请使用程序自身的重绘操作（不保证恢复成功）。"
+            : "进程已退出，无法再请求程序重绘。")
+        : "";
+      return [error, recovery].filter(Boolean).join(" ");
     },
     get historyTruncated() {
       return historyTruncated;
@@ -437,15 +455,11 @@ export function createTerminalSocket(id: string) {
     untrack(submissionId: string) {
       submissions.delete(submissionId);
     },
-    // Replaces the terminal contents with the server's current replay; an
-    // exited session's socket is closed, so its buffer is fetched instead.
+    // Every reset, including after exit, uses the server's safe replay path.
     resync() {
       if (exitCode !== null) {
-        void apiBuffer(id)
-          .then((payload) => restoreBuffer?.(payload))
-          .catch((err) => {
-            error = (err as Error).message;
-          });
+        synced = false;
+        socket?.reconnect();
       } else socket?.send(2, new Uint8Array());
     },
   };

@@ -115,12 +115,13 @@ type Session struct {
 	// controlSub is the controlling client's authoritative connection: the
 	// most recent one. A duplicated browser tab can carry the same client ID;
 	// only one of its connections may resize the PTY or answer queries.
-	controlSub  *Subscriber
-	submissions submissionLog
-	done        chan struct{}
-	readerDone  chan struct{}
-	cleanupDone chan struct{}
-	closeOnce   sync.Once
+	controlSub   *Subscriber
+	repaintTimer *time.Timer
+	submissions  submissionLog
+	done         chan struct{}
+	readerDone   chan struct{}
+	cleanupDone  chan struct{}
+	closeOnce    sync.Once
 }
 
 type startOptions struct {
@@ -276,7 +277,9 @@ func (s *Session) AttachClient(o AttachOptions) *Subscriber {
 
 // Position precedes replayed bytes. "append" continues a terminal at Start
 // with the bytes up to End sent as ordinary output; "reset" is followed by a
-// full snapshot covering Start to End.
+// snapshot covering Start to End. A truncated reset discards incomplete history
+// and starts empty at End, initialized only with synthetic persistent-mode bytes.
+// Those synthetic bytes do not correspond to stream offsets.
 type Position struct {
 	Generation string
 	Mode       string
@@ -304,8 +307,18 @@ func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held []Mess
 		}
 	}
 	if position.Mode == "reset" {
-		s.sendLocked(sub, positionMessage(position))
-		s.sendLocked(sub, frameMessage(s.ring.snapshotWithPrefix([]byte{1})))
+		if position.Truncated {
+			// A raw suffix cannot restore cursor, modes or parser state. It
+			// may even start inside a control sequence or UTF-8 character.
+			// Later live bytes may still finish a sequence begun before
+			// this cut; a redraw is best-effort, not VT state serialization.
+			position.Start = end
+			s.sendLocked(sub, positionMessage(position))
+			s.sendLocked(sub, frameMessage(s.preview.recoveryFrame()))
+		} else {
+			s.sendLocked(sub, positionMessage(position))
+			s.sendLocked(sub, frameMessage(s.ring.snapshotWithPrefix([]byte{1})))
+		}
 	}
 	s.sendLocked(sub, s.stateLocked())
 	for _, m := range held {
@@ -313,6 +326,13 @@ func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held []Mess
 	}
 	if s.info.ExitCode != nil {
 		s.sendLocked(sub, exitMessage(*s.info.ExitCode))
+	}
+	if position.Mode == "reset" && position.Truncated {
+		// Subscription and replay are already queued under mu, so any
+		// response follows them without a replay/live-output gap. A brief
+		// PTY width change requests a redraw even from programs that ignore
+		// same-size SIGWINCH, without changing the logical grid or controller.
+		s.repaintLocked()
 	}
 }
 
@@ -396,8 +416,14 @@ func (s *Session) resizeLocked(cols, rows uint16) error {
 	if cols == s.info.Cols && rows == s.info.Rows {
 		return nil
 	}
-	err := pty.Setsize(s.terminal, &pty.Winsize{Cols: cols, Rows: rows})
+	// Same-logical-size attach notifications are intentionally no-ops above:
+	// restoring immediately would coalesce the recovery width change away.
+	err := s.resizePTYLocked(cols, rows)
 	if err == nil {
+		if s.repaintTimer != nil {
+			s.repaintTimer.Stop()
+			s.repaintTimer = nil
+		}
 		s.info.Cols = cols
 		s.info.Rows = rows
 		s.info.Preview = s.preview.Resize(cols, rows)
@@ -405,6 +431,39 @@ func (s *Session) resizeLocked(cols, rows uint16) error {
 		s.broadcastLocked(s.controlLocked())
 	}
 	return err
+}
+
+// repaintLocked briefly changes the PTY width, then restores the logical grid.
+// The kernel notifies the actual foreground job on each size change. There is
+// no synthetic input, control transfer, or transient control-grid broadcast.
+func (s *Session) repaintLocked() {
+	if s.repaintTimer != nil || s.info.ExitCode != nil || s.terminal == nil || s.cmd == nil || s.cmd.Process == nil || s.info.Cols == 0 || s.info.Rows == 0 {
+		return
+	}
+	cols := s.info.Cols - 1
+	if cols == 0 {
+		cols = 2
+	}
+	if err := s.resizePTYLocked(cols, s.info.Rows); err != nil {
+		return
+	}
+	s.info.Preview = s.preview.Resize(cols, s.info.Rows)
+	var timer *time.Timer
+	timer = time.AfterFunc(100*time.Millisecond, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.repaintTimer != timer {
+			return
+		}
+		s.repaintTimer = nil
+		if s.info.ExitCode != nil || s.terminal == nil {
+			return
+		}
+		if err := s.resizePTYLocked(s.info.Cols, s.info.Rows); err == nil {
+			s.info.Preview = s.preview.Resize(s.info.Cols, s.info.Rows)
+		}
+	})
+	s.repaintTimer = timer
 }
 func (s *Session) read() {
 	defer close(s.readerDone)
@@ -461,6 +520,10 @@ func (s *Session) wait() {
 	}
 	_ = s.terminal.Close()
 	s.mu.Lock()
+	if s.repaintTimer != nil {
+		s.repaintTimer.Stop()
+		s.repaintTimer = nil
+	}
 	s.info.Status = StatusExited
 	s.info.Attention = nil
 	// A finished program can no longer stand behind its last directory report.
