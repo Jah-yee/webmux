@@ -40,6 +40,39 @@ afterEach(async () => {
   localStorage.removeItem("webmux.codeLineNumbers");
 });
 
+test("previews Markdown on request without executing raw HTML or loading images", async () => {
+  render(Harness, { markdown: true });
+  await expect
+    .element(page.getByLabelText("只读代码"))
+    .toMatchTextContent(/# Project/);
+  await page.getByRole("button", { name: "预览", exact: true }).click();
+  const preview = page.getByLabelText("Markdown 预览");
+  await expect
+    .element(page.getByRole("heading", { name: "Project" }))
+    .toBeVisible();
+  expect(
+    preview.element().querySelector("script, img, svg, iframe"),
+  ).toBeNull();
+  expect(
+    (window as unknown as { markdownScript?: boolean }).markdownScript,
+  ).toBeUndefined();
+  expect(
+    (window as unknown as { markdownImage?: boolean }).markdownImage,
+  ).toBeUndefined();
+  await expect
+    .element(page.getByText("图片：diagram（diagram.png）"))
+    .toBeVisible();
+  const external = preview
+    .element()
+    .querySelector<HTMLAnchorElement>('a[href="https://example.com"]');
+  expect(external?.target).toBe("_blank");
+  expect(external?.rel).toContain("noopener");
+  expect(preview.element().querySelector('a[href="docs/other.md"]')).toBeNull();
+  expect(preview.element().textContent).toContain("relative");
+  await page.getByRole("button", { name: "返回源码" }).click();
+  await expect.element(page.getByLabelText("只读代码")).toBeVisible();
+});
+
 test("unchanged content cannot navigate to invisible lines and retains whole-file references", async () => {
   render(Harness, { unchanged: true });
   await expect.element(page.getByText(/文件内容没有变化；/)).toBeVisible();

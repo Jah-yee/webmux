@@ -20,6 +20,7 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import IconChevronDown from "~icons/tabler/chevron-down";
   import CodeImageView from "./CodeImageView.svelte";
+  import CodeMarkdownPreview from "./CodeMarkdownPreview.svelte";
   import CodeDownloadButton from "./CodeDownloadButton.svelte";
   import {
     basename,
@@ -130,6 +131,13 @@
   const svgFile = $derived(
     !shownDiff && doc?.kind === "text" && doc.mediaType === "image/svg+xml",
   );
+  // Markdown stays in source mode until the reader asks for a preview.
+  let markdownView = $state<"source" | "preview">("source");
+  const markdownFile = $derived(
+    !shownDiff &&
+      doc?.kind === "text" &&
+      /\.(?:md|markdown|mdown|mkd)$/i.test(doc.path),
+  );
   const imagePreview = $derived(
     !!doc &&
       doc.source !== "empty" &&
@@ -193,6 +201,7 @@
         invalidSelection = false;
         error = "";
         svgNotice = "";
+        markdownView = "source";
         generation++;
       }
     });
@@ -205,6 +214,7 @@
       start = undefined;
       end = undefined;
       invalidSelection = false;
+      markdownView = "source";
       if (current?.kind !== "image") side = defaultSide;
       // A deleted or added image has nothing to preview on one side.
       if (
@@ -376,6 +386,11 @@
     svgNotice = "";
     svgView = view;
   }
+  function showMarkdown(view: "preview" | "source") {
+    if (view === markdownView) return;
+    clearSelection();
+    markdownView = view;
+  }
   function previewFailed(message: string) {
     if (!svgFile || svgView !== "preview") return;
     clearSelection();
@@ -433,6 +448,15 @@
       disabled={busy}
       onSelect={() => (shownDiff ? (mode = "file") : void compare())}
       >{shownDiff ? "返回文件" : "查看 Diff"}</DropdownMenu.Item
+    >
+  {/if}
+  {#if markdownFile}
+    <DropdownMenu.Item
+      onSelect={() =>
+        showMarkdown(markdownView === "preview" ? "source" : "preview")}
+      >{markdownView === "preview"
+        ? "返回源码"
+        : "预览 Markdown"}</DropdownMenu.Item
     >
   {/if}
   {#if svgFile}
@@ -520,6 +544,14 @@
           disabled={busy}
           onclick={() => (shownDiff ? (mode = "file") : void compare())}
           >{shownDiff ? "返回文件" : "查看 Diff"}</Button
+        >{/if}
+      {#if markdownFile}<Button
+          variant={markdownView === "preview" ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={markdownView === "preview"}
+          onclick={() =>
+            showMarkdown(markdownView === "preview" ? "source" : "preview")}
+          >{markdownView === "preview" ? "返回源码" : "预览"}</Button
         >{/if}
       {#if svgFile}<div
           class="flex shrink-0 gap-1"
@@ -638,6 +670,8 @@
         document={doc}
         onerror={previewFailed}
       />{/key}
+  {:else if markdownFile && markdownView === "preview"}
+    <CodeMarkdownPreview text={doc?.text ?? ""} />
   {:else if doc?.kind === "text" && !shownDiff}
     {#key `${lastVersion}:${generation}`}<CodeReader
         bind:this={reader}

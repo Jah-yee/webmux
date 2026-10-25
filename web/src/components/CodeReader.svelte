@@ -19,6 +19,7 @@
   import { codeReaderPanels, openGotoLine } from "./code-reader-panels";
   import { syntaxHighlighting } from "@codemirror/language";
   import { codeHighlightStyle } from "../code-highlight";
+  import { loadCodeLanguage } from "../code-language";
   import { Button } from "$lib/components/ui/button";
   import IconListNumbers from "~icons/tabler/list-numbers";
   import IconNumber from "~icons/tabler/number";
@@ -248,33 +249,14 @@
         yMargin: 0,
       }),
     });
-    void (async () => {
-      const extension = path.split(".").at(-1)?.toLowerCase();
-      let language;
-      if (["js", "jsx", "ts", "tsx", "mjs", "svelte"].includes(extension ?? ""))
-        language = (await import("@codemirror/lang-javascript")).javascript({
-          typescript: extension?.startsWith("ts"),
-          jsx: extension?.endsWith("x"),
-        });
-      else if (extension === "py")
-        language = (await import("@codemirror/lang-python")).python();
-      else if (extension === "json")
-        language = (await import("@codemirror/lang-json")).json();
-      else if (extension === "go")
-        language = (await import("@codemirror/lang-go")).go();
-      else if (extension === "rs")
-        language = (await import("@codemirror/lang-rust")).rust();
-      else if (extension === "html")
-        language = (await import("@codemirror/lang-html")).html();
-      else if (extension === "css")
-        language = (await import("@codemirror/lang-css")).css();
-      if (!cancelled && view && language) {
-        if (!cancelled)
+    void loadCodeLanguage(path)
+      .then((language) => {
+        if (!cancelled && view && language)
           view.dispatch({ effects: StateEffect.appendConfig.of(language) });
-      }
-    })().catch(() => {
-      /* Plain text remains readable if language loading fails. */
-    });
+      })
+      .catch(() => {
+        /* Plain text remains readable if language loading fails. */
+      });
     return () => {
       cancelled = true;
       pointer.removeEventListener("change", updatePointer);

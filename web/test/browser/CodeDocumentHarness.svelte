@@ -1,11 +1,17 @@
 <script lang="ts">
   import CodeDocumentView from "../../src/components/CodeDocumentView.svelte";
-  import { CodeDiffSchema } from "../../src/schemas";
+  import { CodeDiffSchema, CodeFileSchema } from "../../src/schemas";
   let {
     deleted = false,
     syntax = false,
     unchanged = false,
-  }: { deleted?: boolean; syntax?: boolean; unchanged?: boolean } = $props();
+    markdown = false,
+  }: {
+    deleted?: boolean;
+    syntax?: boolean;
+    unchanged?: boolean;
+    markdown?: boolean;
+  } = $props();
   let revision = $state(1);
   let active = $state(true);
   let status = $state("unchanged");
@@ -81,6 +87,49 @@
       },
     }),
   );
+  const markdownText = [
+    "# Project",
+    "",
+    "- one",
+    "",
+    "```ts",
+    "const answer = 42;",
+    "```",
+    "",
+    '<img src="x" onerror="window.markdownImage = true">',
+    "",
+    '<svg><image href="https://example.com/x.png"></image></svg>',
+    "",
+    "<script>window.markdownScript = true</scr" + "ipt>",
+    "",
+    "![diagram](diagram.png)",
+    "[relative](docs/other.md)",
+    "[external](https://example.com)",
+  ].join("\n");
+  const file = $derived(
+    markdown
+      ? CodeFileSchema.parse({
+          snapshotId: `snapshot-${revision}`,
+          checkedAt: "2026-10-14T00:00:00Z",
+          document: {
+            nodeId: "UkVBRE1FLm1k",
+            path: "README.md",
+            absolutePath: "/repo/README.md",
+            source: "worktree",
+            oid: "",
+            contentVersion: `file-${revision}`,
+            kind: "text",
+            text: markdownText,
+            lineCount: markdownText.split("\n").length,
+            referenceable: true,
+            reason: "",
+            mediaType: "text/markdown",
+            size: markdownText.length,
+            downloadable: true,
+          },
+        })
+      : undefined,
+  );
 </script>
 
 <button onclick={() => revision++}>Replace snapshot</button>
@@ -91,7 +140,8 @@
 <div style:height="650px" style:width={`${width}px`}>
   <CodeDocumentView
     id="session"
-    {diff}
+    {file}
+    diff={markdown ? undefined : diff}
     {active}
     {status}
     contextId="context"

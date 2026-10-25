@@ -80,3 +80,40 @@ test("keeps syntax highlighting across language and view extensions", async () =
     .poll(() => getComputedStyle(comment.element()).color)
     .toBe("rgb(153, 68, 0)");
 });
+
+test("highlights languages matched by extension and filename", async () => {
+  render(Harness, {
+    text: "name: webmux # highlighted",
+    path: "compose.yaml",
+  });
+  const yamlComment = page
+    .elementLocator(document.querySelector(".cm-content")!)
+    .getByText("# highlighted", { exact: true });
+  await expect
+    .poll(() => getComputedStyle(yamlComment.element()).color)
+    .toBe("rgb(153, 68, 0)");
+  await cleanup();
+  render(Harness, {
+    text: "FROM alpine # highlighted",
+    path: "Dockerfile",
+  });
+  const directive = page
+    .elementLocator(document.querySelector(".cm-content")!)
+    .getByText("FROM", { exact: true });
+  await expect
+    .poll(() => getComputedStyle(directive.element()).color)
+    .toBe("rgb(119, 0, 136)");
+});
+
+test("keeps Svelte script highlighting on JavaScript", async () => {
+  render(Harness, {
+    text: "const answer = 42;",
+    path: "App.svelte",
+  });
+  const keyword = page
+    .elementLocator(document.querySelector(".cm-content")!)
+    .getByText("const", { exact: true });
+  await expect
+    .poll(() => getComputedStyle(keyword.element()).color)
+    .toBe("rgb(119, 0, 136)");
+});
