@@ -9,7 +9,6 @@
   import * as Card from "$lib/components/ui/card";
   import TokenHelp from "./components/TokenHelp.svelte";
   import SessionList from "./pages/SessionList.svelte";
-  import Settings from "./pages/Settings.svelte";
   import { createTerminalDrafts } from "./terminal-draft.svelte";
   import { browserDraftStorage } from "./draftStorage";
 
@@ -118,7 +117,15 @@
     </p>
   {/await}
 {:else if path === "/settings"}
-  <Settings />
+  {#await import("./pages/Settings.svelte")}
+    <p role="status" class="p-6 text-muted-foreground">正在加载设置…</p>
+  {:then page}
+    <page.default />
+  {:catch}
+    <p role="alert" class="p-6 text-destructive">
+      设置加载失败，请刷新页面后重试。
+    </p>
+  {/await}
 {:else}
   <SessionList {drafts} />
 {/if}

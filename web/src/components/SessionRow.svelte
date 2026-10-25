@@ -16,11 +16,13 @@
 
   let {
     session,
+    hidden = false,
     now,
     groupPath,
     onclose,
   }: {
     session: SessionInfo;
+    hidden?: boolean;
     now: number;
     groupPath?: string;
     onclose: (session: SessionInfo) => void;
@@ -47,6 +49,13 @@
       ? new Date(session.reportedCwd.since).toLocaleString()
       : "",
   );
+  // Defer floating-layer setup until this row is actually used. Keep it
+  // mounted afterwards so close transitions and focus restoration stay native.
+  let menuReady = $state(false);
+  let menuOpen = $state(false);
+  $effect(() => {
+    if (hidden) menuOpen = false;
+  });
   let copyNotice = $state("");
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
   onDestroy(() => clearTimeout(copyTimer));
@@ -64,6 +73,7 @@
   size="flush"
   class="relative min-h-14 min-w-0"
   data-session-id={session.id}
+  {hidden}
   data-status={session.status}
 >
   <a
@@ -146,7 +156,12 @@
           : "等待终端输出…")}</pre>
   </a>
   <Item.Actions class="absolute top-1.5 right-1.5">
-    <DropdownMenu.Root>
+    <DropdownMenu.Root
+      bind:open={menuOpen}
+      onOpenChange={(open) => {
+        if (open) menuReady = true;
+      }}
+    >
       <DropdownMenu.Trigger>
         {#snippet child({ props })}
           <Button
@@ -159,18 +174,18 @@
           >
         {/snippet}
       </DropdownMenu.Trigger>
-      <DropdownMenu.Content align="end">
-        <DropdownMenu.Item onSelect={() => void copyDirectory()}
-          >{copyTarget.label}</DropdownMenu.Item
-        >
-        <DropdownMenu.Separator />
-        <DropdownMenu.Item
-          variant="destructive"
-          onSelect={() => onclose(session)}
-        >
-          {session.status === "exited" ? "移除会话" : "关闭会话"}
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
+      {#if menuReady}<DropdownMenu.Content align="end">
+          <DropdownMenu.Item onSelect={() => void copyDirectory()}
+            >{copyTarget.label}</DropdownMenu.Item
+          >
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item
+            variant="destructive"
+            onSelect={() => onclose(session)}
+          >
+            {session.status === "exited" ? "移除会话" : "关闭会话"}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>{/if}
     </DropdownMenu.Root>
   </Item.Actions>
 </Item.Root>

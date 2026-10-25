@@ -6,6 +6,7 @@ class Socket {
   static instances: Socket[] = [];
   readyState = 1;
   onopen?: () => void;
+  onmessage?: (event: { data: string | ArrayBuffer }) => void;
   onclose?: (event: { code: number }) => void;
   onerror?: () => void;
   constructor(_url: string) {
@@ -33,6 +34,7 @@ beforeEach(() => {
     setTimeout,
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
   });
   connection = connect(
     "/ws/s/example",
@@ -90,4 +92,51 @@ it("does not reconnect after permanent close or disposal", () => {
   connection.close();
   vi.advanceTimersByTime(60000);
   expect(Socket.instances).toHaveLength(2);
+});
+
+it("ignores queued open and message callbacks after disposal", () => {
+  connection.close();
+  const message = vi.fn();
+  const state = vi.fn();
+  connection = connect("/ws/s/example", message, state, vi.fn());
+  const socket = Socket.instances.at(-1)!;
+  state.mockClear();
+  connection.close();
+  socket.onopen?.();
+  socket.onmessage?.({ data: "late message" });
+  connection.reconnect();
+  expect(message).not.toHaveBeenCalled();
+  expect(state).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+  expect(Socket.instances).toHaveLength(2);
+});
+
+it("ignores queued callbacks from a closed connection during backoff", () => {
+  connection.close();
+  const message = vi.fn();
+  const state = vi.fn();
+  connection = connect("/ws/s/example", message, state, vi.fn());
+  const socket = Socket.instances.at(-1)!;
+  socket.fail();
+  state.mockClear();
+  socket.onopen?.();
+  socket.onmessage?.({ data: "late message" });
+  expect(message).not.toHaveBeenCalled();
+  expect(state).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(250);
+  expect(Socket.instances).toHaveLength(3);
+});
+
+it("does not replace a healthy connection on an ordinary pageshow", () => {
+  window.dispatchEvent(new Event("pageshow"));
+  expect(Socket.instances).toHaveLength(1);
+});
+
+it("reattaches on a bfcache restoration or foreground event", () => {
+  const restored = new Event("pageshow");
+  Object.defineProperty(restored, "persisted", { value: true });
+  window.dispatchEvent(restored);
+  expect(Socket.instances).toHaveLength(2);
+  document.dispatchEvent(new Event("visibilitychange"));
+  expect(Socket.instances).toHaveLength(3);
 });

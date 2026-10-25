@@ -1,10 +1,13 @@
-import { afterEach, expect, test } from "vitest";
-import { page } from "vitest/browser";
+import { afterEach, expect, test, vi } from "vitest";
+import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import SessionRow from "../../src/components/SessionRow.svelte";
 import type { SessionInfo } from "../../src/schemas";
 
-afterEach(() => cleanup());
+afterEach(async () => {
+  await cleanup();
+  await userEvent.cleanup();
+});
 
 const base: SessionInfo = {
   id: "abcdefgh",
@@ -154,4 +157,25 @@ test("status, connection and time read as one aligned, grouped line on a wide ro
   expect(Math.round(text[1].height)).toBe(Math.round(text[0].height));
   expect(text[1].left).toBeGreaterThan(text[0].right);
   expect(text[1].left - text[0].left).toBeLessThanOrEqual(160);
+});
+
+test("a deferred menu keeps mouse, keyboard, Escape focus and close actions", async () => {
+  const onclose = vi.fn();
+  render(SessionRow, {
+    session: base,
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose,
+  });
+  const trigger = page.getByRole("button", { name: "会话菜单 omp agent" });
+  const copy = page.getByRole("menuitem", { name: "复制启动目录" });
+  await trigger.click();
+  await expect.element(copy).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(trigger).toHaveFocus();
+  await expect.poll(() => copy.elements()).toHaveLength(0);
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.element(copy).toHaveFocus();
+  await userEvent.keyboard("{End}{Enter}");
+  expect(onclose).toHaveBeenCalledExactlyOnceWith(base);
+  await expect.element(trigger).toHaveFocus();
 });

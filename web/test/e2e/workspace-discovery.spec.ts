@@ -122,7 +122,7 @@ test("search and status filters compose and follow live session changes", async 
     created.push(await response.json());
   }
   await page.goto("/");
-  const rows = page.locator("[data-session-id]");
+  const rows = page.locator("[data-session-id]:visible");
   await expect(rows).toHaveCount(3);
   const search = page.getByRole("searchbox", { name: "搜索会话" });
   const filters = page.getByRole("group", { name: "按会话状态筛选" });
@@ -202,6 +202,10 @@ test("branch search reveals a collapsed repository and preserves its layout", as
   const region = page.locator(`[data-repository-id="${repo.id}"]`);
   const toggle = region.locator('[data-slot="collapsible-trigger"]');
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const retained = region.locator("[data-session-id]");
+  await retained.evaluate((node) =>
+    node.setAttribute("data-retention-probe", "same-row"),
+  );
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const search = page.getByRole("searchbox", { name: "搜索会话" });
@@ -215,4 +219,8 @@ test("branch search reveals a collapsed repository and preserves its layout", as
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await search.fill("");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(retained).toBeHidden();
+  await expect(retained).toHaveAttribute("data-retention-probe", "same-row");
+  await toggle.click();
+  await expect(retained).toBeVisible();
 });

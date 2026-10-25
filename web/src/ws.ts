@@ -86,16 +86,17 @@ export function connect(
       protocols(stored("token")),
     );
     socket = next;
+    let closed = false;
     next.binaryType = "arraybuffer";
     next.onopen = () => {
-      if (socket !== next) return;
+      if (socket !== next || closed) return;
       stableTimer = window.setTimeout(() => {
         if (socket === next) attempt = 0;
       }, 10000);
       onState("connected");
     };
     next.onmessage = (event) => {
-      if (socket !== next) return;
+      if (socket !== next || closed) return;
       try {
         onMessage(event.data);
       } catch (error) {
@@ -104,7 +105,8 @@ export function connect(
       }
     };
     next.onclose = (event) => {
-      if (socket !== next || disposed) return;
+      if (socket !== next || disposed || closed) return;
+      closed = true;
       clearTimeout(stableTimer);
       clearControls();
       if (event.code === 4410 || event.code === 4404) {
@@ -129,7 +131,12 @@ export function connect(
     if (socket?.readyState !== WebSocket.OPEN) open();
   };
   window.addEventListener("online", online);
-  window.addEventListener("pageshow", visible);
+  const restored = (event: PageTransitionEvent) => {
+    // Initial pageshow may follow an already healthy connection when fonts
+    // load late. Only bfcache restores require a fresh attachment here.
+    if (event.persisted) visible();
+  };
+  window.addEventListener("pageshow", restored);
   open();
   return {
     send(kind: number, payload: Uint8Array) {
@@ -150,10 +157,12 @@ export function connect(
       clearTimeout(timer);
       clearTimeout(stableTimer);
       clearControls();
-      socket?.close();
+      const previous = socket;
+      socket = undefined;
+      previous?.close();
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("online", online);
-      window.removeEventListener("pageshow", visible);
+      window.removeEventListener("pageshow", restored);
     },
     reconnect: open,
   };

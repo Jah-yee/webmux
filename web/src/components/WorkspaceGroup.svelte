@@ -16,6 +16,8 @@
     path,
     worktree,
     sessions,
+    visibleIds,
+    hidden = false,
     now,
     onclose,
     onstart,
@@ -27,6 +29,8 @@
     path?: string;
     worktree?: Worktree;
     sessions: SessionInfo[];
+    visibleIds?: ReadonlySet<string>;
+    hidden?: boolean;
     now: number;
     onclose: (session: SessionInfo) => void;
     onstart?: () => void;
@@ -35,13 +39,23 @@
     pinned?: boolean;
     ontogglepin?: () => void;
   } = $props();
-  const counts = $derived(countSessions(sessions));
+  let menuOpen = $state(false);
+  $effect(() => {
+    if (hidden) menuOpen = false;
+  });
+  const visible = $derived(
+    visibleIds
+      ? sessions.filter((session) => visibleIds.has(session.id))
+      : sessions,
+  );
+  const counts = $derived(countSessions(visible));
   const groupPath = $derived(path ?? worktree?.path);
 </script>
 
 <section
   class="min-w-0 space-y-3"
   data-worktree-id={worktree?.id}
+  {hidden}
   aria-label={title}
 >
   <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
@@ -61,7 +75,7 @@
       {/if}
       <h3 class="min-w-0 break-all text-sm font-semibold">{title}</h3>
       <span class="shrink-0 text-xs text-muted-foreground"
-        >{sessions.length}</span
+        >{visible.length}</span
       >
     </div>
     {#if onstart || onremove || ontogglepin}
@@ -76,7 +90,7 @@
             ><IconPlus class="size-4" aria-hidden="true" />启动会话</Button
           >{/if}
         {#if onremove || ontogglepin}
-          <DropdownMenu.Root>
+          <DropdownMenu.Root bind:open={menuOpen}>
             <DropdownMenu.Trigger>
               {#snippet child({ props })}
                 <Button
@@ -163,7 +177,13 @@
   {#if sessions.length}
     <Item.Group class="gap-3" aria-label={`${title} 的会话`}>
       {#each sessions as session (session.id)}
-        <SessionRow {session} {now} {groupPath} {onclose} />
+        <SessionRow
+          {session}
+          {now}
+          {groupPath}
+          {onclose}
+          hidden={hidden || Boolean(visibleIds && !visibleIds.has(session.id))}
+        />
       {/each}
     </Item.Group>
   {:else}

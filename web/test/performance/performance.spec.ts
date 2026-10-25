@@ -50,7 +50,14 @@ for (const theme of ["light", "dark"] as const) {
       /\/api\/(health|config|repositories|presets)$/,
       async (route) => {
         await delay(750);
-        await route.continue();
+        if (new URL(route.request().url()).pathname === "/api/config") {
+          const response = await route.fetch();
+          const config = await response.json();
+          await route.fulfill({
+            response,
+            json: { ...config, hostname: "demo-host" },
+          });
+        } else await route.continue();
       },
     );
     await page.route("**/fonts/*.woff2", async (route) => {
