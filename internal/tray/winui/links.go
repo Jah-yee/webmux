@@ -5,7 +5,6 @@ package winui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
@@ -23,6 +22,14 @@ func (a *App) openLocal() {
 	}
 	if err := OpenURL(snap.Status.URLs.Local); err != nil {
 		a.fail("无法打开浏览器", err)
+	}
+}
+
+func (a *App) openTunnelSettings() {
+	if url := tray.TunnelEntry(a.snapshot()).SettingsURL; url != "" {
+		if err := OpenURL(url); err != nil {
+			a.fail("无法打开公网访问设置", err)
+		}
 	}
 }
 
@@ -80,9 +87,9 @@ func (a *App) copyToken() {
 }
 
 // toggleTunnel turns the public tunnel off, or on after the risk is
-// confirmed. The state is never saved: it ends with the instance.
+// confirmed. The server owns persistence; the tray never stores this desire.
 func (a *App) toggleTunnel() {
-	enable := !a.snapshot().TunnelActive()
+	enable := !a.snapshot().TunnelEnabled()
 	if enable && !confirm(tray.TunnelWarning) {
 		a.kickUI()
 		return
@@ -99,13 +106,11 @@ func (a *App) toggleTunnel() {
 		return
 	}
 	snap := a.snapshot()
-	if snap.HasStatus && !snap.Status.Config.Exists {
-		if confirm("开启公网隧道失败：" + err.Error() + "\n\n需要至少 43 个字符的 Token。现在初始化配置（生成 Token）吗？之后需要重启 WebMux。") {
-			a.initConfig()
-		}
+	if tray.TunnelEntry(snap).SettingsURL != "" {
+		messageBox("开启公网隧道失败："+err.Error()+"\n\n请打开“公网访问设置”查看状态。WebMux 登录 Token 需要至少 43 个字符，登录 Token 仍由配置文件或配置命令管理。", 0)
 		return
 	}
-	a.fail("开启公网隧道失败", fmt.Errorf("%w；请在配置中设置至少 43 个字符的 Token 并重启 WebMux", err))
+	a.fail("开启公网隧道失败", err)
 }
 
 func (a *App) toggleForward(addr string) {

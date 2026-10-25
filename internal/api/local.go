@@ -26,9 +26,9 @@ type Local struct {
 	// InSession reports whether a peer PID runs inside a WebMux session.
 	InSession func(pid int) bool
 	// Tunnel starts (true) or stops (false) the Cloudflare Tunnel and returns
-	// its state at once. Stopping never fails; an error refuses a start in the
-	// instance's current configuration and is answered with 409. Nil leaves
-	// /local/v1/tunnel unrouted.
+	// its state at once. Enable preconditions answer 409; storage failures
+	// answer 503, including an emergency stop that was not persisted.
+	// Nil leaves /local/v1/tunnel unrouted.
 	Tunnel func(enabled bool) (contract.TunnelStatus, error)
 }
 
@@ -111,7 +111,12 @@ func NewLocal(d Deps, local Local) http.Handler {
 			}
 			status, err := local.Tunnel(*req.Enabled)
 			if err != nil {
-				failure(w, http.StatusConflict, err)
+				if tunnelStatus(err) == http.StatusInternalServerError {
+					// Preserve the existing local callback's refusal contract.
+					failure(w, http.StatusConflict, err)
+				} else {
+					tunnelFailure(w, err)
+				}
 				return
 			}
 			reply(w, http.StatusAccepted, status)
@@ -121,6 +126,10 @@ func NewLocal(d Deps, local Local) http.Handler {
 		defer baseHeaders(w)()
 		if strings.HasPrefix(r.URL.Path, "/local/") {
 			mux.ServeHTTP(w, r)
+			return
+		}
+		if (r.URL.Path == "/api/tunnel" || strings.HasPrefix(r.URL.Path, "/api/tunnel/")) && local.fromSession(r) {
+			failure(w, http.StatusForbidden, errors.New("processes inside a WebMux session cannot control the tunnel"))
 			return
 		}
 		routes.ServeHTTP(w, r)

@@ -5,6 +5,7 @@
   import IconMaximize from "~icons/tabler/maximize";
   import IconMinimize from "~icons/tabler/minimize";
   import IconUpload from "~icons/tabler/upload";
+  import IconSearch from "~icons/tabler/search";
   import { navigate, sessionStatusText } from "../api";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -20,6 +21,7 @@
     readonly exitCode: number | null;
     readonly restoring: boolean;
     readonly historyTruncated: boolean;
+    readonly canFind: boolean;
     scrollToBottom(): void;
     clear(): void;
     resync(): void;
@@ -43,6 +45,7 @@
     showScratch,
     showFontSize,
     close,
+    showFind,
   }: {
     terminal: HeaderTerminal;
     fullscreen: Fullscreen;
@@ -61,8 +64,10 @@
     showScratch: () => void;
     showFontSize: () => void;
     close: () => void;
+    showFind: () => void;
   } = $props();
   let fileInput = $state<HTMLInputElement | null>(null);
+  let openingFind = false;
   const connectionText = $derived(
     t.connection === "connected"
       ? "已连接"
@@ -203,7 +208,15 @@
           aria-label="终端菜单">⋯</Button
         >{/snippet}
     </DropdownMenu.Trigger>
-    <DropdownMenu.Content align="end">
+    <DropdownMenu.Content
+      align="end"
+      onCloseAutoFocus={(event) => {
+        if (openingFind) {
+          event.preventDefault();
+          openingFind = false;
+        }
+      }}
+    >
       <!-- Narrow headers keep only frequent actions; these mirror the
            buttons hidden below 640px. -->
       {#if fullscreen.offered}<DropdownMenu.Item
@@ -224,6 +237,13 @@
         onSelect={scrollToLatest}>滚动到最新位置</DropdownMenu.Item
       >
       <DropdownMenu.Separator class="sm:hidden" />
+      <DropdownMenu.Item
+        disabled={!t.canFind}
+        onSelect={() => {
+          openingFind = true;
+          showFind();
+        }}><IconSearch aria-hidden="true" />查找</DropdownMenu.Item
+      >
       <DropdownMenu.Item
         onSelect={() => {
           void copy();

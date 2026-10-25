@@ -42,11 +42,14 @@ func TestTunnelFlagAndGeneratedToken(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(c.TunnelSettings.Close)
 			if c.Tunnel.Enabled != row.tunnel {
 				t.Fatalf("tunnel enabled %v", c.Tunnel.Enabled)
 			}
 			if row.generated {
+				c.TunnelSettings.Close()
 				again, _ := loadConfig(args)
+				t.Cleanup(again.TunnelSettings.Close)
 				if len(c.Token) != 43 || c.Token == again.Token {
 					t.Fatalf("generated tokens %q %q", c.Token, again.Token)
 				}

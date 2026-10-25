@@ -60,6 +60,7 @@ func (a *App) listen() {
 	}
 	on(m.copyToken, a.copyToken)
 	on(m.tunnel, a.toggleTunnel)
+	on(m.tunnelSettings, a.openTunnelSettings)
 	on(m.copyPublic, func() {
 		a.copyLink(tray.TunnelEntry(a.snapshot()).PublicURL)
 	})

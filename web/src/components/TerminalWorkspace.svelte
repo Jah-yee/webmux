@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import * as Resizable from "$lib/components/ui/resizable";
+  import { terminalFindShortcut } from "../hooks/terminal-find-shortcut";
 
   // Resizable split of the terminal, its draft composer below it and the code
   // panel beside it (stacked instead on narrow screens).
@@ -11,6 +12,7 @@
     terminalPane,
     draftPane,
     codePane,
+    onfind,
   }: {
     codeShown: boolean;
     desktop: boolean;
@@ -18,6 +20,7 @@
     terminalPane: Snippet;
     draftPane: Snippet;
     codePane: Snippet;
+    onfind: () => void;
   } = $props();
   let composerSize = $state(25);
   let terminalHeight = $state(0);
@@ -30,7 +33,11 @@
 >
   <Resizable.PaneGroup direction="horizontal">
     <Resizable.Pane defaultSize={50} minSize={25} class="terminal-pane">
-      <div class="terminal-column" bind:clientHeight={terminalHeight}>
+      <div
+        class="terminal-column"
+        bind:clientHeight={terminalHeight}
+        use:terminalFindShortcut={() => onfind()}
+      >
         <Resizable.PaneGroup direction="vertical">
           <Resizable.Pane
             defaultSize={100 - composerSize}

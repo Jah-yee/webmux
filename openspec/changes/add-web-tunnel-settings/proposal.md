@@ -7,12 +7,12 @@
 ## What Changes
 
 - 新增 `/settings/tunnel` 页面：展示隧道状态、模式、`hostname`、凭据是否已配置、当前设置的来源，提供 Quick / Named 模式表单、保存并应用、启用 / 关闭、恢复配置文件设置、复制访问链接和风险说明。凭据只写不读，页面不会回填或展示明文。
-- 新增服务端持久化设置 `<state_dir>/tunnel.json`（0600、原子替换、独立 flock）：保存 `enabled`、`mode`、`hostname` 与隧道凭据。文件存在时覆盖 TOML 中的 `enabled`、`token`、`hostname`；`cloudflared` 与 `download_mirrors` 仍由 TOML 管理；文件不存在时完全沿用现有 TOML 行为。
+- 新增服务端持久化设置 `<state_dir>/tunnel.json`（0600、原子替换、独立 flock）：保存 `enabled`、`mode`、`hostname` 与隧道凭据。文件存在时覆盖 TOML 中的 `enabled`、`token`、`hostname`；`cloudflared` 与 `download_mirrors` 仍由 TOML 管理；只有确认文件不存在才沿用 TOML。文件损坏、不可读或锁失败时保持隧道关闭，但 HTTP 继续运行，读状态显示存储故障。
 - 新增浏览器可用的 `GET /api/tunnel`、`PUT /api/tunnel/settings`、`PUT /api/tunnel/enabled` 与 `DELETE /api/tunnel/settings` 接口。它们复用现有 Token、Host 与 Origin 校验，响应与日志不包含隧道凭据；本机 `/local/v1/tunnel` 与网页开关写入同一份持久化状态。
-- 运行时应用：保存设置或切换开关后，按新设置撤销旧公网来源、结束旧 generation 的 cloudflared、按新配置启动；请求立即返回，状态经 `starting` 到 `ready` 或 `failed`。旧 generation 的进程退出或迟到事件不能重新授权公网来源。
+- 运行时应用：保存设置或切换开关后，按新设置撤销旧公网来源、结束旧 generation 的 cloudflared、按新配置启动；请求立即返回，状态经 `starting` 到 `ready` 或 `failed`。旧 generation 的进程退出或迟到事件不能重新授权公网来源。关闭即使持久化失败也撤权并停止，返回 503 与 `notPersisted=true`；其他修改仍先保存后应用。
 - 启动恢复：持久化设置存在时，在监听开始后按设置启动隧道；cloudflared 不可用、下载失败或 WebMux 登录 Token 不足时只把隧道标为 `failed`，不阻止服务启动。没有持久化设置时，TOML `enabled` 的启动失败语义保持不变；`--tunnel` 只覆盖本次进程，不写入持久化设置。
 - 动态联动：`GET /api/config` 的 `Named`/`Hostname`、推送来源判定与托盘状态使用当前生效设置；修改 `hostname` 后公网页面会断开、旧推送订阅点开仍指向旧来源，页面在应用前给出确认与说明。
-- 托盘简化：保留公网隧道勾选项、状态、复制链接与失败通知，新增“打开公网访问设置…”入口；移除托盘中面向隧道的配置文件编辑与重启引导，推送说明改为网页配置步骤。根 WebMux 登录 Token 仍由现有配置命令或配置文件管理。
+- 托盘简化：保留公网隧道勾选项、状态、复制链接与失败通知；勾选使用含命令行覆盖的当前进程期望开关，可选字段缺失时回退实际状态；只有显式 `settingsAvailable=true` 才显示“打开公网访问设置…”入口与网页推送引导，旧服务端降级。移除新服务端隧道配置文件编辑与重启引导。根 WebMux 登录 Token 仍由现有配置命令或配置文件管理。
 - 不修改 `config.toml`，不新增第二套认证，不把隧道凭据写入日志、URL、`GET` 响应或错误文本。
 
 ## Capabilities

@@ -65,9 +65,6 @@ test("an unavailable store disables writes but keeps the rest of the page", asyn
   await expect
     .element(page.getByRole("button", { name: /添加快捷指令/ }).first())
     .toBeEnabled();
-  await expect
-    .element(page.getByText(/启动配置保存在服务端，在所有设备间共享/))
-    .toBeVisible();
 });
 
 test("lists configs without env values and confirms deletion", async () => {

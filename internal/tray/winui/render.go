@@ -110,6 +110,11 @@ func (m *menu) render(snap tray.Snapshot, v view) bindings {
 		m.tunnelInfo.hide()
 		m.copyPublic.hide()
 	}
+	if tunnel.SettingsURL != "" && !v.noWSL {
+		m.tunnelSettings.set("打开公网访问设置…", true, false)
+	} else {
+		m.tunnelSettings.hide()
+	}
 	if push := tray.PushEntry(snap); push.Show && !v.noWSL {
 		m.pushInfo.set(push.Info, false, false)
 		m.pushGuide.set("手机推送设置说明…", true, false)

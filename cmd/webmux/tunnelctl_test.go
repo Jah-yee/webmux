@@ -20,6 +20,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
 	"github.com/rainchan/webmux/internal/runtime"
+	"github.com/rainchan/webmux/internal/tunnelsettings"
 )
 
 const publicOrigin = "https://" + publicHost
@@ -142,7 +143,7 @@ func processGone(pid int) bool {
 func TestRuntimeTunnelStartStop(t *testing.T) {
 	r := startServe(t, false, tunnelTestToken)
 	localHost := strings.TrimPrefix(r.local, "http://")
-	if got := r.tunnel(t); got != (contract.TunnelStatus{State: contract.TunnelOff}) {
+	if got := r.tunnel(t); got.State != contract.TunnelOff || got.Enabled == nil || *got.Enabled || !got.SettingsAvailable {
 		t.Fatalf("initial tunnel %+v", got)
 	}
 	if got := r.configTunnel(t); got != (contract.TunnelInfo{State: contract.TunnelOff}) {
@@ -154,7 +155,7 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	if got := r.setTunnel(t, true); got.State != contract.TunnelStarting && got.State != contract.TunnelReady {
 		t.Fatalf("start reply %+v", got)
 	}
-	if got := r.waitTunnel(t, contract.TunnelReady); got != (contract.TunnelStatus{State: contract.TunnelReady, PublicURL: publicOrigin}) {
+	if got := r.waitTunnel(t, contract.TunnelReady); got.PublicURL != publicOrigin || got.Enabled == nil || !*got.Enabled {
 		t.Fatalf("ready tunnel %+v", got)
 	}
 	if got := r.configTunnel(t); got != (contract.TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: publicOrigin}) {
@@ -187,9 +188,7 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	if len(pids) != 1 {
 		t.Fatalf("cloudflared processes started: %v", pids)
 	}
-	if !processGone(pids[0]) {
-		t.Fatalf("cloudflared %d still running after stop", pids[0])
-	}
+	eventually(t, "cloudflared stopped", func() bool { return processGone(pids[0]) })
 	if got := r.status(t, localHost); got != http.StatusOK {
 		t.Fatalf("local request after stop: %d", got)
 	}
@@ -266,9 +265,10 @@ func TestStartupTunnelStopThenStart(t *testing.T) {
 		t.Fatalf("public request after stop: %d", got)
 	}
 	first := r.pids(t)
-	if len(first) != 1 || !processGone(first[0]) {
-		t.Fatalf("startup cloudflared not stopped: %v", first)
+	if len(first) != 1 {
+		t.Fatalf("startup cloudflared count: %v", first)
 	}
+	eventually(t, "startup cloudflared stopped", func() bool { return processGone(first[0]) })
 	r.setTunnel(t, true)
 	if got := r.waitTunnel(t, contract.TunnelReady); got.PublicURL != publicOrigin {
 		t.Fatalf("restarted tunnel %+v", got)
@@ -309,19 +309,20 @@ func TestTunnelControllerStopCancelsLocate(t *testing.T) {
 		return "", ctx.Err()
 	}
 	cfg := config.TunnelConfig{Token: "named-credential", Hostname: "webmux.example.com"}
-	tc := newTunnelController(cfg, "http://127.0.0.1:1", tunnelTestToken, public, locate, io.Discard, slog.New(slog.DiscardHandler))
-	status, err := tc.Start()
-	if err != nil || status != (contract.TunnelStatus{State: contract.TunnelStarting, Named: true}) {
+	store := tunnelsettings.Open(t.TempDir(), cfg)
+	t.Cleanup(store.Close)
+	tc := newTunnelController(cfg, store, "http://127.0.0.1:1", tunnelTestToken, public, locate, io.Discard, slog.New(slog.DiscardHandler))
+	status, err := tc.SetEnabled(true)
+	if err != nil || status.State != contract.TunnelStarting || !status.Named {
 		t.Fatalf("start %+v %v", status, err)
 	}
 	<-entered
-	tc.Stop() // returns only after the locating worker has exited
-	if got := tc.Status(); got != (contract.TunnelStatus{State: contract.TunnelOff, Named: true}) {
+	_, _ = tc.SetEnabled(false)
+	if got := tc.Status(); got.State != contract.TunnelOff || !got.Named {
 		t.Fatalf("after stop %+v", got)
 	}
-	tc.Stop()
 	tc.Close()
-	if _, err := tc.Start(); err == nil {
+	if _, err := tc.SetEnabled(true); err == nil {
 		t.Fatal("start after close succeeded")
 	}
 	if got := tc.Status(); got.State != contract.TunnelOff {

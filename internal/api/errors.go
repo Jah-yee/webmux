@@ -8,8 +8,10 @@ import (
 	"os"
 
 	"github.com/rainchan/webmux/internal/codeview"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
@@ -134,4 +136,28 @@ func workspaceFailure(w http.ResponseWriter, err error) bool {
 	}
 	failure(w, workspaceStatus(err), err)
 	return true
+}
+
+func tunnelStatus(err error) int {
+	switch {
+	case errors.Is(err, tunnelsettings.ErrNotPersisted):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, tunnelsettings.ErrInvalid):
+		return http.StatusBadRequest
+	case errors.Is(err, tunnelsettings.ErrUnavailable):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, tunnelsettings.ErrEnableBlocked):
+		return http.StatusConflict
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+func tunnelFailure(w http.ResponseWriter, err error) {
+	status := tunnelStatus(err)
+	message := err.Error()
+	if status == http.StatusInternalServerError {
+		message = "tunnel settings operation failed"
+	}
+	reply(w, status, contract.TunnelSettingsError{Error: message, NotPersisted: errors.Is(err, tunnelsettings.ErrNotPersisted)})
 }

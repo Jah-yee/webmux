@@ -202,10 +202,12 @@
         {:else if advice === "quick_tunnel"}
           <p class="font-medium">Quick Tunnel 无法持续接收推送</p>
           <p>
-            Quick Tunnel 每次启动都会更换地址，旧订阅点开即失效。请改用 Named
-            Tunnel。
+            Quick Tunnel 每次启动都会更换地址，旧订阅点开即失效。在 Cloudflare
+            控制台创建 Tunnel 并设置公共主机名路由，再到“设置 → 公网访问” 选择
+            Named Tunnel，填写凭据与 hostname，保存并启用，无需重启。
+            用新的公网链接打开 WebMux 后开启推送。
           </p>
-          <a class="underline underline-offset-2" href="#access"
+          <a class="underline underline-offset-2" href="/settings/tunnel"
             >查看公网访问配置</a
           >
         {:else if advice === "unsupported_origin"}
@@ -215,7 +217,7 @@
             公网地址与本机回环地址（127.0.0.1、localhost）。请改用 Named Tunnel
             公网链接打开 WebMux 后再开启。
           </p>
-          <a class="underline underline-offset-2" href="#access"
+          <a class="underline underline-offset-2" href="/settings/tunnel"
             >查看公网访问配置</a
           >
         {:else if advice === "disabled"}

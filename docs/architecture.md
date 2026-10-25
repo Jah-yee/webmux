@@ -56,6 +56,7 @@ flowchart LR
 | `internal/files`                              | 目录补全、创建目录、上传文件落盘（私有临时目录）                                                |
 | `internal/workspace`                          | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
 | `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
+| `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                      |
 | `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
 | `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R10                                                             |
@@ -67,7 +68,7 @@ flowchart LR
 | `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
 | `web/`                                        | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
 
-`cmd/webmux` 先加载配置，用 `cmd/internal/assemble` 把配置转换为 `session.Options`，再构造 `session.Manager`、启动配置、workspace、codeview、files 与 push 服务，最后以 `api.Deps` 注入 `api.New`。各模块通过构造函数显式依赖，不使用全局状态。
+`cmd/webmux` 先加载配置，用 `cmd/internal/assemble` 把配置转换为 `session.Options`，再构造 `session.Manager`、启动配置、workspace、codeview、files、push 与 tunnelsettings 服务，最后以 `api.Deps` 注入 `api.New`。隧道控制器串行应用设置，撤销旧公网来源并等待旧 worker 退出后再启动新 generation；HTTP 控制器不直接访问状态文件。各模块通过构造函数显式依赖，不使用全局状态。
 
 ## 分层与架构测试
 
@@ -77,7 +78,7 @@ flowchart LR
 | -------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | 装配根         | `cmd/...`                                                                                     | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
 | Controller     | `internal/api`、`internal/hub`、`internal/wire`                                               | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
-| Service        | `session`、`workspace`、`launch`、`push`、`codeview`、`files`                                 | 业务规则、状态、文件系统与进程                                                     |
+| Service        | `session`、`workspace`、`launch`、`push`、`codeview`、`files`、`tunnelsettings`               | 业务规则、状态、文件系统与进程                                                     |
 | 共享           | `contract`、`config`、`runtime`、`statefile`、`fetch`、`pathutil`、`attentionkind`            | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
 | 服务器外客户端 | `client`、`localclient`、`attach`、`sessioncmd`、`tray/...`、`wslclient`、`tunnel`、`service` | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
 
@@ -138,7 +139,7 @@ flowchart LR
 - **会话与连接解耦**：Session 的生命周期只由子进程决定；WebSocket 连接只是观察者，可以有零个或多个。
 - **服务端只传字节**：PTY 原始字节直接进入缓冲并转发给 xterm.js，服务端不做终端仿真；OSC 标题与屏幕预览只是旁路解析。
 - **重连优先增量续接**：输出有绝对字节 offset 与会话运行代际；客户端带着已渲染的位置重连，服务端仍保留后续字节时只补发缺失部分，否则清屏全量回放。服务端仍不做终端仿真。
-- **会话只在内存中**：无数据库；只有显式登记的仓库清单与用户保存的启动配置写入状态目录，Git 自己持有 worktree 与分支状态。
+- **会话只在内存中**：无数据库；仓库清单、启动配置、推送设置与隧道设置写入状态目录，Git 自己持有 worktree 与分支状态。
 - **控制端决定尺寸**：多端同时附着时，只有控制端的 resize 生效；用户输入取得控制，控制端离开后不自动转交。终端自动回复只写入一个连接的回答。
 
 ## 会话生命周期
@@ -158,6 +159,8 @@ flowchart LR
 快照捕获与订阅注册在同一把锁内完成，保证回放与实时流之间没有缺口。
 
 缓冲记录累计写入字节数，因此每个字节都有绝对 offset。每次回放前先发送位置帧（代际、起止 offset、是否截断）。客户端只统计已交给 xterm 的字节；页面隐藏时停止写入并保留 offset，回到前台重连后由服务端补发其后的字节。代际不符或 offset 已被覆盖时退回全量快照。
+
+终端查找完全在浏览器中由官方 SearchAddon 搜索 xterm 活动缓冲，无新增服务端接口或文本索引。查找栏覆盖在网格上方，不触发 PTY resize 或输入；全量回放清除结果，增量续接保留视口。清除时同时清理装饰、选区与响应式结果；1000 个高亮上限不代表匹配总数。
 
 ## 提交与控制端
 

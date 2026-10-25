@@ -1,0 +1,36 @@
+{
+  "status": 200,
+  "body": {
+    "config": {
+      "exists": false,
+      "path": ""
+    },
+    "drift": null,
+    "health": {
+      "status": ""
+    },
+    "launcher": "",
+    "listen": "",
+    "localApi": true,
+    "logFile": "",
+    "pid": null,
+    "record": true,
+    "sessions": null,
+    "socket": "",
+    "state": "running",
+    "tokenConfigured": false,
+    "tunnel": {
+      "enabled": false,
+      "named": false,
+      "settingsAvailable": true,
+      "state": "off"
+    },
+    "urls": {
+      "local": "",
+      "remote": null
+    },
+    "v": 1,
+    "version": "",
+    "warnings": null
+  }
+}

@@ -84,7 +84,7 @@ type menu struct {
 	open, copyLocal, remoteWarn, copyRemote, remoteSub, remoteSubWarn *item
 	remoteLinks, forwardLinks                                         []*item
 	copyToken                                                         *item
-	tunnel, tunnelInfo, copyPublic                                    *item
+	tunnel, tunnelInfo, copyPublic, tunnelSettings                    *item
 	pushInfo, pushGuide                                               *item
 
 	remote, fwHeadline, fwBlocked, fwInit *item
@@ -160,11 +160,12 @@ func buildMenu() *menu {
 	m.tunnelInfo.mi.Disable()
 	m.tunnelInfo.enabled = false
 	m.copyPublic = add("复制公网链接")
+	m.tunnelSettings = add("打开公网访问设置…")
 	m.pushInfo = add("")
 	m.pushInfo.mi.Disable()
 	m.pushInfo.enabled = false
 	m.pushGuide = add("手机推送设置说明…")
-	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.copyPublic, m.pushInfo, m.pushGuide} {
+	for _, it := range []*item{m.tunnel, m.tunnelInfo, m.copyPublic, m.tunnelSettings, m.pushInfo, m.pushGuide} {
 		it.hide()
 	}
 	m.remote = add("远程访问")

@@ -23,6 +23,9 @@ bell_attention = true
 # A configured webmux token must be at least 43 characters in tunnel mode.
 # The root `token` above is the WebMux login token; `[tunnel].token` below is
 # the Cloudflare tunnel credential from the dashboard. They are different.
+# Web Settings -> Public access persists enabled/mode/credential/hostname in
+# <state_dir>/tunnel.json and overrides these defaults after the first save.
+# cloudflared/download_mirrors remain TOML-only. --tunnel overrides this run only.
 # [tunnel]
 # enabled = false
 # Empty = Quick Tunnel (random *.trycloudflare.com); set for a Named Tunnel.

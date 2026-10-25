@@ -33,6 +33,8 @@
     toggle,
     paste,
     keyboard,
+    findOpen = false,
+    findBar,
   }: {
     container?: HTMLDivElement;
     terminal: ViewportTerminal;
@@ -44,12 +46,15 @@
     toggle: (key: keyof Modifiers) => void;
     paste: () => Promise<void>;
     keyboard: () => void;
+    findOpen?: boolean;
+    findBar?: Snippet;
   } = $props();
 </script>
 
 <div class="terminal-column">
   <div class="terminal-area">
     <div class="terminal-host" bind:this={container}></div>
+    {@render findBar?.()}
     {#if uploads.dragging}
       <div
         class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border-2 border-dashed border-primary bg-background/90"
@@ -60,7 +65,7 @@
         </p>
       </div>
     {/if}
-    {#if t.selection}
+    {#if t.selection && !findOpen}
       <div
         class="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border bg-popover p-1 shadow-md"
         role="toolbar"

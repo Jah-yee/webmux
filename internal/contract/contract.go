@@ -126,6 +126,11 @@ type TunnelStatus struct {
 	PublicURL string `json:"publicUrl,omitempty"`
 	Error     string `json:"error,omitempty"`
 	Named     bool   `json:"named"`
+	// Enabled is the effective process desire, including command-line
+	// overrides. Nil identifies older servers: fall back to runtime state.
+	Enabled *bool `json:"enabled,omitempty"`
+	// SettingsAvailable explicitly advertises the web settings page/API.
+	SettingsAvailable bool `json:"settingsAvailable,omitempty"`
 }
 
 // TunnelRequest is the body of POST /local/v1/tunnel.

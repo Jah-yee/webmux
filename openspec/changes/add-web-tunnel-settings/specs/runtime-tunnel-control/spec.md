@@ -21,7 +21,7 @@
 
 ### Requirement: 运行时关闭隧道
 
-本机客户端或网页请求关闭隧道时，WebMux SHALL 先持久化 `enabled=false`，立即撤销公网主机名的授权（之后公网请求返回 403），再结束 cloudflared，状态变为 `off`。关闭 SHALL 同样适用于以 `--tunnel` 启动的隧道和网页持久化开启的隧道。隧道已关闭时请求关闭 SHALL 成功且无副作用。
+本机客户端或网页请求关闭隧道时，WebMux SHALL 尝试持久化 `enabled=false`，并无条件立即撤销公网主机名的授权（之后公网请求返回 403），再异步结束 cloudflared，状态立即变为 `off`。即使持久化失败也 MUST 撤权并停止，返回 503 与 `notPersisted=true`，明确说明关闭仅对当前进程生效。关闭 SHALL 同样适用于以 `--tunnel` 启动的隧道和网页持久化开启的隧道。隧道已关闭且存储可用时请求关闭 SHALL 成功且无副作用。
 
 #### Scenario: 关闭后公网失效
 
@@ -51,3 +51,8 @@ WebMux 退出时 SHALL 结束 cloudflared。网页或本机客户端修改的隧
 
 - **WHEN** 持久化开关为关闭，用户以 `--tunnel` 启动
 - **THEN** 本次进程开启隧道，但不会改写持久化设置；下次普通启动仍为关闭
+
+#### Scenario: 存储故障阻止自动暴露
+
+- **WHEN** 网页设置损坏、不可读或锁冲突，即使 TOML 或 `--tunnel` 要求开启
+- **THEN** HTTP 服务继续运行，当前隧道保持关闭；读状态报告存储不可用，不能以回退 TOML 的方式重新暴露公网

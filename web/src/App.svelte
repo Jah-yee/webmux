@@ -116,6 +116,16 @@
       {error instanceof Error ? error.message : "终端加载失败"}
     </p>
   {/await}
+{:else if path === "/settings/tunnel"}
+  {#await import("./pages/TunnelSettingsPage.svelte")}
+    <p role="status" class="p-6 text-muted-foreground">正在加载公网访问设置…</p>
+  {:then page}
+    <page.default />
+  {:catch}
+    <p role="alert" class="p-6 text-destructive">
+      公网访问设置加载失败，请刷新页面后重试。
+    </p>
+  {/await}
 {:else if path === "/settings"}
   {#await import("./pages/Settings.svelte")}
     <p role="status" class="p-6 text-muted-foreground">正在加载设置…</p>

@@ -54,6 +54,42 @@ func (t TunnelConfig) NamedHostname() string {
 	return t.Hostname
 }
 
+// ValidateTunnelSettings validates the web-managed subset without exposing
+// submitted values in errors. Operational fields remain owned by TOML.
+func ValidateTunnelSettings(mode, hostname, token string) (TunnelConfig, error) {
+	switch mode {
+	case "quick":
+		return TunnelConfig{}, nil
+	case "named":
+		if token == "" {
+			return TunnelConfig{}, errors.New("token is required for a named tunnel")
+		}
+		if hostname == "" {
+			return TunnelConfig{}, errors.New("hostname is required for a named tunnel")
+		}
+		t := TunnelConfig{Enabled: true, Token: token, Hostname: hostname}
+		if err := t.validate(); err != nil {
+			return TunnelConfig{}, errors.New("hostname must be a bare ASCII/punycode hostname without a scheme, port, path, wildcard or whitespace")
+		}
+		for _, label := range strings.Split(t.Hostname, ".") {
+			if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+				return TunnelConfig{}, errors.New("hostname contains an invalid DNS label")
+			}
+			for _, ch := range label {
+				if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
+					return TunnelConfig{}, errors.New("hostname contains an invalid DNS label")
+				}
+			}
+		}
+		if len(t.Hostname) > 253 {
+			return TunnelConfig{}, errors.New("hostname is too long")
+		}
+		return t, nil
+	default:
+		return TunnelConfig{}, errors.New("mode must be quick or named")
+	}
+}
+
 // PushConfig controls Web Push attention alerts.
 type PushConfig struct {
 	Enabled bool   `toml:"enabled"`

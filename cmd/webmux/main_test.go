@@ -77,6 +77,7 @@ func TestConfigurationPrecedence(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Cleanup(c.TunnelSettings.Close)
 			if c.TokenGenerated != row.generated || row.generated && len(c.Token) < minTunnelTokenLength {
 				t.Fatalf("token generated=%v len=%d, want generated=%v", c.TokenGenerated, len(c.Token), row.generated)
 			}
@@ -95,6 +96,7 @@ func TestConfigurationPrecedence(t *testing.T) {
 
 func TestExplicitConfigurationAndOverridesAreValidated(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("HOME", dir)
 	if _, err := loadConfig([]string{"--config", filepath.Join(dir, "missing.toml")}); err == nil {
 		t.Fatal("explicit missing config was ignored")
 	}
@@ -105,8 +107,10 @@ func TestExplicitConfigurationAndOverridesAreValidated(t *testing.T) {
 	if _, err := loadConfig([]string{"--config", file}); err == nil {
 		t.Fatal("invalid file listen accepted")
 	}
-	if _, err := loadConfig([]string{"--config", file, "--listen", "127.0.0.1:9000"}); err != nil {
+	if c, err := loadConfig([]string{"--config", file, "--listen", "127.0.0.1:9000"}); err != nil {
 		t.Fatalf("file validated before flag override: %v", err)
+	} else {
+		c.TunnelSettings.Close()
 	}
 	if _, err := loadConfig([]string{"--config", file, "--listen="}); err == nil {
 		t.Fatal("explicit empty listen accepted")

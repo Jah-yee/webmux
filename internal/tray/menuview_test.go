@@ -167,3 +167,42 @@ func TestPushEntry(t *testing.T) {
 		t.Fatalf("push shown without tunnel entries: %+v", got)
 	}
 }
+
+func TestTunnelEffectiveDesireAndSettingsCapability(t *testing.T) {
+	enabled, disabled := true, false
+	for _, row := range []struct {
+		name                string
+		state               string
+		enabled             *bool
+		capability, checked bool
+	}{
+		{"web failed desire", contract.TunnelFailed, &enabled, true, true},
+		{"flag disables saved enable", contract.TunnelOff, &disabled, true, false},
+		{"flag enables saved disable", contract.TunnelStarting, &enabled, true, true},
+		{"old ready server", contract.TunnelReady, nil, false, true},
+		{"old failed server", contract.TunnelFailed, nil, false, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			snap := Snapshot{State: StateRunning, HasStatus: true, Mode: ModeTray, Status: contract.StatusV1{
+				State: contract.StateRunning, URLs: contract.URLs{Local: "http://127.0.0.1:7681"},
+				Tunnel: &contract.TunnelStatus{State: row.state, Enabled: row.enabled, SettingsAvailable: row.capability},
+				Push:   &contract.PushStatus{Enabled: true, Available: true},
+			}}
+			item := TunnelEntry(snap)
+			if !item.Show || item.Checked != row.checked || (item.SettingsURL != "") != row.capability {
+				t.Fatalf("menu %+v", item)
+			}
+			if row.capability && item.SettingsURL != "http://127.0.0.1:7681/settings/tunnel" {
+				t.Fatal("incorrect settings URL")
+			}
+			guide := PushEntry(snap).Guide
+			if row.capability {
+				if !strings.Contains(guide, "设置 → 公网访问") || strings.Contains(guide, "[tunnel]") {
+					t.Fatalf("new server guide %q", guide)
+				}
+			} else if strings.Contains(guide, "设置 → 公网访问") {
+				t.Fatal("old server advertised unsupported settings page")
+			}
+		})
+	}
+}

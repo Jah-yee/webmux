@@ -125,6 +125,16 @@ func (s Snapshot) TunnelActive() bool {
 	return s.HasStatus && s.Status.State == contract.StateRunning && t != nil && (t.State == contract.TunnelStarting || t.State == contract.TunnelReady)
 }
 
+// TunnelEnabled reports the server's effective desire. Older servers omit
+// Enabled and retain their runtime-only toggle semantics.
+func (s Snapshot) TunnelEnabled() bool {
+	t := s.Status.Tunnel
+	if s.HasStatus && s.Status.State == contract.StateRunning && t != nil && t.Enabled != nil {
+		return *t.Enabled
+	}
+	return s.TunnelActive()
+}
+
 // Managed reports whether the tray may stop or restart the instance.
 func (s Snapshot) Managed() bool {
 	switch s.State {

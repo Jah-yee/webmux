@@ -26,6 +26,7 @@ import (
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tunnel"
+	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
@@ -138,7 +139,9 @@ type serverRun struct {
 	ConfigFound bool
 	LogFile     string
 	// TokenGenerated marks a per-process token absent from the config.
-	TokenGenerated bool
+	TokenGenerated   bool
+	TunnelSettings   *tunnelsettings.Service
+	TunnelWebManaged bool
 }
 
 func loadConfig(args []string) (serverRun, error) {
@@ -178,19 +181,35 @@ func loadConfig(args []string) (serverRun, error) {
 	if explicit["token"] {
 		c.Token = *token
 	}
-	if explicit["tunnel"] {
+	if c.StateDir == "" {
+		c.StateDir = config.DefaultStateDir()
+	}
+	run.TunnelSettings = tunnelsettings.Open(c.StateDir, c.Tunnel)
+	var webManaged bool
+	c.Tunnel, webManaged = run.TunnelSettings.Effective()
+	if explicit["tunnel"] && run.TunnelSettings.Unavailable() == nil {
 		c.Tunnel.Enabled = *tunnelFlag
 	}
+	run.TunnelWebManaged = webManaged && !explicit["tunnel"]
 	if err = c.Validate(); err != nil {
+		run.TunnelSettings.Close()
 		return run, err
 	}
 	hadToken := c.Token != ""
-	if err = ensureToken(&c); err != nil {
+	if err = ensureStartupToken(&c, run.TunnelWebManaged); err != nil {
+		run.TunnelSettings.Close()
 		return run, err
 	}
 	run.Config = c
 	run.TokenGenerated = !hadToken && c.Token != ""
 	return run, nil
+}
+
+func ensureStartupToken(c *config.Config, webManaged bool) error {
+	if webManaged && c.Token != "" && len(c.Token) < minTunnelTokenLength {
+		return nil
+	}
+	return ensureToken(c)
 }
 
 // ensureToken keeps every network entry point authenticated: an empty token
@@ -225,6 +244,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer c.TunnelSettings.Close()
 	if c.LogFile != "" {
 		if err := redirectOutput(c.LogFile); err != nil {
 			return fmt.Errorf("log file: %w", err)
@@ -240,9 +260,19 @@ func run(args []string) error {
 // vets the token. Access URLs go to out, never to slog, so tokens stay out of
 // structured logs.
 func serve(ctx context.Context, c serverRun, out io.Writer) error {
+	// Direct embedders/tests supply validated config rather than loadConfig.
+	if c.TunnelSettings == nil {
+		c.TunnelSettings = tunnelsettings.Open(c.StateDir, c.Tunnel)
+		c.Tunnel, c.TunnelWebManaged = c.TunnelSettings.Effective()
+	}
+	defer c.TunnelSettings.Close()
+	if err := c.TunnelSettings.Unavailable(); err != nil {
+		c.Tunnel.Enabled = false
+		slog.Warn("tunnel settings unavailable; public tunnel remains off", "error", err)
+	}
 	locator := tunnel.Locator{Explicit: c.Tunnel.Cloudflared, StateDir: c.StateDir, Mirrors: c.Tunnel.DownloadMirrors}
 	var cloudflared string
-	if c.Tunnel.Enabled {
+	if c.Tunnel.Enabled && !c.TunnelWebManaged {
 		path, err := locator.Find(ctx)
 		if err != nil {
 			return fmt.Errorf("cloudflare tunnel: %w", err)
@@ -272,13 +302,13 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// reports ready, so a server without a tunnel behaves as before.
 	public := &api.PublicOrigin{}
 	local := localOrigin(listener.Addr())
-	tunnels := newTunnelController(c.Tunnel, local, c.Token, public, locator.Find, out, slog.Default())
+	tunnels := newTunnelController(c.Tunnel, c.TunnelSettings, local, c.Token, public, locator.Find, out, slog.Default())
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
 		Files: files.New(c.DefaultCwd), Push: pushes, Launch: launches,
 	}
+	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels)
-	deps.Public, deps.Tunnel = public, tunnels.Status
 	server := &http.Server{
 		Handler:           api.New(deps),
 		ReadHeaderTimeout: 10 * time.Second,

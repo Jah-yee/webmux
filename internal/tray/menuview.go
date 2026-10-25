@@ -134,6 +134,7 @@ func StatusLine(snap Snapshot) string {
 type TunnelItem struct {
 	// Show is false when no instance runs or it cannot control its tunnel.
 	Show, Checked bool
+	SettingsURL   string
 	// Info is the state line; PublicURL is set only when ready.
 	Info, PublicURL string
 }
@@ -144,7 +145,10 @@ func TunnelEntry(snap Snapshot) TunnelItem {
 	if !snap.HasStatus || snap.Status.State != contract.StateRunning || t == nil || !snap.Actions().Access {
 		return TunnelItem{}
 	}
-	item := TunnelItem{Show: true, Checked: snap.TunnelActive()}
+	item := TunnelItem{Show: true, Checked: snap.TunnelEnabled()}
+	if t.SettingsAvailable && snap.Status.URLs.Local != "" {
+		item.SettingsURL = strings.TrimRight(snap.Status.URLs.Local, "/") + "/settings/tunnel"
+	}
 	switch t.State {
 	case contract.TunnelStarting:
 		item.Info = "公网隧道：正在连接"
@@ -187,7 +191,7 @@ func PushEntry(snap Snapshot) PushItem {
 	default:
 		item.Info = fmt.Sprintf("手机推送：%d 台设备已开启", p.Subscriptions)
 	}
-	item.Guide = pushGuide(p, snap.Status.URLs.Local)
+	item.Guide = pushGuide(p, snap.Status.URLs.Local, snap.Status.Tunnel.SettingsAvailable)
 	return item
 }
 
@@ -196,7 +200,7 @@ const pushPhoneSteps = "在手机上开启推送：\n" +
 	"2. iPhone / iPad（iOS 16.4 以上）：在 Safari 中点“分享 → 添加到主屏幕”，从主屏幕图标打开 WebMux 并输入 Token；\n" +
 	"3. 进入 设置 → 通知推送，打开开关。"
 
-func pushGuide(p *contract.PushStatus, local string) string {
+func pushGuide(p *contract.PushStatus, local string, webSettings bool) string {
 	var b strings.Builder
 	if !p.Enabled {
 		b.WriteString("推送已在配置中停用：在 WebMux 配置文件的 [push] 中设置 enabled = true，再通过托盘重启 WebMux。\n\n")
@@ -207,9 +211,14 @@ func pushGuide(p *contract.PushStatus, local string) string {
 			target += "（" + local + "）"
 		}
 		b.WriteString("Quick Tunnel 的地址每次启动都会变化，旧订阅点开即失效，无法用于手机推送。请先配置 Cloudflare Named Tunnel：\n" +
-			"1. 在 Cloudflare 控制台创建 Tunnel，把公共主机名指向" + target + "；\n" +
-			"2. 在 WebMux 配置文件的 [tunnel] 中写入 token（tunnel.token）与 hostname（tunnel.hostname）；\n" +
-			"3. 通过托盘重启 WebMux，再开启“公网隧道（Cloudflare）”。\n\n")
+			"1. 在 Cloudflare 控制台创建 Tunnel，把公共主机名指向" + target + "；\n")
+		if webSettings {
+			b.WriteString("2. 在 WebMux 设置 → 公网访问中选择 Named Tunnel，填写隧道凭据与 hostname；\n" +
+				"3. 保存并启用公网访问，无需重启 WebMux。\n\n")
+		} else {
+			b.WriteString("2. 当前服务端尚不支持网页公网访问设置，请升级服务端，或在配置文件的 [tunnel] 中写入 token（tunnel.token）与 hostname（tunnel.hostname）；\n" +
+				"3. 修改旧版服务端配置后重启 WebMux，再开启“公网隧道（Cloudflare）”。\n\n")
+		}
 	} else {
 		b.WriteString("公网地址：" + p.PublicOrigin + "\n\n")
 	}

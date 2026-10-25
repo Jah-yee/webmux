@@ -32,6 +32,7 @@ async function stopChild(child) {
  * @property {string} baseURL
  * @property {string} apiURL
  * @property {string} workDir
+ * @property {string} stateDir
  * @property {() => Promise<void>} restart
  * @property {() => string} logs
  * @property {() => Promise<void>} close
@@ -39,8 +40,12 @@ async function stopChild(child) {
 
 // Every Playwright worker owns a real server and a fresh HOME, config and cwd.
 // Port zero asks the OS to allocate ports; no local developer server is reused.
-/** @param {{noGit?: boolean, token?: string}} options @returns {Promise<E2EServer>} */
-export async function startE2EServer({ noGit = false, token = "" } = {}) {
+/** @param {{noGit?: boolean, token?: string, tunnel?: {cloudflared: string, enabled?: boolean}}} options @returns {Promise<E2EServer>} */
+export async function startE2EServer({
+  noGit = false,
+  token = "",
+  tunnel,
+} = {}) {
   const binary = process.env.WEBMUX_E2E_BINARY;
   if (!binary)
     throw new Error(
@@ -52,6 +57,7 @@ export async function startE2EServer({ noGit = false, token = "" } = {}) {
   const workDir = join(root, "work");
   const home = join(root, "home");
   const config = join(root, "config.toml");
+  const stateDir = join(root, "state");
   let backend;
   let closing;
   let backendOutput = "";
@@ -75,7 +81,10 @@ export async function startE2EServer({ noGit = false, token = "" } = {}) {
       mkdir(home),
       writeFile(
         config,
-        `listen = "127.0.0.1:0"\ntoken = ${JSON.stringify(token)}\ndefault_cwd = ${JSON.stringify(workDir)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\nidle_after_seconds = 30\n`,
+        `listen = "127.0.0.1:0"\ntoken = ${JSON.stringify(token)}\ndefault_cwd = ${JSON.stringify(workDir)}\nstate_dir = ${JSON.stringify(stateDir)}\nidle_after_seconds = 30\n` +
+          (tunnel
+            ? `\n[tunnel]\nenabled = ${tunnel.enabled ?? false}\ncloudflared = ${JSON.stringify(tunnel.cloudflared)}\n`
+            : ""),
       ),
     ]);
     async function launchBackend(listen) {
@@ -136,6 +145,7 @@ export async function startE2EServer({ noGit = false, token = "" } = {}) {
       baseURL,
       apiURL,
       workDir,
+      stateDir,
       logs,
       async restart() {
         await stopChild(backend);

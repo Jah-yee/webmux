@@ -42,7 +42,8 @@ type Deps struct {
 	Launch *launch.Service
 	// Tunnel reports the runtime tunnel state; nil leaves GET /api/config
 	// describing only the configured mode.
-	Tunnel func() contract.TunnelStatus
+	Tunnel         func() contract.TunnelStatus
+	TunnelSettings TunnelSettingsControl
 }
 
 type Server struct {
@@ -94,6 +95,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.workspaceRoutes(mux)
 	s.pushRoutes(mux)
 	s.launchRoutes(mux)
+	s.tunnelRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
@@ -117,6 +119,9 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
+		if _, sensitive := v.(*contract.TunnelSettingsUpdate); sensitive {
+			err = errors.New("invalid tunnel settings JSON: use only known fields with the correct types")
+		}
 		failure(w, 400, err)
 		return false
 	}

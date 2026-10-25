@@ -11,6 +11,10 @@ func (s *Server) tunnelInfo() contract.TunnelInfo {
 		Named:    s.Config.Tunnel.Named(),
 		Hostname: s.Config.Tunnel.NamedHostname(),
 	}
+	if s.TunnelSettings != nil {
+		settings := s.TunnelSettings.Settings()
+		info.Named, info.Hostname = settings.Mode == "named", settings.Hostname
+	}
 	if s.Tunnel == nil {
 		return info
 	}

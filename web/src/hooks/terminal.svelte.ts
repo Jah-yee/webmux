@@ -1,5 +1,12 @@
 import { onMount } from "svelte";
 import type { Terminal } from "@xterm/xterm";
+import { SearchAddon } from "@xterm/addon-search";
+import {
+  terminalFindError,
+  terminalFindLimit,
+  type TerminalFindOptions,
+  type TerminalFindResults,
+} from "../terminal-search";
 import { stored, store } from "../api";
 import {
   FontSizeSchema,
@@ -39,6 +46,18 @@ export interface TerminalController {
   readonly control: ControlState | undefined;
   readonly controlling: boolean;
   readonly clientId: string;
+  readonly canFind: boolean;
+  readonly findResults: TerminalFindResults | null;
+  readonly findReplayed: boolean;
+  readonly bufferType: "normal" | "alternate";
+  readonly scrollback: number;
+  findNext(
+    query: string,
+    options: TerminalFindOptions,
+    incremental?: boolean,
+  ): void;
+  findPrevious(query: string, options: TerminalFindOptions): void;
+  clearFind(): void;
   claim(): void;
   submit(
     submissionId: string,
@@ -88,6 +107,63 @@ export function useTerminal(
   );
   let modifiers = $state<Modifiers>({ ctrl: false, alt: false });
   let selection = $state("");
+  let search: SearchAddon | undefined;
+  let canFind = $state(false);
+  let findResults = $state<TerminalFindResults | null>(null);
+  let findReplayed = $state(false);
+  let bufferType = $state<"normal" | "alternate">("normal");
+  let scrollback = $state(10000);
+  let findActive = false;
+  function clearFind() {
+    findActive = false;
+    search?.clearDecorations();
+    terminal?.clearSelection();
+    // clearDecorations does not emit a result-reset event.
+    findResults = null;
+    findReplayed = false;
+  }
+  function find(
+    query: string,
+    options: TerminalFindOptions,
+    previous: boolean,
+    incremental = false,
+  ) {
+    if (!query) {
+      clearFind();
+      return;
+    }
+    if (
+      !terminal ||
+      !search ||
+      stream.restoring ||
+      terminalFindError(query, options.regex)
+    )
+      return;
+    if (incremental || !findActive) {
+      search.clearDecorations();
+      // The addon starts at row zero without a selection. Seed a one-cell
+      // anchor at the viewport, synchronously replaced by the actual match
+      // (or cleared on no match). Never seed before validating the query.
+      terminal.select(0, terminal.buffer.active.viewportY, 1);
+    }
+    findActive = true;
+    findReplayed = false;
+    const theme = terminal.options.theme;
+    const searchOptions = {
+      ...options,
+      incremental,
+      decorations: {
+        matchBackground: theme?.yellow,
+        matchBorder: theme?.yellow,
+        matchOverviewRuler: theme?.yellow ?? "#a16207",
+        activeMatchBackground: theme?.blue,
+        activeMatchBorder: theme?.blue,
+        activeMatchColorOverviewRuler: theme?.blue ?? "#2563eb",
+      },
+    };
+    if (previous) search.findPrevious(query, searchOptions);
+    else search.findNext(query, searchOptions);
+  }
   // Whether the newest output is in view: the xterm viewport sits at the
   // buffer end and, for an observer panning a larger grid, the host does too.
   let atBottom = $state(true);
@@ -162,11 +238,36 @@ export function useTerminal(
       const term = view.term;
       renderer = view;
       terminal = term;
+      search = new SearchAddon({ highlightLimit: terminalFindLimit });
+      term.loadAddon(search);
+      canFind = true;
+      scrollback = term.options.scrollback ?? 10000;
+      bufferType = term.buffer.active.type;
+      const resultsChanged = search.onDidChangeResults((results) => {
+        if (findActive) {
+          // The addon clears then reselects on its delayed output refresh.
+          // xterm omits the second selection event for unchanged coordinates,
+          // so read the completed search's selection rather than its clear.
+          selection = term.getSelection();
+          findResults = results;
+        }
+      });
+      const bufferChanged = term.buffer.onBufferChange((buffer) => {
+        clearFind();
+        bufferType = buffer.type;
+        // Replayed TUI entry/exit must not erase the full-replay notice.
+        findReplayed = stream.restoring;
+      });
       const attachment = stream.attach(term, {
         fit: safeFit,
         scrollToBottom,
         isVisible,
         copy: (text) => clipboard.copySelection(text),
+        resetFind: () => {
+          clearFind();
+          findReplayed = true;
+        },
+        preserveViewport: () => findActive,
       });
       const detachInput = attachTerminalInput(term, parent, {
         userInput,
@@ -200,6 +301,12 @@ export function useTerminal(
         parsed.dispose();
         parent.removeEventListener("scroll", updateBottom);
         selected.dispose();
+        resultsChanged.dispose();
+        bufferChanged.dispose();
+        clearFind();
+        search?.dispose();
+        search = undefined;
+        canFind = false;
         attachment.dispose();
         terminal = undefined;
         renderer = undefined;
@@ -258,6 +365,28 @@ export function useTerminal(
     get clientId() {
       return stream.clientId;
     },
+    get canFind() {
+      return canFind;
+    },
+    get findResults() {
+      return findResults;
+    },
+    get findReplayed() {
+      return findReplayed;
+    },
+    get bufferType() {
+      return bufferType;
+    },
+    get scrollback() {
+      return scrollback;
+    },
+    findNext(query, options, incremental = false) {
+      find(query, options, false, incremental);
+    },
+    findPrevious(query, options) {
+      find(query, options, true);
+    },
+    clearFind,
     claim: stream.claim,
     submit(submissionId, text, enter, report) {
       if (!stream.submittable) return false;
@@ -295,6 +424,7 @@ export function useTerminal(
       }
     },
     clear() {
+      clearFind();
       terminal?.clear();
     },
     resync: stream.resync,

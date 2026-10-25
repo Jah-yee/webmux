@@ -23,6 +23,7 @@
   import TerminalPasteDialog from "../components/TerminalPasteDialog.svelte";
   import TerminalViewport from "../components/TerminalViewport.svelte";
   import TerminalWorkspace from "../components/TerminalWorkspace.svelte";
+  import TerminalFindBar from "../components/TerminalFindBar.svelte";
   import type {
     DraftOperation,
     TerminalDrafts,
@@ -56,6 +57,34 @@
   let mounted = false;
   let codeShown = $state(false);
   let desktop = $state(matchMedia("(min-width:1024px)").matches);
+  let findOpen = $state(false);
+  let findPanel = $state<TerminalFindBar>();
+  let findReturnFocus: HTMLElement | null = null;
+  function showFind() {
+    if (!findOpen) {
+      const active = document.activeElement;
+      findReturnFocus =
+        active instanceof HTMLElement &&
+        (active.matches(".xterm-helper-textarea") ||
+          active.closest(".draft-pane"))
+          ? active
+          : null;
+    }
+    if (!desktop) codeShown = false;
+    findOpen = true;
+    void tick().then(() => findPanel?.focus());
+  }
+  function closeFind() {
+    t.clearFind();
+    findOpen = false;
+    if (document.activeElement instanceof HTMLElement)
+      document.activeElement.blur();
+    if (!hasTouchInput())
+      void tick().then(() => {
+        if (findReturnFocus?.isConnected) findReturnFocus.focus();
+        else focusInput();
+      });
+  }
   // Loaded on first use; the type-only import keeps it out of this chunk.
   let CodePanel = $state<typeof CodePanelComponent>();
   let loadingCode = false;
@@ -343,6 +372,10 @@
     event.preventDefault();
     if (hasTouchInput()) return;
     await tick();
+    if (findOpen) {
+      findPanel?.focus();
+      return;
+    }
     focusInput();
   }
 </script>
@@ -383,6 +416,7 @@
     {paste}
     {showScratch}
     showFontSize={() => (settingsOpen = true)}
+    {showFind}
     close={closeSession}
   />
   <TerminalNotices
@@ -396,12 +430,18 @@
     dismissScratch={() => (draft.scratchUpdatedWhileHidden = false)}
     remove={closeSession}
   />
-  <TerminalWorkspace {codeShown} {desktop} draftOpen={draft.enabled}>
+  <TerminalWorkspace
+    {codeShown}
+    {desktop}
+    draftOpen={draft.enabled}
+    onfind={showFind}
+  >
     {#snippet terminalPane()}
       <TerminalViewport
         bind:container
         terminal={t}
         visible={terminalVisible()}
+        {findOpen}
         {uploads}
         {quickMenu}
         send={softInput}
@@ -414,7 +454,16 @@
           if (draft.enabled) composer?.keyboard();
           else t.keyboard();
         }}
-      />
+      >
+        {#snippet findBar()}
+          <TerminalFindBar
+            bind:this={findPanel}
+            open={findOpen}
+            terminal={t}
+            onclose={closeFind}
+          />
+        {/snippet}
+      </TerminalViewport>
     {/snippet}
     {#snippet draftPane()}
       <TerminalInputComposer

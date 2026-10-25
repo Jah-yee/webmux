@@ -337,3 +337,131 @@ test("long denied copy keeps the dialog inside the viewport and scrolls its text
   });
   expect(scroll).toEqual({ overflows: true, atEnd: true });
 });
+
+test("terminal find searches real output without input or resize, copies and returns to the shell", async ({
+  page,
+  context,
+  request,
+  workDir,
+}, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const frames: Buffer[] = [];
+  page.on("websocket", (socket) =>
+    socket.on("framesent", ({ payload }) => {
+      frames.push(Buffer.isBuffer(payload) ? payload : Buffer.from(payload));
+    }),
+  );
+  const id = await createShell(page, "Find retained output", workDir);
+  // Split the marker so the echoed command is not a second match.
+  await runCommand(
+    page,
+    "printf '\\033[31m%s%s\\033[0m\\n' 'UNIQUE_' 'FIND_ERROR'",
+  );
+  await expectTerminalLine(page, "UNIQUE_FIND_ERROR");
+  const retained = await (
+    await request.get(`/api/sessions/${id}/buffer`)
+  ).text();
+  const grid = await page.locator(".xterm-screen").boundingBox();
+  const baseline = frames.length;
+  if (testInfo.project.use.isMobile) {
+    // The shared menu also works while the narrow layout shows code instead.
+    await page.getByRole("button", { name: "代码", exact: true }).click();
+    await page.getByRole("button", { name: "终端菜单" }).click();
+    await page.getByRole("menuitem", { name: "查找", exact: true }).click();
+  } else {
+    await page.locator(".xterm-helper-textarea").focus();
+    await page.keyboard.press("Control+Shift+F");
+  }
+  const query = page.getByRole("textbox", {
+    name: "查找终端输出",
+    exact: true,
+  });
+  await expect(query).toBeFocused();
+  await query.fill("UNIQUE_FIND_ERROR");
+  await expect(page.getByRole("status", { name: "查找结果" })).toHaveText(
+    "1/1",
+  );
+  await page.getByRole("button", { name: "复制选中", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe("UNIQUE_FIND_ERROR");
+  await expect(
+    page.getByRole("toolbar", { name: "终端文字选择" }),
+  ).toBeHidden();
+  await page.getByRole("button", { name: "关闭查找" }).click();
+  await expect(query).toBeHidden();
+  if (testInfo.project.use.isMobile)
+    await expect(page.locator(".xterm-helper-textarea")).not.toBeFocused();
+  else await expect(page.locator(".xterm-helper-textarea")).toBeFocused();
+  expect(await page.locator(".xterm-screen").boundingBox()).toEqual(grid);
+  expect(
+    frames.slice(baseline).filter((frame) => frame[0] === 0 || frame[0] === 1),
+  ).toEqual([]);
+  expect(await (await request.get(`/api/sessions/${id}/buffer`)).text()).toBe(
+    retained,
+  );
+  await runCommand(page, "printf '%s%s\\n' 'AFTER_' 'FIND_OK'");
+  await expectTerminalLine(page, "AFTER_FIND_OK");
+});
+
+test("terminal find denied copy retains only readable selection and restores find focus", async ({
+  page,
+  workDir,
+}, testInfo) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.clipboard, "writeText", {
+      configurable: true,
+      value: () =>
+        Promise.reject(
+          new DOMException("Permission denied", "NotAllowedError"),
+        ),
+    });
+  });
+  await createShell(page, "Find copy fallback", workDir);
+  await runCommand(
+    page,
+    "printf '\\033[31m%s%s\\033[0m\\n' 'READABLE_' 'ERROR'",
+  );
+  await expectTerminalLine(page, "READABLE_ERROR");
+  await page.getByRole("button", { name: "终端菜单" }).click();
+  await page.getByRole("menuitem", { name: "查找", exact: true }).click();
+  const query = page.getByRole("textbox", {
+    name: "查找终端输出",
+    exact: true,
+  });
+  await query.fill("READABLE_ERROR");
+  await page.getByRole("button", { name: "复制选中", exact: true }).click();
+  const copied = page.getByRole("textbox", { name: "复制内容" });
+  await expect(copied).toHaveValue("READABLE_ERROR");
+  await expect(copied).toHaveAttribute("readonly");
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  if (!testInfo.project.use.isMobile) await expect(query).toBeFocused();
+  await expect(page.locator(".xterm-helper-textarea")).not.toBeFocused();
+  await page.getByRole("button", { name: "关闭查找" }).click();
+});
+
+test("draft shortcut does not modify or submit the draft", async ({
+  page,
+  workDir,
+}, testInfo) => {
+  test.skip(!!testInfo.project.use.isMobile, "Desktop focus restoration");
+  await createShell(page, "Draft find isolation", workDir);
+  await runCommand(page, "printf '%s%s\\n' 'DRAFT_' 'FIND_TARGET'");
+  await expectTerminalLine(page, "DRAFT_FIND_TARGET");
+  await page.getByRole("button", { name: "草稿模式", exact: true }).click();
+  const draft = page.locator(".draft-pane textarea").first();
+  await draft.fill("keep my unsent draft");
+  await draft.press("Control+Shift+F");
+  const query = page.getByRole("textbox", {
+    name: "查找终端输出",
+    exact: true,
+  });
+  await expect(query).toBeFocused();
+  await query.fill("DRAFT_FIND_TARGET");
+  await expect(page.getByRole("status", { name: "查找结果" })).toHaveText(
+    "1/1",
+  );
+  await query.press("Escape");
+  await expect(draft).toHaveValue("keep my unsent draft");
+  await expect(draft).toBeFocused();
+});

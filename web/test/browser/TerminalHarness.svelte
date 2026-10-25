@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import {
     useTerminal,
     type TerminalController,
   } from "../../src/hooks/terminal.svelte";
   import type { TerminalUserInput } from "../../src/hooks/terminal-input";
+  import TerminalFindBar from "../../src/components/TerminalFindBar.svelte";
+  import { terminalFindShortcut } from "../../src/hooks/terminal-find-shortcut";
+  import { hasTouchInput } from "../../src/touchInput";
 
   type Props = {
     // Draft-mode routing, as Terminal.svelte passes it to the hook.
@@ -20,6 +23,21 @@
   let container: HTMLDivElement;
   let copied = $state("");
   let copies = $state(0);
+  let findOpen = $state(false);
+  let findPanel = $state<TerminalFindBar>();
+  let returnFocus: HTMLElement | null = null;
+  function openFind() {
+    if (!findOpen) returnFocus = document.activeElement as HTMLElement | null;
+    findOpen = true;
+    void tick().then(() => findPanel?.focus());
+  }
+  function closeFind() {
+    terminal.clearFind();
+    findOpen = false;
+    if (document.activeElement instanceof HTMLElement)
+      document.activeElement.blur();
+    if (!hasTouchInput()) void tick().then(() => returnFocus?.focus());
+  }
   const terminal = useTerminal(
     () => container,
     "terminal-render-fixture",
@@ -42,12 +60,26 @@
   expose?.(terminal);
 </script>
 
-<div
-  bind:this={container}
-  class="terminal-host"
-  data-testid="terminal-host"
-  style="position: fixed; left: 0; top: 0; width: 400px; height: 750px"
-></div>
+<div use:terminalFindShortcut={openFind}>
+  <div
+    bind:this={container}
+    class="terminal-host"
+    data-testid="terminal-host"
+    style="position: fixed; left: 0; top: 0; width: 400px; height: 750px"
+  ></div>
+  <div style="position: fixed; left: 0; top: 0; width: 400px">
+    <TerminalFindBar
+      bind:this={findPanel}
+      open={findOpen}
+      {terminal}
+      onclose={closeFind}
+    />
+  </div>
+  {#if userInput}<textarea aria-label="Fixture draft"></textarea>{/if}
+</div>
+<textarea
+  aria-label="Fixture code pane"
+  style="position: fixed; left: 450px; top: 0"></textarea>
 <div style="position: fixed; left: 0; top: 760px">
   <output aria-label="Terminal connection">{terminal.connection}</output>
   <output aria-label="Terminal restoration"
@@ -65,4 +97,5 @@
     >{terminal.atBottom ? "latest" : "history"}</output
   >
   <button onclick={() => terminal.scrollToBottom()}>Scroll to latest</button>
+  <button onclick={openFind}>Find terminal output</button>
 </div>

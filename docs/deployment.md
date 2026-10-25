@@ -211,9 +211,9 @@ NAT 网络模式（WSL 默认）下，局域网与 Windows 上 Tailscale 的流�
 
 ### 公网隧道
 
-WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、不影响会话的情况下开启或关闭 Cloudflare Tunnel（按 WebMux 配置的 `[tunnel]` 选择 Quick Tunnel 或 Named Tunnel，cloudflared 的定位与下载规则见下文“公网访问（Cloudflare Tunnel）”）。每次开启前托盘都会确认风险；要求 WebMux 已配置至少 43 个字符的 Token（`webmux config init` 生成的即可），否则拒绝开启。就绪后菜单显示公网地址，“复制公网链接”与其他复制链接一样带 Token。隧道断开时托盘通知一次且不自动重开；开关状态不保存，WebMux 重启后隧道关闭。
+WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、不影响会话的情况下开启或关闭 Cloudflare Tunnel。新服务按持久化的期望开关勾选（失败但期望开启时仍勾选），开关跨重启保留；命令行覆盖只影响本次进程。每次开启前托盘确认风险，要求已有至少 43 字符的 WebMux Token。新增“打开公网访问设置…”进入网页配置；旧服务保留原临时开关，不显示不支持的网页入口。就绪后可复制带 Token 的公网链接；隧道断开不自动重开。
 
-隧道项下方的“手机推送”一行显示推送前置条件与已开启的设备数：未配置 Named Tunnel 时提示“需要 Named Tunnel”，配置后显示设备数。“手机推送设置说明…”按当前隧道类型列出 Named Tunnel 配置步骤与手机端开启步骤（见下文“手机推送（Web Push）”）；托盘不会修改配置文件。
+隧道项下方的“手机推送”显示前置条件与设备数；“手机推送设置说明…”引导到网页“设置 → 公网访问”配置 Named Tunnel，再从固定 HTTPS 地址开启手机推送。托盘不修改配置文件。
 
 ### Token 与剪贴板
 
@@ -256,7 +256,7 @@ Windows 托盘经 `wsl.exe --exec` 启动 WebMux，同样不经过登录 shell�
 webmux --tunnel
 ```
 
-或在配置中设置：
+推荐打开网页“设置 → 公网访问”，保存 Quick/Named 配置并启用，无需重启。首次网页保存前也可在配置中设置：
 
 ```toml
 [tunnel]
@@ -268,11 +268,13 @@ cloudflared = "" # 可选：cloudflared 路径
 ```
 
 - **Quick Tunnel**：无需账号，每次启动得到随机 `https://*.trycloudflare.com` 地址，无 SLA，适合临时访问。
-- **Named Tunnel**：在 Cloudflare 控制台创建隧道，把公共主机名指向 `http://127.0.0.1:<端口>`，再把隧道 token 写入 `tunnel.token`、主机名写入 `tunnel.hostname`。凭据经环境变量传给 cloudflared，不出现在进程命令行中。固定地址也是手机推送的前提。
-- 启用隧道时 webmux 强制认证：未配置 `token` 则每次启动生成 256 位随机 token；显式配置的 webmux `token` 至少 43 个字符，否则拒绝启动。隧道连通后终端打印 `WebMux public: https://<公网主机>/#token=<token>` 与二维码，手机扫码即可进入。
+- **Named Tunnel**：在 Cloudflare 控制台创建隧道，把公共主机名指向 `http://127.0.0.1:<端口>`，在网页保存凭据与主机名（首次保存前也可用 TOML）。凭据经环境变量传给 cloudflared，不出现在命令行中。固定地址也是手机推送的前提。
+- 启用隧道要求至少 43 字符的 WebMux 登录 Token；启动需要认证且未配置时生成随机 Token。网页管理配置的恢复失败不会结束本地服务：弱 Token 或 cloudflared 故障显示 failed，可修复后重新开启。网页复制的公网地址不含登录 Token。
 - cloudflared 依次取 `tunnel.cloudflared`、`PATH`、`<state_dir>/cloudflared/<版本>/` 缓存；都没有时下载 webmux 固定的版本，先连 GitHub，10 秒无响应或 20 秒无数据时依次改用 `download_mirrors` 镜像（默认 `ghfast.top`、`gh-proxy.com`；`[]` 表示只用 GitHub）。任何来源的文件都必须与内置 SHA-256 一致才会执行。镜像是第三方服务，能看到请求者 IP 和所下载的文件；不希望回退到它们时设置 `download_mirrors = []`。
 - webmux 以 `--config /dev/null` 运行 cloudflared，`~/.cloudflared/config.yml` 不会影响隧道。
 - cloudflared 意外退出时公网地址立即失效（返回 403），本地访问和会话不受影响；webmux 退出时 cloudflared 随之结束。Linux 上即使 webmux 被 SIGKILL 或 OOM 终止，内核也会结束 cloudflared；macOS 没有等价机制，依赖 launchd 结束作业的全部进程，手动运行时需自行确认没有残留。
+- 网页配置保存于 `<state_dir>/tunnel.json`（0600），优先于 TOML；`--tunnel` / `--tunnel=false` 只覆盖本次启动。恢复配置文件设置会删除网页配置并立即关闭，下一次启动按 TOML。
+- 存储损坏、锁冲突或不可读时保持本地服务可用且公网关闭，不退回 TOML 意外重开。运行中关闭即使保存失败也先撤销公网授权并停止隧道，页面提示尚未持久化；修复存储后须重新保存关闭状态。
 
 Cloudflare 控制台步骤、两个 token 的区别、Windows/WSL 托盘操作、验证方法与故障排查见 **[Cloudflare Named Tunnel 配置指南](cloudflare-tunnel.md)**。
 

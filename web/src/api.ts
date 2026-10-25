@@ -13,6 +13,8 @@ export class APIError extends Error {
     message: string,
     // Machine-readable cause some endpoints add, such as push 409 reasons.
     public reason?: string,
+    // Emergency tunnel shutdown can succeed even when its disk write fails.
+    public notPersisted?: boolean,
   ) {
     super(message);
   }
@@ -56,7 +58,12 @@ function responseError(status: number, body: unknown, fallback: string) {
   const detail = ErrorSchema.safeParse(body);
   if (status === 401) window.dispatchEvent(new Event("webmux:auth"));
   return detail.success
-    ? new APIError(status, detail.data.error, detail.data.reason)
+    ? new APIError(
+        status,
+        detail.data.error,
+        detail.data.reason,
+        detail.data.notPersisted,
+      )
     : new APIError(status, fallback);
 }
 

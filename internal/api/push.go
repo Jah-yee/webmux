@@ -34,6 +34,9 @@ func (s *Server) pushOrigin(r *http.Request) (string, string) {
 		return "", pushUnsupportedOrigin
 	}
 	named := s.Config.Tunnel.NamedHostname()
+	if s.TunnelSettings != nil {
+		named = s.TunnelSettings.Settings().Hostname
+	}
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		// Same-origin GETs omit Origin. Tunnel traffic reaches this server

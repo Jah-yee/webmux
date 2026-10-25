@@ -174,7 +174,7 @@
     <div>
       <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">设置</h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        快捷指令、草稿和预览只保存在当前浏览器；启动配置保存在服务端，在所有设备间共享。公网访问与通知推送涉及服务端能力，本页提供说明或当前设备操作；修改服务端配置需要编辑配置文件并重启。
+        快捷指令、草稿和预览只保存在当前浏览器；启动配置与公网访问设置保存在服务端，在所有设备间共享。隧道配置和启停无需重启；通知推送按当前设备管理。
       </p>
     </div>
     <Card.Root id="quick-commands" class="scroll-mt-4">

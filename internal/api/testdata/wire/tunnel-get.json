@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "canEnable": true,
+    "enabled": false,
+    "hostname": "",
+    "mode": "quick",
+    "source": "config",
+    "state": "off",
+    "storageAvailable": true,
+    "tokenConfigured": false
+  }
+}

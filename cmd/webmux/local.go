@@ -107,7 +107,7 @@ func localStatus(record runtime.Record, c serverRun, m *session.Manager, tunnels
 	s.Tunnel = &tunnel
 	state := pushes.Status()
 	s.Push = &contract.PushStatus{Enabled: state.Enabled, Available: state.Available, Error: state.Error, Subscriptions: state.Subscriptions}
-	if host := c.Tunnel.NamedHostname(); host != "" {
+	if host := tunnels.Settings().Hostname; host != "" {
 		s.Push.PublicOrigin = "https://" + host
 	}
 	return s

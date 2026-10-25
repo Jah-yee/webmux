@@ -33,10 +33,11 @@
 - 不自行扫描 `buffer.active`：折行、宽字符、跨行匹配与选区映射由 addon 维护，自实现容易与 xterm 行为漂移。也不搜 `/buffer` 原始字节：其中包含控制序列，会重复或漏掉输出。
 - `web/src/hooks/terminal.svelte.ts` 在 `mountTerminal` 中加载并持有 addon，dispose 时释放；新增 `findNext` / `findPrevious` / `clearFind`、`findResults`、`bufferType`、`scrollback` 与 `canFind`（`ready` 之外仍允许已退出会话查找）。
 - 查询选项传给 addon：`caseSensitive`、`wholeWord`、`regex`、`incremental`。输入时增量查找；Enter 下一个、Shift+Enter 上一个；查询为空时清高亮与计数。
+- addon 无选区时从缓冲顶部查找，而非当前视口。首次查找、修改查询或切换选项时，先校验语法，再清除 addon 缓存并以 `term.select(0, viewportY, 1)` 设置同步的一格起点，立即由 addon 替换为完整命中或在无匹配时清空；不扫描缓冲、不访问私有 API，也不遗留伪选区。打开/重新打开只聚焦，不执行搜索；首次 Enter 从当前视图附近定位。
 
 ### 2. 匹配计数与高亮上限
 
-- addon 默认 `highlightLimit = 1000`。只有传入 `decorations` 选项时，`onDidChangeResults` 才会给出 `resultIndex` 与 `resultCount`，且 `resultCount` 最多为 1000；界面显示 `i/n`，选中项超出前 1000 个时 `resultIndex === -1`，显示“1000+ 匹配”并说明只统计前 1000 个。
+- addon 默认 `highlightLimit = 1000`。只有传入 `decorations` 选项时，`onDidChangeResults` 才会给出 `resultIndex` 与 `resultCount`，且 `resultCount` 最多为 1000。低于上限显示 `i/n`；只要 `resultCount >= 1000`，无论 `resultIndex` 是否为 -1，都显示“至少 1000 个匹配（仅统计前 1000 个）”。addon 无法区分恰好 1000 与更多匹配，不能仅凭索引判断是否溢出。
 - 上一个/下一个不依赖计数列表，超过上限仍可继续移动；不为突破上限引入第二套扫描。
 - 正则先本地校验语法；无效正则只显示行内错误，不调用 addon、不改变当前高亮。10k 行内的普通查找视为可接受；极端回溯可能短暂卡顿，v1 接受并记录在风险中。
 
@@ -58,16 +59,16 @@
 
 - 范围行始终写明“当前终端缓冲（最多回看 10000 行）”，行数取 xterm `scrollback` 实际配置，不声称是完整服务端缓冲或完整执行记录。
 - `historyTruncated` 为真时追加“服务端已覆盖更早输出”。这是服务端环形缓冲的截断提示，与客户端 10000 行上限彼此独立，不能互相推断。
-- `buffer.active.type === "alternate"` 时范围行改为“全屏程序：仅当前屏幕”，此时没有回看。订阅 `term.buffer.onBufferChange`：切换缓冲时清除高亮与计数、保留查询词；切回 normal 后由下一次查找重新定位，不自动跳转。
+- `buffer.active.type === "alternate"` 时范围行追加“全屏程序：仅当前屏幕”，此时没有回看。订阅 `term.buffer.onBufferChange`：切换缓冲时清除高亮、计数与选区、保留查询词；切回 normal 后由下一次查找重新定位，不自动跳转。
 - 已退出会话仍可查找其最终缓冲；查找入口不以 `ready` 或连接状态禁用，只在终端尚未挂载时不可用。
-- 无匹配时显示“无匹配”；查询为空时只显示范围行。状态行不承诺恢复已覆盖内容。
+- 无匹配时显示“无匹配”，addon 清除旧选区，不修改终端内容或发送输入；无效正则不调用 addon，保留当前选区、高亮和位置。查询为空时清除高亮、选区和结果，只显示范围行。
 
 ### 6. 回放、清屏与结果重置
 
 - 在 `terminal-socket.svelte.ts` 的 `restore()` 调用 `term.reset()` 后通知搜索状态重置（通过 attach 回调或等价钩子）：清除高亮、计数与选区，保留查询词并显示“回放完成，按 Enter 重新查找”。全量回放期间 (`restoring`) 禁用上一个/下一个，避免在正在重建的缓冲上跳转。
-- 增量续接不清空缓冲，保留查询与计数；addon 会在写入解析后自动重算，且不自动滚动（`noScroll`），避免实时输出把视图拽走。
-- 用户执行“清屏”时同时清除高亮与计数，保留查询词；因为 `terminal.clear()` 只影响视图，不承诺搜索结果仍指向原内容。
-- 关闭查找栏即调用 addon 的 `clearDecorations()` 清理高亮、计数与选区；再次打开恢复查询词但不自动跳转，用户按 Enter 或点下一个才开始。
+- 增量续接不清空缓冲，保留查询与计数；addon 写入后自动重算且使用 `noScroll`。socket 的缺失尾部追加回调也必须保留搜索视口（写入前记录 `viewportY`，解析完成后还原），无新字节的 append 分支同样不调用 `scrollToBottom`；仅依赖 addon 的 `noScroll` 无法阻止 socket 自身跳到底部。
+- 用户执行“清屏”时同时清除高亮、计数与选区，保留查询词；因为 `terminal.clear()` 只影响视图，不承诺搜索结果仍指向原内容。
+- 关闭查找栏、全量回放、清屏及缓冲切换共用 `clearFind()`：显式调用 addon `clearDecorations()`、`term.clearSelection()`，并把响应式结果设为 `null`。`clearDecorations()` 不清除 xterm 选区，也不发结果重置事件；不能依赖订阅完成重置。再次打开恢复查询词但不自动查找或跳转，按 Enter 或点下一个才重新建立结果。
 
 ### 7. 复制可读片段
 
@@ -77,8 +78,8 @@
 
 ### 8. 纯函数与测试边界
 
-- 新增 `web/src/terminal-search.ts`，存放与 DOM 无关的逻辑：查询校验（空值、正则语法）、结果文案（`i/n`、`1000+`、无匹配）、范围文案（回看行数、截断、alternate、回放中）。便于 Node 单测，避免在 Svelte 组件里堆条件。
-- 浏览器测试扩展现有 `TerminalHarness.svelte`：断言 `Ctrl+Shift+F` 打开查找且不发送 `\x06`、普通 `Ctrl+F` 仍发送 `^F`、匹配计数与前后移动、折行/宽字符匹配、选项切换、无效正则、alternate 切换清空、回放清空后保留查询词、关闭清高亮，以及全程 `socket.sent` 不含查找输入。
+- 新增 `web/src/terminal-search.ts`，存放与 DOM 无关的逻辑：查询校验（空值、正则语法）、结果文案（`i/n`、饱和计数的“至少 1000 个”、无匹配）、范围文案（回看行数、截断、alternate、回放中）与快捷键判定。便于 Node 单测，避免在 Svelte 组件里堆条件。
+- 浏览器测试扩展现有 `TerminalHarness.svelte`，新增 `TerminalRendering.test.ts`：实际 addon 与 xterm 验证快捷键、草稿隔离、视口起点、匹配计数与前后移动、折行/宽字符、选项、无效正则、饱和计数、IME、alternate、全量回放与两种增量续接、关闭清高亮和查询保留，断言 socket 不发送输入或因查找改变网格。
 - E2E 在真实输出中查找唯一错误词，覆盖桌面快捷键与 Pixel 7 菜单入口，复制选中得到可读文本，关闭后 shell 仍能正常执行命令。
 - 不修改 Go 代码，因此不新增 Go 测试；服务端 `/buffer` 行为由现有测试继续覆盖。
 

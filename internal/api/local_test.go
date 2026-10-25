@@ -190,6 +190,34 @@ func TestLocalConfigReportsRuntimeTunnel(t *testing.T) {
 	}
 }
 
+func TestLocalTunnelSettingsCannotBypassSessionPolicy(t *testing.T) {
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	control := newTunnelControlFixture()
+	h := NewLocal(testDeps(t, Deps{Manager: m, TunnelSettings: control}), Local{InSession: func(pid int) bool { return pid == 20 }})
+	for _, endpoint := range []struct{ method, path, body string }{
+		{"GET", "/api/tunnel", ""},
+		{"PUT", "/api/tunnel/settings", `{"mode":"quick","hostname":""}`},
+		{"PUT", "/api/tunnel/enabled", `{"enabled":true}`},
+		{"DELETE", "/api/tunnel/settings", ""},
+	} {
+		for _, pid := range []int{0, 20} {
+			r := httptest.NewRequest(endpoint.method, endpoint.path, strings.NewReader(endpoint.body))
+			if pid != 0 {
+				r = r.WithContext(context.WithValue(r.Context(), peerKey{}, pid))
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != 403 {
+				t.Fatalf("session bypass via %s: %d", endpoint.path, w.Code)
+			}
+		}
+	}
+	if control.calls != 0 {
+		t.Fatal("session reached settings controller")
+	}
+}
+
 func TestLocalSkipsHostOriginAndToken(t *testing.T) {
 	c := config.Config{Listen: "127.0.0.1:7681", Token: "secret"}
 	m := session.NewManager(session.Options{})

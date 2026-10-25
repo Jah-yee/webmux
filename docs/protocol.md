@@ -87,7 +87,47 @@ interface SessionInfo {
 | GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                    |
 | POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                       |
 
-`tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。`state` 为 `off`、`starting`、`ready` 或 `failed`；`enabled` 仅在 `starting`/`ready` 时为 `true`，启动失败不会被当作可用。`named` 与 `hostname` 来自 `[tunnel]` 配置，未启用时也可用于说明配置模式；Named Tunnel 缺少 `hostname` 时为空字符串。`publicUrl` 仅在 `ready` 时出现，且不含 token。响应不包含 `[tunnel].token` 或其他 Cloudflare 凭据。
+`tunnel` 是只读的运行时隧道状态：`{enabled, state, named, hostname, publicUrl?}`。`state` 为 `off`、`starting`、`ready` 或 `failed`；此处的 `enabled` 仅在 `starting`/`ready` 时为 `true`，与下述设置 API 的启用期望不同。`named` 与 `hostname` 动态读取当前有效设置（Web 覆盖优先，否则使用配置文件），关闭时也保留模式信息；Named Tunnel 缺少 `hostname` 时为空字符串。`publicUrl` 仅在 `ready` 时出现且不含 token。响应不包含 Cloudflare 凭据。
+
+### 公网隧道设置
+
+以下端点复用网络 API 的认证和 Host/Origin 检查；经本机 Unix 套接字访问时仍禁止会话内进程调用（包括只读 GET，返回 403）。Web 页面入口为 `/settings/tunnel`，不增加终端 WebSocket 消息。
+
+| 方法   | 路径                   | 请求及成功响应                                                                                         |
+| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/tunnel`          | 200，返回 `TunnelSettings`；存储不可用仍返回可读状态及存储错误                                         |
+| PUT    | `/api/tunnel/settings` | `{mode, hostname, token?}`；返回 `TunnelSettings`，响应时 `state == "starting"` 为 202，否则 200       |
+| PUT    | `/api/tunnel/enabled`  | `{"enabled": true}` 或 `{"enabled": false}`；202，返回 `TunnelSettings`，不等待 cloudflared 就绪或退出 |
+| DELETE | `/api/tunnel/settings` | 无请求体；200，返回 `TunnelSettings`；删除 Web 覆盖，恢复配置文件模式/凭据并停止当前隧道               |
+
+```ts
+interface TunnelSettings {
+  enabled: boolean; // 当前进程启用期望，含 CLI 覆盖；不是 ready，也不保证等于磁盘值
+  mode: "quick" | "named";
+  hostname: string; // Quick 为空；Named 为规范化后的裸主机名
+  tokenConfigured: boolean; // 仅报告 Named 凭据是否存在，不返回凭据
+  source: "config" | "web"; // 模式/凭据的来源，不是 CLI 开关是否生效的标记
+  state: "off" | "starting" | "ready" | "failed";
+  publicUrl?: string; // 仅 ready，不含登录 token
+  error?: string; // 运行时失败原因；Cloudflare 凭据脱敏
+  canEnable: boolean;
+  enableBlockedReason?: string;
+  storageAvailable: boolean;
+  storageError?: string;
+}
+```
+
+`mode` 只接受 `quick`/`named`。Named 必须有非空 token 与合法裸 ASCII/punycode 主机名（不能带 scheme、端口、路径、通配符或空白，须满足 DNS 标签限制）。省略 `token` 保留现有凭据，显式空字符串在 Named 模式下无效；Quick 模式会清除主机名与凭据。凭据是写入式字段，不能通过 GET、成功响应或错误消息读回；不放入 URL、浏览器持久存储或 cloudflared 命令行。PUT 请求严格解析：未知字段、类型错误、多份 JSON 或缺少必需 `enabled` 返回 400。
+
+设置保存在 `<state_dir>/tunnel.json`，目录 0700、文件 0600，持有独占锁并原子持久化。已保存的 Web 模式、主机名、凭据与开关优先于 TOML；cloudflared 路径、下载镜像等运维配置仍由 TOML 管理。显式 `--tunnel` 仅覆盖当前进程开关，不写盘。`enabled` 因此描述当前进程期望：启动失败时可为 true，关闭写盘失败时为 false。删除覆盖成功后当前进程保持 off，即使 TOML 默认启用也要下次启动才生效。
+
+普通保存与启用先成功持久化再应用；保存不单独改变开关，已启用时更换模式、主机名或凭据会异步重启隧道。应用先撤销旧公网授权、取消并等待旧 cloudflared，再启动新代际；旧代际的迟到事件不能重新授权。重复启用不创建第二个进程。运行中启用要求当前 WebMux 登录 token 至少 43 字符，不生成或轮换登录 token。Web 管理的启动遇到短 token、依赖定位/下载或隧道启动失败时置为 failed，HTTP/本机 API 继续可用；显式 CLI/TOML 启动仍保留其前置失败规则。设置存储损坏、不可读或锁冲突时禁止公网启动，不能回退到 TOML 或 CLI 开启，原文件不被自动覆盖。
+
+错误响应使用 `{"error":"..."}`：请求/设置无效 400，认证失败 401，来源或本机会话权限拒绝 403，启用前提不足 409，设置服务/存储不可用 503，其他设置操作失败 500（固定通用错误，不返回内部错误值）。控制器未提供时包括 GET 在内返回 503；存在控制器但存储出错时 GET 仍为 200。
+
+关闭是安全例外：即使无法落盘，也立即把当前进程置为 off、撤销公网授权并取消 cloudflared，返回 **503** `{"error":"...", "notPersisted":true}`。客户端应重新 GET 状态并明确告知“当前已关闭，但关闭状态未保存，修复存储后再重启”，不得据此认为旧磁盘启用值已被清除。普通保存/启用失败不应用新配置，DELETE 失败不宣称已恢复默认。
+
+契约与实现：[线上字段](../internal/contract/tunnel.go)、[HTTP 处理器](../internal/api/tunnel.go)、[持久化服务](../internal/tunnelsettings/store.go)、[运行时控制](../cmd/webmux/tunnelctl.go)、[端点与动态来源测试用例](../internal/api/tunnel_test.go)。终端缓冲查找完全在浏览器 xterm 中完成，不使用新的搜索 API，也不扩大 `/api/sessions/{id}/buffer` 的保留范围。
 
 ### 启动配置
 
@@ -151,7 +191,7 @@ interface SessionInfo {
 | DELETE | `/api/push/subscriptions/{id}` | 204，ID 不存在同样 204                                                                                                                                                                                            |
 | POST   | `/api/push/test`               | 无请求体；同时向全部已登记设备发送测试通知并等待推送服务应答 → 200 `{devices, accepted, removed: [订阅 ID], errors: [信息]}`；`removed` 为推送服务报告失效并已删除的订阅，`errors` 只含推送服务主机名；409 不可用 |
 
-`reason` 取值：`disabled`（`[push] enabled = false`）、`storage`（`<state_dir>/push.json` 不可读写）、`quick_tunnel`、`unsupported_origin`。来源按请求 `Origin` 判定（没有时由 `Host` 推断，经隧道到达的视为 `https`）：只有已配置 Named Tunnel 的 `https://<tunnel.hostname>`（与隧道是否运行无关）和 `127.0.0.1` / `::1` / `localhost` 回环来源可以订阅；当前 Quick Tunnel 公网来源为 `quick_tunnel`，其余（VPN、局域网、其他反向代理、本机套接字）为 `unsupported_origin`。
+`reason` 取值：`disabled`（`[push] enabled = false`）、`storage`（`<state_dir>/push.json` 不可读写）、`quick_tunnel`、`unsupported_origin`。来源按请求 `Origin` 判定（没有时由 `Host` 推断，经隧道到达的视为 `https`）：只有当前有效 Named 设置的 `https://<hostname>`（Web 覆盖优先，与隧道是否运行无关）和 `127.0.0.1` / `::1` / `localhost` 回环来源可以订阅；更改 Named 主机名、切换 Quick 或恢复配置默认后，后续请求立即使用新的有效主机名判定，不继续使用启动时 TOML 的旧值。当前 Quick Tunnel 公网来源为 `quick_tunnel`，其余（VPN、局域网、其他反向代理、本机套接字）为 `unsupported_origin`。订阅来源资格不等于公网 Host/Origin 授权：后者仍只在当前隧道 ready 后授予，停止/失败或重配时撤销。
 
 服务端订阅会话列表，以 `(会话 ID, kind, since)` 去重：启动或重新订阅时快照中已有的 attention 只作为基线，同一信号的 source 变化、输出、spinner 与重连都不再推送；清除后再次置位或种类升级才推送。只推送 `[push] kinds` 中的种类，启发式 `waiting`、attention 清除与进程退出不推送。内部订阅积压断开后按保留的基线比较新快照，补推断开期间新出现的信号一次；500 ms 内置位又清除的信号不推送，不重放断线期间已清除的信号。
 
@@ -290,14 +330,16 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 
 套接字额外提供以下接口；它们不在 TCP 上提供（返回 404）。响应为 JSON，错误为 `{"error": "..."}`。`v1` 内只增加可选字段，不兼容变更使用新的路径版本。
 
-| 路由                      | 说明                                                                                                                                                  |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /local/v1/status`    | 状态 JSON（与 `webmux status --json` 契约 v1 相同，`record`、`localApi` 为 `true`，`drift` 由服务端重读配置文件计算）                                 |
-| `POST /local/v1/shutdown` | 可选请求体 `{"force": bool}`；systemd / launchd 启动且未设 `force` 时 409 并给出管理命令；否则 202，按 SIGTERM 流程退出。会话内部的连接 403           |
-| `GET /local/v1/token`     | `{"token": "..."}`；未配置 Token 时 404；会话内部的连接 403                                                                                           |
-| `POST /local/v1/tunnel`   | 请求体 `{"enabled": bool}`；开启或关闭 Cloudflare Tunnel，立即返回 202 与隧道状态对象；请求体无效 400；Token 不满足要求时开启 409；会话内部的连接 403 |
+| 路由                      | 说明                                                                                                                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /local/v1/status`    | 状态 JSON（与 `webmux status --json` 契约 v1 相同，`record`、`localApi` 为 `true`，`drift` 由服务端重读配置文件计算）                                                                                                  |
+| `POST /local/v1/shutdown` | 可选请求体 `{"force": bool}`；systemd / launchd 启动且未设 `force` 时 409 并给出管理命令；否则 202，按 SIGTERM 流程退出。会话内部的连接 403                                                                            |
+| `GET /local/v1/token`     | `{"token": "..."}`；未配置 Token 时 404；会话内部的连接 403                                                                                                                                                            |
+| `POST /local/v1/tunnel`   | 请求体 `{"enabled": bool}`；开启或关闭 Cloudflare Tunnel，立即返回 202 与 `TunnelStatus`；无效请求 400，启用前提不足或控制拒绝 409，设置存储不可用 503，会话内部的连接 403；关闭落盘失败的 503 带 `notPersisted: true` |
 
-隧道开启按启动时加载的 `[tunnel]` 配置与 `--tunnel` 相同的规则定位 cloudflared，要求当前 Token 不少于 43 字符（运行中不生成或更换 Token），重复开启不启动第二个 cloudflared；就绪后服务输出打印不含 Token 的公网地址。关闭先撤销公网主机名授权再结束 cloudflared，同样适用于 `--tunnel` 启动的隧道，已关闭时无副作用。cloudflared 定位失败或意外退出时状态为 `failed` 并撤销授权，不自动重试；开启状态不持久化。
+本机开关与 Web 设置共用当前有效配置及持久化控制器，定位 cloudflared 的规则相同，要求当前登录 Token 不少于 43 字符（运行中不生成或更换 Token）。成功操作保存开关，重复开启不启动第二个 cloudflared；运行时就绪后只打印不含 Token 的公网地址。关闭先撤销公网授权再结束 cloudflared，同样适用于 `--tunnel` 启动的隧道；即使写盘失败也停止当前进程，但必须报告未持久化。定位失败或意外退出时状态为 `failed` 并撤销授权，不自动重试。本机套接字上的 `/api/tunnel` 及其所有子路径也拒绝会话内进程（403），并非只有 `/local/v1/tunnel` 受限。
+
+`TunnelStatus` 为 `{state, publicUrl?, error?, named, enabled?, settingsAvailable?}`。新增可选 `enabled` 表示当前进程启用期望，包括命令行覆盖，不是持久磁盘值或运行就绪状态；旧服务缺失时客户端才按 starting/ready 推断开关。`settingsAvailable: true` 显式声明 Web 设置页/API 可用，托盘仅凭该能力提供 `/settings/tunnel` 入口，不能从版本号、`enabled` 或存在 `tunnel` 推断；缺失或 false 时仍可使用旧本机开关。
 
 `webmux bridge` 把一条套接字连接原样桥接到标准输入输出（HTTP/1.1 keep-alive 与 WebSocket 升级照常工作）；连接失败时不写标准输出，服务未运行退出码 3，其他错误 1。
 
@@ -349,6 +391,8 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
     "publicUrl": "https://abc.trycloudflare.com", // 仅 ready，不含 Token
     "error": "", // 仅 failed，失败原因
     "named": false, // 是否 Named Tunnel
+    "enabled": true, // 可选：当前进程启用期望（含 CLI 覆盖），不代表磁盘或 ready
+    "settingsAvailable": true, // 可选：只有 true 才提供 Web 隧道设置页入口
   },
   "push": {
     // 仅运行中实例经本机 API 返回；未运行或旧版本实例省略。不含 endpoint 或密钥
@@ -356,7 +400,7 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
     "available": true, // 推送存储可用
     "error": "", // 仅不可用时出现
     "subscriptions": 1, // 已登记设备数
-    "publicOrigin": "https://term.example.com", // 仅配置了 Named Tunnel 时出现
+    "publicOrigin": "https://term.example.com", // 仅当前有效 Named 设置具有主机名时出现，动态跟随设置
   },
 }
 ```

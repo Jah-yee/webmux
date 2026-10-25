@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": {
+    "canEnable": true,
+    "enabled": false,
+    "hostname": "term.example.com",
+    "mode": "named",
+    "source": "web",
+    "state": "off",
+    "storageAvailable": true,
+    "tokenConfigured": true
+  }
+}

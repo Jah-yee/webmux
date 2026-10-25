@@ -178,6 +178,28 @@ export const TunnelInfoSchema = z.object({
   publicUrl: z.string().optional(),
 });
 export type TunnelInfo = z.infer<typeof TunnelInfoSchema>;
+
+export const TunnelSettingsSchema = z.object({
+  enabled: z.boolean(),
+  mode: z.enum(["quick", "named"]),
+  hostname: z.string(),
+  tokenConfigured: z.boolean(),
+  source: z.enum(["web", "config"]),
+  state: TunnelInfoSchema.shape.state,
+  publicUrl: z.string().optional(),
+  error: z.string().optional(),
+  canEnable: z.boolean(),
+  enableBlockedReason: z.string().optional(),
+  storageAvailable: z.boolean(),
+  storageError: z.string().optional(),
+});
+export type TunnelSettings = z.infer<typeof TunnelSettingsSchema>;
+export const TunnelSettingsUpdateSchema = z.object({
+  mode: z.enum(["quick", "named"]),
+  hostname: z.string(),
+  token: z.string().optional(),
+});
+export type TunnelSettingsUpdate = z.infer<typeof TunnelSettingsUpdateSchema>;
 export const ConfigSchema = z.object({
   defaultCwd: z.string(),
   // Older servers do not send this display-only field.
@@ -249,6 +271,7 @@ export const DirectoriesSchema = z.array(z.string());
 export const ErrorSchema = z.object({
   error: z.string(),
   reason: z.string().optional(),
+  notPersisted: z.boolean().optional(),
 });
 export const UploadSchema = z.object({ path: z.string().startsWith("/") });
 export const RecentDirsSchema = z

@@ -126,7 +126,7 @@ func withoutTunnelToken(env []string) []string {
 	return out
 }
 
-// scan forwards cloudflared logs and announces readiness at most once. A
+// scan consumes cloudflared output and announces readiness at most once.
 // timeout only logs an error: a slow edge handshake can still register later,
 // and that origin must not stay permanently forbidden.
 func (t *Tunnel) scan(ctx context.Context, stderr io.Reader, public string, timeout time.Duration, logger *slog.Logger) {
@@ -141,7 +141,6 @@ func (t *Tunnel) scan(ctx context.Context, stderr io.Reader, public string, time
 	scanner := bufio.NewScanner(stderr)
 	for scanner.Scan() {
 		line := scanner.Text()
-		logger.Debug("cloudflared", "line", line)
 		if announced.Load() {
 			continue
 		}

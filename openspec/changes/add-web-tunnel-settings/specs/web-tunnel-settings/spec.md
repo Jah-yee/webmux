@@ -6,7 +6,7 @@
 
 ### Requirement: 网页公网访问设置页
 
-系统 SHALL 提供 `/settings/tunnel` 页面，并从设置页的“公网访问（Cloudflare Tunnel）”摘要卡提供入口。页面 SHALL 展示当前生效模式（Quick 或 Named）、持久化开关、运行状态（`off`、`starting`、`ready`、`failed`）、公共主机名、凭据是否已配置、当前设置的来源（网页设置或配置文件）、公网地址与失败原因，并 SHALL 提供保存并应用、启用、关闭、恢复配置文件设置、复制访问链接和打开配置指南的操作。
+系统 SHALL 提供 `/settings/tunnel` 页面，并从设置页的“公网访问（Cloudflare Tunnel）”摘要卡提供入口。页面 SHALL 展示当前生效模式（Quick 或 Named）、当前进程期望开关（含命令行覆盖与紧急关闭）、运行状态（`off`、`starting`、`ready`、`failed`）、公共主机名、凭据是否已配置、当前设置的来源（网页设置或配置文件）、公网地址与失败原因，并 SHALL 提供保存并应用、启用、关闭、恢复配置文件设置、复制访问链接和打开配置指南的操作。
 
 页面 MUST NOT 展示、回填或请求隧道凭据的明文；凭据输入框在保存成功后 SHALL 清空并显示“已配置”。页面 SHALL 在加载、保存、应用与失败时给出可区分状态，并在窄屏、桌面、亮色与暗色主题下保持可用和可访问。
 
@@ -67,7 +67,7 @@
 
 文件存在时，其 `enabled`、`mode`、`hostname` 与凭据 SHALL 覆盖 TOML `[tunnel]` 的同名项；`cloudflared` 与 `download_mirrors` SHALL 继续来自 TOML。文件不存在时，系统 MUST 完全沿用 TOML 行为且不创建文件。系统 MUST NOT 改写 `config.toml`。
 
-“恢复配置文件设置” SHALL 删除持久化文件、停止当前隧道并回到 TOML 设置；页面 SHALL 说明下次启动按配置文件决定是否自动开启。文件损坏、不可读或被锁定时，系统 SHALL 报告存储不可用、保留原文件、启动回退到 TOML，并让网页设置接口返回 503。
+“恢复配置文件设置” SHALL 删除持久化文件、停止当前隧道并回到 TOML 设置；页面 SHALL 说明当前进程保持关闭、下次启动按配置文件决定是否自动开启。文件损坏、不可读或被锁定时，系统 SHALL 报告存储不可用、保留原文件、保持隧道关闭（即使 TOML 或 `--tunnel` 要求开启），同时保持 HTTP 服务可用。只有确认文件不存在才能使用 TOML 开关。读接口 SHALL 返回 200 与关闭状态、`storageAvailable=false` 及 `storageError`；写接口 SHALL 返回 503。
 
 #### Scenario: 首次保存创建文件
 
@@ -87,18 +87,18 @@
 #### Scenario: 损坏的设置文件
 
 - **WHEN** `tunnel.json` 不是合法 JSON
-- **THEN** WebMux 正常启动并按 TOML 处理隧道，网页设置接口返回 503，原文件不被覆盖
+- **THEN** WebMux 正常启动并保持隧道关闭，读接口报告存储不可用，写接口返回 503，原文件不被覆盖
 
 #### Scenario: 第二个实例
 
 - **WHEN** 另一个 WebMux 实例持有同一 `state_dir` 的 `tunnel-config.lock`
-- **THEN** 本实例回退到 TOML 启动，网页设置接口返回 503 并说明存储被占用
+- **THEN** 本实例正常启动但保持隧道关闭，读接口报告存储被占用，写接口返回 503
 
 ### Requirement: 隧道设置接口
 
 系统 SHALL 在 `/api/` 下提供以下端点，并复用现有 Token、Host 与 Origin 校验：
 
-- `GET /api/tunnel`：返回生效设置、来源、`tokenConfigured`、运行状态、公网地址、错误、`canEnable` 与不可启用原因；
+- `GET /api/tunnel`：返回生效设置、来源、`tokenConfigured`、运行状态、公网地址、错误、`canEnable`、不可启用原因与 `storageAvailable`/`storageError`，存储故障也可读取；
 - `PUT /api/tunnel/settings`：保存 `mode`、`hostname` 与可选新凭据，并在已启用时应用；
 - `PUT /api/tunnel/enabled`：保存并应用 `enabled`；
 - `DELETE /api/tunnel/settings`：删除网页覆盖并恢复 TOML。
@@ -123,7 +123,7 @@
 #### Scenario: 存储不可用
 
 - **WHEN** 设置文件被损坏或被另一个实例锁定，用户请求任一写接口
-- **THEN** 返回 503，原文件与当前运行状态不变
+- **THEN** 返回 503 且原文件不变；设置更新、开启与恢复默认不改变运行状态，但关闭请求仍立即撤权、停止旧 worker 并报告 `off` 和 `notPersisted=true`
 
 #### Scenario: 未认证与非法 Origin
 
@@ -139,7 +139,7 @@
 
 保存设置或切换开关 SHALL 立即应用，不重启 WebMux、不中断 TCP 服务、本机 API、WebSocket 或任何 PTY 会话。运行中修改模式、凭据或 `hostname` 时，系统 SHALL 先撤销旧公网来源，再结束旧 generation 的 cloudflared，并按新设置启动；请求立即返回，状态经 `starting` 到 `ready`，失败时变为 `failed` 且不自动重试。旧 generation 的迟到事件 MUST NOT 重新授权公网来源。
 
-关闭 SHALL 持久化 `enabled=false`，撤销公网授权后结束 cloudflared，状态变为 `off`。开启失败时持久化开关 SHALL 保持用户选择的开启状态，页面显示原因并允许重试或关闭。`GET /api/config` 的 `named`/`hostname`、推送来源判定与托盘状态 SHALL 读取当前生效设置；修改 `hostname` 后旧推送订阅 SHALL 保留原 origin，页面 SHALL 提示重新订阅。
+关闭 SHALL 尝试持久化 `enabled=false`，并且不论持久化结果都立即撤销公网授权后结束 cloudflared，状态变为 `off`。持久化失败 SHALL 返回 503、`notPersisted=true` 与明确错误，之后读接口仍能看到当前进程已关闭，并说明重启状态未保存。开启失败时持久化开关 SHALL 保持用户选择的开启状态，页面显示原因并允许重试或关闭。`GET /api/config` 的 `named`/`hostname`、推送来源判定与托盘状态 SHALL 读取当前生效设置；修改 `hostname` 后旧推送订阅 SHALL 保留原 origin，页面 SHALL 提示重新订阅。
 
 如果当前页面来自即将失效的公网来源，关闭隧道或修改 `hostname` 前 SHALL 弹出确认，说明应用后当前公网页面会断开。
 
@@ -152,6 +152,11 @@
 
 - **WHEN** 隧道 `ready`，用户关闭公网访问
 - **THEN** 持久化开关变为关闭，公网来源立即失效，cloudflared 结束，本机与 VPN 访问正常
+
+#### Scenario: 关闭时持久化失败
+
+- **WHEN** 隧道已就绪但设置文件不能写入，用户请求关闭
+- **THEN** 公网来源立即失效，旧 generation 被取消，当前状态为 `off`，响应为 503 且 `notPersisted=true`；之后 `GET /api/tunnel` 仍为 200，并可读到关闭状态与存储错误
 
 #### Scenario: 隧道启动失败
 

@@ -1,7 +1,9 @@
 package tunnel
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +21,8 @@ quick)
 	echo 'ERR failed to request quick Tunnel: Post "https://api.trycloudflare.com/tunnel": EOF' >&2
 	echo 'INF |  https://abc-def.trycloudflare.com                    |' >&2
 	echo 'INF Registered tunnel connection connIndex=0 location=lax' >&2 ;;
-named) echo 'INF Registered tunnel connection connIndex=0' >&2 ;;
+named) echo "credential: $TUNNEL_TOKEN" >&2
+	echo 'INF Registered tunnel connection connIndex=0' >&2 ;;
 url-only) echo 'INF |  https://abc-def.trycloudflare.com  |' >&2 ;;
 late) sleep 0.5
 	echo 'INF |  https://late-reg.trycloudflare.com  |' >&2
@@ -166,5 +169,20 @@ func TestCloseTerminatesProcess(t *testing.T) {
 	}
 	if err := tun.Err(); err != nil {
 		t.Fatalf("Close reported %v", err)
+	}
+}
+
+func TestNamedCredentialNeverReachesDebugLogs(t *testing.T) {
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	tun, _ := startFake(t, "named", Options{Token: "do-not-log-this-credential", Hostname: "term.example.com", Logger: logger})
+	select {
+	case <-tun.Ready():
+	case <-time.After(5 * time.Second):
+		t.Fatal("fake named tunnel never registered")
+	}
+	tun.Close()
+	if strings.Contains(logs.String(), "do-not-log-this-credential") {
+		t.Fatal("cloudflared output leaked credential")
 	}
 }

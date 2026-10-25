@@ -31,6 +31,8 @@ export interface TerminalSocketView {
   isVisible(): boolean;
   // An application copy request (OSC 52) made by live output.
   copy(text: string): void;
+  resetFind(): void;
+  preserveViewport(): boolean;
 }
 
 export interface TerminalSocketAttachment {
@@ -106,6 +108,7 @@ export function createTerminalSocket(id: string) {
       term.write("", () => {
         if (disposed) return;
         term.reset();
+        view.resetFind();
         replaying = true;
       });
       term.write(payload, () => {
@@ -159,6 +162,10 @@ export function createTerminalSocket(id: string) {
         const frame = new Uint8Array(data);
         const payload = frame.subarray(1);
         if (frame[0] === 0) {
+          const viewportY =
+            appending && view.preserveViewport()
+              ? term.buffer.active.viewportY
+              : undefined;
           // Output missed while hidden leaves a gap: stop writing, keep
           // the offset, and let the foreground reconnect fill it in.
           // Bytes xterm cannot keep up with are dropped the same way; the
@@ -167,11 +174,12 @@ export function createTerminalSocket(id: string) {
           else if (output.write(payload)) {
             offset += payload.length;
             if (appending) {
-              // Like a full replay, a resumed terminal lands on its newest
-              // output once the missing tail has been parsed.
+              // Searches keep their viewport; ordinary resumes show the tail.
               appending = false;
               term.write("", () => {
-                if (!disposed) view.scrollToBottom();
+                if (disposed) return;
+                if (viewportY !== undefined) term.scrollToLine(viewportY);
+                else if (!view.preserveViewport()) view.scrollToBottom();
               });
             }
           } else {
@@ -196,7 +204,7 @@ export function createTerminalSocket(id: string) {
             stale = false;
             restoring = false;
             appending = position.end > position.start;
-            if (!appending) view.scrollToBottom();
+            if (!appending && !view.preserveViewport()) view.scrollToBottom();
           } else {
             synced = false;
             ws.send(2, new Uint8Array());
