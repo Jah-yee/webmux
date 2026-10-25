@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -135,9 +136,11 @@ type serverRun struct {
 	config.Config
 	ConfigPath     string
 	ConfigExplicit bool
-	// ConfigFound reports whether the configuration file existed at start.
+	// ConfigFound reports whether the configuration file was loaded from disk.
 	ConfigFound bool
-	LogFile     string
+	// ConfigCreated reports whether this start created the missing default file.
+	ConfigCreated bool
+	LogFile       string
 	// TokenGenerated marks a per-process token absent from the config.
 	TokenGenerated   bool
 	TunnelSettings   *tunnelsettings.Service
@@ -160,6 +163,11 @@ func loadConfig(args []string) (serverRun, error) {
 	explicit := map[string]bool{}
 	flags.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
 	run := serverRun{ConfigExplicit: explicit["config"]}
+	if !run.ConfigExplicit && !filepath.IsAbs(*path) {
+		// An unset HOME made DefaultPath relative; never auto-write a token
+		// into the current working directory (an untrusted repository).
+		return run, fmt.Errorf("default configuration path %q is not absolute; set HOME or pass --config", *path)
+	}
 	var err error
 	if run.ConfigPath, err = pathutil.Expand(*path); err != nil {
 		return run, err
@@ -169,9 +177,19 @@ func loadConfig(args []string) (serverRun, error) {
 			return run, err
 		}
 	}
+	if !run.ConfigExplicit {
+		// A missing default configuration is created once, then loaded like any
+		// other file. An explicit --config is read-only: a missing path fails.
+		run.ConfigCreated, err = ensureDefaultConfig(run.ConfigPath)
+		if err != nil {
+			return run, fmt.Errorf("create default configuration %s: %w", run.ConfigPath, err)
+		}
+	}
 	_, statErr := os.Stat(run.ConfigPath)
 	run.ConfigFound = statErr == nil
-	c, err := config.Load(run.ConfigPath, run.ConfigExplicit)
+	// Both paths must now name a complete file: auto-creation either published
+	// it or observed a concurrent winner, and an explicit path must exist.
+	c, err := config.Load(run.ConfigPath, true)
 	if err != nil {
 		return run, err
 	}
@@ -322,6 +340,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	go func() { ended <- server.Serve(listener) }()
 	rt.serve()
 	slog.Info("webmux listening", "address", listener.Addr(), "version", version)
+	printConfigNotice(out, c)
 	localLink := local
 	if c.Tunnel.Enabled || c.TokenGenerated {
 		// Tunnel mode and generated tokens print the token because the
@@ -352,4 +371,21 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		return err
 	}
 	return nil
+}
+
+// printConfigNotice names the configuration in use and points at the local
+// API for a persisted token. Neither branch prints the token itself, so
+// service-manager logs never capture it.
+func printConfigNotice(out io.Writer, c serverRun) {
+	if c.ConfigPath == "" {
+		return
+	}
+	if c.ConfigCreated {
+		_, _ = fmt.Fprintln(out, "Created config:  "+c.ConfigPath)
+	} else {
+		_, _ = fmt.Fprintln(out, "Using config:    "+c.ConfigPath)
+	}
+	if c.Token != "" && !c.TokenGenerated {
+		_, _ = fmt.Fprintln(out, "Token: configured; reveal it with: webmux status --json --reveal-token")
+	}
 }

@@ -41,8 +41,13 @@ func newFixture(t *testing.T, platform string) *fixture {
 		environment: map[string]string{"PATH": "/bin:/usr/bin", "SHELL": "/bin/sh", "LANG": "en_US.UTF-8"},
 		out:         &f.output, stderr: &f.output,
 		lookPath: func(name string) (string, error) { return name, nil },
-		initConfig: func(path string) error {
-			return os.WriteFile(path, []byte("token = \""+strings.Repeat("a", 48)+"\"\n"), 0600)
+		initConfig: func(path string) (bool, error) {
+			if _, err := os.Stat(path); err == nil {
+				return false, nil
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return false, err
+			}
+			return true, os.WriteFile(path, []byte("token = \""+strings.Repeat("a", 48)+"\"\n"), 0600)
 		},
 	}
 	f.m.run = func(ctx context.Context, name string, args []string, out, stderr io.Writer) error {
@@ -152,6 +157,21 @@ func TestDryRunAndInvalidConfigHaveNoSideEffects(t *testing.T) {
 		if err := f.m.Install(context.Background(), path, true, false, false); err == nil || len(f.calls) != 0 {
 			t.Fatal("invalid configuration installed")
 		}
+	}
+}
+
+func TestConfigCreationFailureStopsInstall(t *testing.T) {
+	f := newFixture(t, "linux")
+	f.m.initConfig = func(string) (bool, error) {
+		return false, errors.New("disk full")
+	}
+	path := filepath.Join(f.m.home, "config.toml")
+	err := f.m.Install(context.Background(), path, true, false, false)
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("config creation failure: %v", err)
+	}
+	if _, err := os.Stat(f.m.definitionPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("service definition was written after config creation failed")
 	}
 }
 

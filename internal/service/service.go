@@ -25,10 +25,10 @@ type Manager struct {
 	out, stderr                                    io.Writer
 	run                                            commandRunner
 	lookPath                                       func(string) (string, error)
-	initConfig                                     func(string) error
+	initConfig                                     func(string) (bool, error)
 }
 
-func New(out, stderr io.Writer, initConfig func(string) error) (*Manager, error) {
+func New(out, stderr io.Writer, initConfig func(string) (bool, error)) (*Manager, error) {
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
 		return nil, fmt.Errorf("user services are unsupported on %s", runtime.GOOS)
 	}
@@ -126,13 +126,22 @@ func (m *Manager) Install(ctx context.Context, path string, createConfig, force,
 		return err
 	}
 	if createConfig {
-		if _, err := os.Stat(abs); errors.Is(err, os.ErrNotExist) {
-			if err := m.initConfig(abs); err != nil {
-				return err
-			}
-			fmt.Fprintf(m.out, "Created %s (0600). Read its token to sign in.\n", abs)
-		} else if err != nil {
+		created, err := m.initConfig(abs)
+		if err != nil {
 			return err
+		}
+		if created {
+			fmt.Fprintf(m.out, "Created %s (0600). Read its token to sign in.\n", abs)
+		}
+		// The first load saw in-memory defaults when the file was absent, and
+		// another process may have won the creation race. Reload the published
+		// file so validation and the installed service share one token.
+		c, err = config.Load(abs, true)
+		if err != nil {
+			return fmt.Errorf("load configuration: %w", err)
+		}
+		if err := c.Validate(); err != nil {
+			return fmt.Errorf("validate configuration: %w", err)
 		}
 	}
 	if m.platform == "darwin" {

@@ -41,8 +41,9 @@ func TestServiceCLIHelpAndUsage(t *testing.T) {
 
 func TestServiceConfigUsesExistingInitializer(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "config.toml")
-	if err := initializeServiceConfig(path); err != nil {
-		t.Fatal(err)
+	created, err := initializeServiceConfig(path)
+	if err != nil || !created {
+		t.Fatalf("initialize: created=%v %v", created, err)
 	}
 	c, err := config.Load(path, true)
 	if err != nil {
@@ -58,8 +59,8 @@ func TestServiceConfigUsesExistingInitializer(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("service configuration is not private")
 	}
-	if err := initializeServiceConfig(path); err == nil {
-		t.Fatal("service installation overwrote an existing configuration")
+	if created, err := initializeServiceConfig(path); err != nil || created {
+		t.Fatalf("existing configuration: created=%v %v", created, err)
 	}
 	kept, err := config.Load(path, true)
 	if err != nil || kept.Token != c.Token {

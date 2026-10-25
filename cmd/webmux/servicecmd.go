@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/rainchan/webmux/deploy"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -81,12 +80,8 @@ func serviceCommand(args []string, out, stderr io.Writer) int {
 	return contract.ExitOK
 }
 
-// Reuse the same commented template, token generator and exclusive writer as
-// config init; installing a service never replaces an existing config.
-func initializeServiceConfig(path string) error {
-	content, err := renderConfigTemplate(deploy.ConfigExample, generateToken(), "")
-	if err != nil {
-		return err
-	}
-	return writeNewConfig(path, content, false)
+// Reuse the same generation and exclusive publication as a first server
+// start; installing a service never replaces an existing config.
+func initializeServiceConfig(path string) (bool, error) {
+	return ensureDefaultConfig(path)
 }

@@ -11,14 +11,16 @@
 ## 配置
 
 ```sh
-webmux config init                 # 生成 0600 的 ~/.config/webmux/config.toml，含随机 Token
+webmux config init                 # 手动预生成 0600 的 ~/.config/webmux/config.toml，含随机 Token
 # 或：mkdir -p ~/.config/webmux && cp deploy/config.example.toml ~/.config/webmux/config.toml && chmod 600 ~/.config/webmux/config.toml
 ```
 
 示例见 [`deploy/config.example.toml`](../deploy/config.example.toml)。加载规则：
 
-- 默认路径为 `~/.config/webmux/config.toml`，不存在时全部使用默认值；通过 `--config` 显式指定的文件不存在时启动失败。`--config` 与 `--log-file` 支持 `~/`。
-- 命令行 `--listen`、`--token` 优先于配置文件，显式传入空 token 也会覆盖配置。
+- 默认路径为 `~/.config/webmux/config.toml`。未显式指定 `--config` 且该文件不存在时，首次 `webmux` / `webmux serve` 会用与 `config init` 相同的模板和随机 token 生成它（目录 0700、文件 0600），然后正常启动；启动输出会说明是新建还是使用现有配置，并提示用 `webmux status --json --reveal-token` 查看已持久化的 token。并发首次启动通过原子发布只创建一个文件，各进程读取同一 token。
+- 通过 `--config` 显式指定的文件只读：文件存在时只读取该文件，不存在时启动失败且绝不创建。`--config` 与 `--log-file` 支持 `~/`。
+- 默认配置已存在时直接读取，不修改、不重写。生成失败（主目录只读、权限不足、磁盘满等）会报错退出，不会静默回退到内存默认值。
+- 命令行 `--listen`、`--token` 优先于配置文件，显式传入空 token 也会覆盖配置；覆盖只影响本次进程，不写入新生成的默认配置。仅 `config show`、`config validate`、`status`、`stop` 等客户端命令只读取配置，不会触发生成。
 - `webmux version` 输出版本号；`webmux version --json` 另含控制契约版本（见 [API 与协议](protocol.md#控制面-json-契约)）。
 
 ```sh
@@ -44,20 +46,20 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 
 ### 配置项
 
-| 配置项               | 默认值                                                     | 说明                                                                                                                                                                 |
-| -------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`                                             | HTTP / WebSocket 监听地址                                                                                                                                            |
-| `token`              | 空                                                         | 共享 token；监听 loopback 且未启用隧道时空表示不认证；其他监听地址或启用隧道且为空时每次启动随机生成，并打印带 `#token=` 的本地链接；隧道模式显式 token 至少 43 字符 |
-| `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                                                                                               |
-| `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                                                                                                    |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                                                                                                   |
-| `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                                                                                         |
-| `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                                                                                                       |
-| `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件                                                                                    |
-| `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                                                                                                |
-| `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                                                                                                 |
-| `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                                                                                             |
-| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                                                                                                        |
+| 配置项               | 默认值                                                     | 说明                                                                                                                                                                                                                                                    |
+| -------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listen`             | `0.0.0.0:7681`                                             | HTTP / WebSocket 监听地址                                                                                                                                                                                                                               |
+| `token`              | 空                                                         | 共享 token；首次启动自动生成并持久化，可用 `webmux status --json --reveal-token` 查看；已有配置监听 loopback 且未启用隧道时空表示不认证；其他监听地址或启用隧道且为空时每次启动临时生成，并打印带 `#token=` 的本地链接；隧道模式显式 token 至少 43 字符 |
+| `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                                                                                                                                                                                  |
+| `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                                                                                                                                                                                       |
+| `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                                                                                                                                                                                      |
+| `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                                                                                                                                                                            |
+| `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                                                                                                                                                                                          |
+| `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件                                                                                                                                                                       |
+| `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                                                                                                                                                                                   |
+| `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                                                                                                                                                                                    |
+| `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                                                                                                                                                                                |
+| `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                                                                                                                                                                                           |
 
 所有启动命令都由使用者自定义：在设置页保存“名称 + 完整命令 + 环境变量”，新建会话时选用，或直接填写不保存的临时命令。新安装首次启动（`launch-configs.json` 不存在）时自动写入 Shell（`$SHELL -l -i`，未设置时为 `/bin/sh`）、Claude Code、Codex CLI、Gemini CLI、Open Code、omp 六条启动配置，agent 预设以 `bash -ic 'exec -- "$@"' webmux <程序>` 加载 `~/.bashrc`；它们是普通配置，可编辑或删除。不再读取 `[[presets]]` 或 `shell`；旧配置请改为在设置页保存。
 
@@ -87,7 +89,7 @@ webmux service restart
 webmux service uninstall
 ```
 
-- `install` 写入用户服务定义并立即启用、启动；缺少默认配置时自动创建带随机 token 的配置。显式 `--config PATH` 指定的文件必须已经存在且有效。
+- `install` 写入用户服务定义并立即启用、启动；缺少默认配置时与首次 `serve` 共用同一生成逻辑，创建带随机 token 的 0600 配置后重新读取并校验。显式 `--config PATH` 指定的文件必须已经存在且有效，不会自动创建。
 - 服务使用当前可执行文件和配置文件的绝对路径，不复制二进制。移动二进制后，需在新位置执行 `service install --force` 更新定义。
 - 已有服务定义需要 `service install --force` 才能替换，并会重启服务。`service install --dry-run` 只输出服务定义，不写文件、不创建配置、不操作服务；可与 `--config` 配合使用。
 - `stop`、`restart`、覆盖安装和卸载会结束当前所有终端会话，滚屏不会在重启后恢复。`uninstall` 保留二进制、配置、日志和状态目录。
@@ -166,7 +168,7 @@ install -m 755 webmux-linux-amd64 ~/.local/bin/webmux # arm64 设备用 webmux-l
 webmux config init
 ```
 
-也可以跳过 `config init`，之后在托盘菜单中点击“初始化配置（生成 Token）”。托盘只在配置文件不存在时提供该入口，从不改写已有配置；修改配置请用“打开 WebMux 配置文件”。缺少 webmux 时托盘停在错误状态且不定时重试；手动安装后重新打开托盘菜单即恢复。
+也可以跳过 `config init`：WSL 中的 `serve` 首次启动同样会在默认路径生成配置。托盘菜单的“初始化配置（生成 Token）”调用同一个 `config init`，只在配置文件不存在时提供该入口，从不改写已有配置；修改配置请用“打开 WebMux 配置文件”。缺少 webmux 时托盘停在错误状态且不定时重试；手动安装后重新打开托盘菜单即恢复。
 
 ### 放置托盘与登录启动
 
@@ -278,7 +280,7 @@ cloudflared = "" # 可选：cloudflared 路径
 
 Cloudflare 控制台步骤、两个 token 的区别、Windows/WSL 托盘操作、验证方法与故障排查见 **[Cloudflare Named Tunnel 配置指南](cloudflare-tunnel.md)**。
 
-> 隧道模式或自动生成 token 时打印的链接与二维码包含 token；以 systemd / launchd 运行时它们会写入 journal 或日志文件，请限制日志访问权限；自动生成的 token 每次重启都会更换。非隧道模式不打印固定的已配置 token。
+> 隧道模式或本次进程临时生成 token 时打印的链接与二维码包含 token；以 systemd / launchd 运行时它们会写入 journal 或日志文件，请限制日志访问权限。首次启动写入配置文件的 token 会跨重启保留，不会每次更换；只有未持久化的临时 token 会在重启时更换。非隧道模式不打印固定的已配置 token，启动输出只提示用 `webmux status --json --reveal-token` 查看。
 
 ## 手机推送（Web Push）
 

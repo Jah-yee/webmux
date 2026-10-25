@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/pathutil"
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 const configUsage = "usage: webmux config path|show|validate|check|init [--config PATH] [--json]"
@@ -191,6 +193,37 @@ func renderConfigTemplate(template, token, listen string) (string, error) {
 	return out, nil
 }
 
+// newConfigContent renders the shipped template with a fresh random token.
+// Every entry point that creates a configuration uses it so the contents and
+// permissions do not drift from `webmux config init`.
+func newConfigContent(listen string) (string, error) {
+	return renderConfigTemplate(deploy.ConfigExample, generateToken(), listen)
+}
+
+// ensureDefaultConfig creates path from the embedded template when it does not
+// exist. It returns created=true only when this call published the file.
+// Concurrent callers race on an atomic hard link: the loser sees the complete
+// winner and reuses its token. An existing file is never opened for writing.
+func ensureDefaultConfig(path string) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return false, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	content, err := newConfigContent("")
+	if err != nil {
+		return false, err
+	}
+	err = publishConfig(path, content, false)
+	if errors.Is(err, os.ErrExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func configInit(args []string, stdout, stderr io.Writer) int {
 	var listen *string
 	var force *bool
@@ -207,7 +240,7 @@ func configInit(args []string, stdout, stderr io.Writer) int {
 			return contract.ExitUsage
 		}
 	}
-	content, err := renderConfigTemplate(deploy.ConfigExample, generateToken(), *listen)
+	content, err := newConfigContent(*listen)
 	if err == nil {
 		err = writeNewConfig(path, content, *force)
 	}
@@ -221,23 +254,33 @@ func configInit(args []string, stdout, stderr io.Writer) int {
 
 var errConfigExists = errors.New("configuration file already exists; use --force to replace it (the old file is kept as .bak)")
 
-func writeNewConfig(path, content string, force bool) error {
-	aside := ""
-	if force {
-		aside = ".bak"
-	}
-	f, err := createFresh(path, aside, 0)
-	if !force && errors.Is(err, os.ErrExist) {
-		return fmt.Errorf("%s: %w", path, errConfigExists)
-	}
-	if err != nil {
+// publishConfig stages content next to path and publishes it atomically.
+// Without force an existing target is never replaced; with force the existing
+// file is first kept as .bak. Staging means a concurrent reader sees either
+// no file or the complete new one, never a partially written token.
+func publishConfig(path, content string, force bool) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
-	if _, err = f.WriteString(content); err == nil {
-		err = f.Sync()
+	if force {
+		if _, err := os.Lstat(path); err == nil {
+			if err := os.Rename(path, path+".bak"); err != nil {
+				return err
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
+	return statefile.Write(path, []byte(content), statefile.Options{
+		TempPattern: ".config-*",
+		Exclusive:   !force,
+	})
+}
+
+func writeNewConfig(path, content string, force bool) error {
+	err := publishConfig(path, content, force)
+	if !force && errors.Is(err, os.ErrExist) {
+		return fmt.Errorf("%s: %w", path, errConfigExists)
 	}
 	return err
 }

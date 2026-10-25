@@ -64,7 +64,6 @@ func TestConfigurationPrecedence(t *testing.T) {
 		listen, token string
 		generated     bool
 	}{
-		{"defaults", nil, "0.0.0.0:7681", "", true},
 		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", false},
 		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", false},
 		{"explicit empty token on loopback", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", false},

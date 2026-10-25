@@ -22,18 +22,22 @@ func TestTunnelFlagAndGeneratedToken(t *testing.T) {
 	if err := os.WriteFile(enabled, []byte("[tunnel]\nenabled = true\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	plain := filepath.Join(dir, "plain.toml")
+	if err := os.WriteFile(plain, []byte("listen = '127.0.0.1:7681'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, row := range []struct {
 		name      string
 		args      []string
 		tunnel    bool
-		token     string // "generated" means a fresh 43-character token
+		token     string // "generated", "persisted", "" or an exact token
 		generated bool
 	}{
-		{"default", nil, false, "", false},
-		{"flag enables", []string{"--tunnel"}, true, "", true},
+		{"default auto config", nil, false, "persisted", false},
+		{"flag enables", []string{"--config", plain, "--tunnel"}, true, "generated", true},
 		{"flag disables file", []string{"--config", enabled, "--tunnel=false"}, false, "", false},
-		{"file enables", []string{"--config", enabled}, true, "", true},
-		{"configured token kept", []string{"--tunnel", "--token", tunnelTestToken}, true, tunnelTestToken, false},
+		{"file enables", []string{"--config", enabled}, true, "generated", true},
+		{"configured token kept", []string{"--config", enabled, "--tunnel", "--token", tunnelTestToken}, true, tunnelTestToken, false},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			// Loopback isolates the tunnel rule from wildcard token generation.
@@ -46,15 +50,31 @@ func TestTunnelFlagAndGeneratedToken(t *testing.T) {
 			if c.Tunnel.Enabled != row.tunnel {
 				t.Fatalf("tunnel enabled %v", c.Tunnel.Enabled)
 			}
-			if row.generated {
-				c.TunnelSettings.Close()
-				again, _ := loadConfig(args)
-				t.Cleanup(again.TunnelSettings.Close)
-				if len(c.Token) != 43 || c.Token == again.Token {
-					t.Fatalf("generated tokens %q %q", c.Token, again.Token)
+			if c.TokenGenerated != row.generated {
+				t.Fatalf("token generated %v, want %v", c.TokenGenerated, row.generated)
+			}
+			switch row.token {
+			case "generated", "persisted":
+				if len(c.Token) != 43 {
+					t.Fatalf("token length %d", len(c.Token))
 				}
-			} else if c.Token != row.token {
-				t.Fatalf("token %q, want %q", c.Token, row.token)
+				c.TunnelSettings.Close()
+				again, err := loadConfig(args)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(again.TunnelSettings.Close)
+				same := c.Token == again.Token
+				if row.token == "generated" && same {
+					t.Fatalf("generated tokens were reused: %q", c.Token)
+				}
+				if row.token == "persisted" && !same {
+					t.Fatalf("persisted token changed: %q -> %q", c.Token, again.Token)
+				}
+			default:
+				if c.Token != row.token {
+					t.Fatalf("token %q, want %q", c.Token, row.token)
+				}
 			}
 		})
 	}
