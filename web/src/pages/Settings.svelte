@@ -271,9 +271,7 @@
         <Card.Title id="launch-configs-title">启动配置</Card.Title>
         <Card.Description
           >保存“名称 + 完整命令 +
-          环境变量”，在新建会话时选用；保存在服务端，所有设备共享。内置预设来自服务端配置文件的
-          <code class="font-mono">[[presets]]</code
-          >，需编辑配置文件并重启服务才会变化，不在这里管理。启动配置保存的是创建时的命令副本，之后修改或删除内置预设不会影响它。</Card.Description
+          环境变量”，在新建会话时选用；自定义启动配置保存在服务端，所有设备共享。也可以在新建会话时输入不保存的临时命令。</Card.Description
         >
       </Card.Header>
       <Card.Content class="space-y-4">

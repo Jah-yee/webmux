@@ -14,8 +14,8 @@ import (
 )
 
 func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
-	c := config.Config{Presets: []config.Preset{{Name: "blocked", Cmd: []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}}}}
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: testPresets(c.Presets)})
+	c := config.Config{}
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())})))
 	defer server.Close()
 	defer func() {
@@ -23,7 +23,7 @@ func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "blocked", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

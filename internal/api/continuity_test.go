@@ -32,8 +32,8 @@ func recorder(path string) []string {
 
 func newContinuityFixture(t *testing.T, argv []string) *continuityFixture {
 	t.Helper()
-	presets := []config.Preset{{Name: "record", Cmd: argv}}
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: testPresets(presets)})
+
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(func() {
 		cancel()
@@ -41,11 +41,11 @@ func newContinuityFixture(t *testing.T, argv []string) *continuityFixture {
 		defer done()
 		m.Shutdown(shutdown)
 	})
-	item, err := m.Create("", "record", nil, nil, "", nil)
+	item, err := m.Create("", argv, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(New(testDeps(t, Deps{Config: config.Config{Presets: presets}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())})))
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())})))
 	t.Cleanup(server.Close)
 	until := time.Now().Add(5 * time.Second)
 	for !bytes.Contains(item.Buffer(), []byte("READY")) {

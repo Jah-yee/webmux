@@ -231,7 +231,11 @@ test("drafts survive navigation and reload, remain session-local and stop persis
   await mode(page).click();
   await draft(page).fill("A private draft");
   const response = await request.post("/api/sessions", {
-    data: { cwd: workDir, preset: "shell", name: "Draft B" },
+    data: {
+      cwd: workDir,
+      cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+      name: "Draft B",
+    },
   });
   expect(response.status()).toBe(201);
   const back = () =>

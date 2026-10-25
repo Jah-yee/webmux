@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/workspace"
 )
 
 func TestAttentionSignalOptions(t *testing.T) {
@@ -43,12 +45,13 @@ func TestAttentionSignalOptions(t *testing.T) {
 	}
 }
 
-func TestAgentPresetsLoadBashrcAndForwardArguments(t *testing.T) {
+func TestSavedLaunchConfigLoadsBashrcAndForwardsArguments(t *testing.T) {
 	home := t.TempDir()
 	bin := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("PATH", bin+string(filepath.ListSeparator)+os.Getenv("PATH"))
-	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte("export WEBMUX_TEST_TOKEN=bashrc\n"), 0600); err != nil {
+	t.Setenv("WEBMUX_TEST_TOKEN", "")
+	bashrc := "export WEBMUX_TEST_TOKEN=bashrc\nexport PATH='" + strings.ReplaceAll(bin, "'", "'\\''") + "':\"$PATH\"\n"
+	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(bashrc), 0600); err != nil {
 		t.Fatal(err)
 	}
 	c, err := config.Load(filepath.Join(home, "config.toml"), false)
@@ -64,28 +67,33 @@ func TestAgentPresetsLoadBashrcAndForwardArguments(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	for _, agent := range []string{"claude", "codex", "omp"} {
-		t.Run(agent, func(t *testing.T) {
-			script := "#!/bin/sh\nprintf 'agent=%s token=%s\\n' \"" + agent + "\" \"$WEBMUX_TEST_TOKEN\"\nfor arg in \"$@\"; do printf 'arg=<%s>\\n' \"$arg\"; done\n"
-			if err := os.WriteFile(filepath.Join(bin, agent), []byte(script), 0700); err != nil {
-				t.Fatal(err)
-			}
-			s, err := m.Create(home, agent, nil, []string{"--resume", "two words"}, "", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			select {
-			case <-s.Done():
-			case <-time.After(5 * time.Second):
-				t.Fatalf("%s preset did not exit", agent)
-			}
-			out := string(s.Buffer())
-			if !strings.Contains(out, "agent="+agent+" token=bashrc") {
-				t.Fatalf("~/.bashrc environment missing: %q", out)
-			}
-			if !strings.Contains(out, "arg=<--resume>") || !strings.Contains(out, "arg=<two words>") {
-				t.Fatalf("preset arguments missing or split: %q", out)
-			}
-		})
+	launches := launch.Open(t.TempDir())
+	defer launches.Close()
+	service := workspace.New(t.TempDir(), m, launches, home)
+	defer service.Close()
+	agent := "opencode"
+	script := "#!/bin/sh\nprintf 'agent=%s token=%s\\n' \"" + agent + "\" \"$WEBMUX_TEST_TOKEN\"\nfor arg in \"$@\"; do printf 'arg=<%s>\\n' \"$arg\"; done\n"
+	if err := os.WriteFile(filepath.Join(bin, agent), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := launches.Create(launch.Input{Name: "Open Code", Cmd: []string{"bash", "-ic", `exec opencode "$@"`, "opencode", "--resume", "two words", "", "$HOME"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := service.CreateSession(context.Background(), workspace.SessionInput{Cwd: home, ConfigID: &saved.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-s.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatalf("%s saved command did not exit", agent)
+	}
+	out := string(s.Buffer())
+	if !strings.Contains(out, "agent="+agent+" token=bashrc") {
+		t.Fatalf("~/.bashrc environment missing: %q", out)
+	}
+	if !strings.Contains(out, "arg=<--resume>") || !strings.Contains(out, "arg=<two words>") || !strings.Contains(out, "arg=<>") || !strings.Contains(out, "arg=<$HOME>") {
+		t.Fatalf("saved command arguments missing or split: %q", out)
 	}
 }

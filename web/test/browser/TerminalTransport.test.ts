@@ -244,7 +244,6 @@ function sessionInfo(title: string) {
     generation,
     title,
     cwd: "/tmp",
-    preset: "shell",
     cmd: ["bash"],
     status: "running",
     exitCode: null,

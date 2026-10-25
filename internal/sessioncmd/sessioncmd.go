@@ -125,7 +125,7 @@ func Run(ctx context.Context, e Env, args []string) int {
 		_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
 		return contract.ExitUsage
 	}
-	request := contract.CreateSessionRequest{Preset: "custom", Cmd: argv, Cwd: dir, Name: *name}
+	request := contract.CreateSessionRequest{Cmd: argv, Cwd: dir, Name: *name}
 	if len(env) > 0 {
 		request.Env = map[string]string(env)
 	}

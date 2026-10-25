@@ -10,13 +10,13 @@ import (
 
 func TestPersistentPTY(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "shell", Cmd: []string{"/bin/bash", "--noprofile", "--norc", "-i"}}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "shell", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-i"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,13 +102,13 @@ func TestReportedCwdClearsWhenSessionExits(t *testing.T) {
 
 func TestResizeFromRequiresTheControllingConnection(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "idle", Cmd: []string{"/bin/sleep", "30"}}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "idle", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/sleep", "30"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,13 +145,13 @@ func TestResizeFromRequiresTheControllingConnection(t *testing.T) {
 
 func newIdleSession(t *testing.T, cmd ...string) *Session {
 	t.Helper()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "idle", Cmd: cmd}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", "idle", nil, nil, "", nil)
+	s, err := m.Create("", cmd, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

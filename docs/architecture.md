@@ -143,7 +143,7 @@ flowchart LR
 
 ## 会话生命周期
 
-1. **创建**：校验并规范化 cwd，组装 argv（预设 argv + 追加参数，或 `custom` 的完整 argv），设置 `TERM=xterm-256color`、`COLORTERM=truecolor` 和 `WEBMUX_SESSION_ID`，在新会话（`setsid`）中启动 PTY。
+1. **创建**：解析已保存的自定义启动配置或使用请求中的完整 argv，校验并规范化 cwd，设置 `TERM=xterm-256color`、`COLORTERM=truecolor` 和 `WEBMUX_SESSION_ID`，在新会话（`setsid`）中启动 PTY；不隐式经过 shell 或展开参数。
 2. **运行**：reader 循环读取 PTY → 写入环形缓冲 → 更新 OSC 标题与屏幕预览 → 广播给订阅者。
 3. **退出**：子进程结束后先清理残留子进程、排空 PTY，再发布退出事件，保证退出帧之前的输出完整。
 4. **关闭**：向进程组发送 SIGHUP，5 秒后 SIGKILL。按会话 ID 与进程树查找其他 job-control 进程组；Linux 另按继承的 `WEBMUX_SESSION_ID` 查找，并通过 subreaper 回收孤儿进程。

@@ -46,7 +46,7 @@ func TestUnknownStatusAndExecutablePermissionAreNotClean(t *testing.T) {
 	if err != nil || snapshot.Availability != "unavailable" || snapshot.Error == "" {
 		t.Fatalf("executable permission failure: %+v %v", snapshot, err)
 	}
-	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: root, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf PERMISSION_DIRECT"}})
+	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: root, Cmd: []string{"/bin/sh", "-c", "printf PERMISSION_DIRECT"}})
 	if err != nil {
 		t.Fatal(err)
 	}

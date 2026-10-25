@@ -59,7 +59,7 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 - Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. PTY data stays binary, not JSON or decoded text.
 - Return contextual Go errors and API JSON errors with meaningful HTTP statuses. Services report sentinel error kinds (for example `workspace.ErrConflict`); only `internal/api/errors.go` maps them to statuses. Frontend failures use `APIError`; HTTP 401 triggers `webmux:auth`. Preserve cancellation/deadlines for PTY writes and join spawned connection goroutines.
 - Protect manager/session state with existing locks; do not hold them across blocking network or PTY operations. Shared output chunks stay immutable. Exit publication follows PTY drain and process cleanup.
-- Execute commands as argv, not shell-expanded strings. Preset creation and `preset: "custom"` command creation are mutually exclusive contracts. Preserve authentication and Origin checks on API/WebSocket paths; never log terminal input/output or expose tokens through configuration responses.
+- Execute commands as argv, not shell-expanded strings. Session creation takes either a saved custom launch `configId` or an explicit full `cmd`/`env`; they are mutually exclusive. There are no built-in launch presets or implicit shell wrappers. Loading `.bashrc` requires an explicit command such as `bash -ic 'exec opencode "$@"' opencode`. Preserve authentication and Origin checks on API/WebSocket paths; never log terminal input/output or expose tokens through configuration responses.
 
 ## Important Files
 

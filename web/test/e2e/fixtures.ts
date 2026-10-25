@@ -148,7 +148,10 @@ export async function createShell(
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await page.getByRole("button", { name: "Shell", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await page
+    .getByLabel("自定义启动命令", { exact: true })
+    .fill("/bin/bash --noprofile --norc -i");
   if (cwd) await page.getByLabel("工作目录", { exact: true }).fill(cwd);
   await page.getByLabel("会话名称", { exact: false }).fill(name);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();

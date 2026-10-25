@@ -270,13 +270,13 @@ func TestRealSessionAttentionSurvivesSpinner(t *testing.T) {
 	script := `env > env.txt; printf '\033]777;notify;warp://cli-agent;{"v":1,"event":"question_asked"}\007'; ` +
 		`stty raw -echo; while :; do printf '\r|'; sleep 0.05; printf '\r/'; sleep 0.05; done`
 	dir := t.TempDir()
-	m := NewManager(Options{DefaultCwd: dir, Presets: []Preset{{Name: "agent", Cmd: []string{"/bin/bash", "-c", script}}}})
+	m := NewManager(Options{DefaultCwd: dir})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "agent", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", script}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

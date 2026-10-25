@@ -8,7 +8,6 @@ function session(id: string, second = 0): SessionInfo {
     generation: "0123456789abcdef",
     title: id,
     cwd: "/work",
-    preset: "shell",
     cmd: ["bash"],
     status: "running",
     exitCode: null,

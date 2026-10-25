@@ -16,13 +16,13 @@ import (
 
 func TestAdoptedZombieReapedWhileLeaderLives(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "daemon", Cmd: []string{"/bin/bash", "-c", `setsid /bin/bash -c 'sleep 0.05 & printf "DAEMON_CHILD=%s\n" "$!"'; read -r stop; exit 23`}}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "daemon", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", `setsid /bin/bash -c 'sleep 0.05 & printf "DAEMON_CHILD=%s\n" "$!"'; read -r stop; exit 23`}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

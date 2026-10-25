@@ -26,7 +26,6 @@ export const SessionInfoSchema = z.object({
   generation: z.string().regex(/^[0-9a-f]{16}$/),
   title: z.string(),
   cwd: z.string(),
-  preset: z.string(),
   cmd: z.array(z.string()).min(1),
   status: z.enum(["running", "waiting", "idle", "exited"]),
   exitCode: z.number().int().nullable(),
@@ -41,16 +40,6 @@ export const SessionInfoSchema = z.object({
   reportedCwd: ReportedCwdSchema.nullable(),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
-
-export const PresetsSchema = z.array(
-  z.object({
-    name: z.string(),
-    label: z.string(),
-    cmd: z.array(z.string()).min(1),
-    allowArgs: z.boolean(),
-  }),
-);
-export type Preset = z.infer<typeof PresetsSchema>[number];
 
 // Launch configs are server-stored launch commands. Summaries (list) carry only
 // env variable names; the full config with values is fetched per id for edits.

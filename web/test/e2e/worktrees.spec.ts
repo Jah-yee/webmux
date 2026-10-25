@@ -63,7 +63,10 @@ async function createTree(page: Page, branch: string, name: string) {
   const path = await page
     .getByLabel("新工作树完整路径", { exact: true })
     .inputValue();
-  await page.getByRole("button", { name: "Shell", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await page
+    .getByLabel("自定义启动命令", { exact: true })
+    .fill("/bin/bash --noprofile --norc -i");
   await page.getByLabel("会话名称", { exact: false }).fill(name);
   await expect(branchInput).toHaveValue(branch);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
@@ -106,7 +109,10 @@ test("repository → two worktrees → shared PTYs → guarded force removal ret
   await alphaGroup
     .getByRole("button", { name: "启动会话", exact: true })
     .click();
-  await page.getByRole("button", { name: "Shell", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await page
+    .getByLabel("自定义启动命令", { exact: true })
+    .fill("/bin/bash --noprofile --norc -i");
   await page.getByLabel("会话名称", { exact: false }).fill("Alpha helper");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
@@ -198,10 +204,7 @@ test("failed agent start retains new worktree and retry does not create again; u
   await expect(branchInput).not.toHaveValue("");
   await branchInput.fill("retry-agent");
   await expect(branchInput).toHaveValue("retry-agent");
-  await page
-    .getByRole("button", { name: "临时命令（不保存）", exact: true })
-    .click();
-  await page.getByRole("button", { name: "自定义", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
   await page.getByLabel("自定义启动命令").fill("/webmux-missing-agent");
   await expect(branchInput).toHaveValue("retry-agent");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
@@ -211,7 +214,10 @@ test("failed agent start retains new worktree and retry does not create again; u
       "工作树已创建。再次提交只启动会话，不会重复创建分支或目录。",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Shell", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await page
+    .getByLabel("自定义启动命令", { exact: true })
+    .fill("/bin/bash --noprofile --norc -i");
   await page.getByLabel("会话名称", { exact: false }).fill("Retained shell");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/[a-z0-9]+$/);
@@ -264,7 +270,10 @@ test("external changes refresh and restart retains registry but not sessions", a
   await expect(repo.getByText("external", { exact: true })).toBeVisible();
   const session = await (
     await request.post("/api/sessions", {
-      data: { cwd: external, preset: "shell" },
+      data: {
+        cwd: external,
+        cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+      },
     })
   ).json();
   expect(session.workspace.repositoryId).toBe(before[0].id);
@@ -305,7 +314,10 @@ test("without Git an isolated real service still starts and runs a direct shell"
       .locator("header")
       .getByRole("button", { name: "＋ 新建会话", exact: true })
       .click();
-    await page.getByRole("button", { name: "Shell", exact: true }).click();
+    await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+    await page
+      .getByLabel("自定义启动命令", { exact: true })
+      .fill("/bin/bash --noprofile --norc -i");
     await page
       .getByRole("button", { name: "创建并进入 →", exact: true })
       .click();
@@ -343,7 +355,7 @@ test("multiple repositories keep every session visible through local failure, co
     [workDir, "Direct shell"],
   ]) {
     const response = await request.post("/api/sessions", {
-      data: { cwd, preset: "shell", name },
+      data: { cwd, cmd: ["/bin/bash", "--noprofile", "--norc", "-i"], name },
     });
     expect(response.status()).toBe(201);
     entries.push(await response.json());
@@ -445,7 +457,11 @@ test("existing branch creation, safe removal and stale destructive confirmation 
   ).toBeVisible();
   const started = await (
     await request.post("/api/sessions", {
-      data: { cwd: path, preset: "shell", name: "New arrival" },
+      data: {
+        cwd: path,
+        cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+        name: "New arrival",
+      },
     })
   ).json();
   await page.getByRole("button", { name: "确认安全删除", exact: true }).click();
@@ -539,7 +555,10 @@ test("direct launch still offers explicit directory creation without registering
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
   await page.getByLabel("工作目录", { exact: true }).fill(path);
-  await page.getByRole("button", { name: "Shell", exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await page
+    .getByLabel("自定义启动命令", { exact: true })
+    .fill("/bin/bash --noprofile --norc -i");
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page

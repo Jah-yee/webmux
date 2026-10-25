@@ -164,24 +164,16 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-type PresetV1 struct {
-	Name      string   `json:"name"`
-	Label     string   `json:"label"`
-	Argv      []string `json:"argv"`
-	AllowArgs bool     `json:"allowArgs"`
-}
-
 // ConfigV1 is printed by `webmux config show --json`; it never has a token.
 type ConfigV1 struct {
-	V               int        `json:"v"`
-	Path            string     `json:"path"`
-	Exists          bool       `json:"exists"`
-	Listen          string     `json:"listen"`
-	TokenConfigured bool       `json:"tokenConfigured"`
-	DefaultCwd      string     `json:"defaultCwd"`
-	StateDir        string     `json:"stateDir"`
-	AllowedOrigins  []string   `json:"allowedOrigins"`
-	Presets         []PresetV1 `json:"presets"`
+	V               int      `json:"v"`
+	Path            string   `json:"path"`
+	Exists          bool     `json:"exists"`
+	Listen          string   `json:"listen"`
+	TokenConfigured bool     `json:"tokenConfigured"`
+	DefaultCwd      string   `json:"defaultCwd"`
+	StateDir        string   `json:"stateDir"`
+	AllowedOrigins  []string `json:"allowedOrigins"`
 }
 
 // ConfigPathV1 is printed by `webmux config path --json`.

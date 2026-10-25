@@ -22,11 +22,11 @@ func TestMultiplePTYsKeepRealChildCwdAndIndependentBuffers(t *testing.T) {
 	if err := os.MkdirAll(child, 0700); err != nil {
 		t.Fatal(err)
 	}
-	first, err := s.CreateSession(context.Background(), SessionInput{Cwd: child, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf FIRST; read value; printf 'GOT:%s' \"$value\""}, Name: "first", Workspace: &Reference{r.ID, tree.ID}})
+	first, err := s.CreateSession(context.Background(), SessionInput{Cwd: child, Cmd: []string{"/bin/sh", "-c", "printf FIRST; read value; printf 'GOT:%s' \"$value\""}, Name: "first", Workspace: &Reference{r.ID, tree.ID}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := s.CreateSession(context.Background(), SessionInput{Cwd: child, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf SECOND; read value"}, Name: "second"})
+	second, err := s.CreateSession(context.Background(), SessionInput{Cwd: child, Cmd: []string{"/bin/sh", "-c", "printf SECOND; read value"}, Name: "second"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,11 @@ func TestExplicitWorkspaceNeverFallsBackOrMatchesNestedRepository(t *testing.T) 
 	}
 	gitTest(t, nested, "init")
 	for _, cwd := range []string{root, nested} {
-		if _, err := s.CreateSession(context.Background(), SessionInput{Cwd: cwd, Preset: "custom", Cmd: []string{"/bin/sh"}, Workspace: &Reference{r.ID, tree.ID}}); err == nil {
+		if _, err := s.CreateSession(context.Background(), SessionInput{Cwd: cwd, Cmd: []string{"/bin/sh"}, Workspace: &Reference{r.ID, tree.ID}}); err == nil {
 			t.Fatalf("conflicting cwd accepted: %q", cwd)
 		}
 	}
-	direct, err := s.CreateSession(context.Background(), SessionInput{Cwd: nested, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf NESTED"}})
+	direct, err := s.CreateSession(context.Background(), SessionInput{Cwd: nested, Cmd: []string{"/bin/sh", "-c", "printf NESTED"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestExplicitWorkspaceNeverFallsBackOrMatchesNestedRepository(t *testing.T) 
 	if direct.Info().Workspace != nil {
 		t.Fatal("nested unregistered repository matched outer worktree")
 	}
-	prior, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf OLD; read value"}})
+	prior, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Cmd: []string{"/bin/sh", "-c", "printf OLD; read value"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestExplicitWorkspaceNeverFallsBackOrMatchesNestedRepository(t *testing.T) 
 	if err := os.Rename(tree.Path, tree.Path+"-gone"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateSession(context.Background(), SessionInput{Preset: "custom", Cmd: []string{"/bin/sh"}, Workspace: &Reference{r.ID, tree.ID}}); err == nil {
+	if _, err := s.CreateSession(context.Background(), SessionInput{Cmd: []string{"/bin/sh"}, Workspace: &Reference{r.ID, tree.ID}}); err == nil {
 		t.Fatal("missing selected tree fell back to default")
 	}
 	if _, err := s.Refresh(context.Background(), r.ID); err != nil {
@@ -115,7 +115,7 @@ func TestCloseTimeoutDoesNotDeleteTreeAndReleasesReservation(t *testing.T) {
 	s, _ := testService(t, t.TempDir(), root)
 	r := registerTest(t, s, root)
 	tree := linkedTest(t, s, r, "close-timeout")
-	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Preset: "custom", Cmd: []string{"/bin/bash", "-c", `trap '' HUP; printf READY; while :; do sleep 1; done`}})
+	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Cmd: []string{"/bin/bash", "-c", `trap '' HUP; printf READY; while :; do sleep 1; done`}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestCloseTimeoutDoesNotDeleteTreeAndReleasesReservation(t *testing.T) {
 	}
 	assertExists(t, tree.Path)
 	waitDone(t, item)
-	next, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf RELEASED"}})
+	next, err := s.CreateSession(context.Background(), SessionInput{Cwd: tree.Path, Cmd: []string{"/bin/sh", "-c", "printf RELEASED"}})
 	if err != nil {
 		t.Fatal("timeout retained reservation", err)
 	}

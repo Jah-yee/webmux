@@ -1,6 +1,5 @@
 // Package launch stores user launch configs: a name, a full argv and explicit
-// environment variables, persisted in the server state directory. It never
-// reads the TOML presets; those stay live built-ins served by /api/presets.
+// environment variables, persisted in the server state directory.
 package launch
 
 import (

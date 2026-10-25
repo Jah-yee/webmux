@@ -79,7 +79,6 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		reply(w, 200, contract.APIHealth{OK: true, Sessions: len(m.List())})
 	})
-	mux.HandleFunc("GET /api/presets", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, wire.Presets(c.Presets)) })
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		hostname, _ := os.Hostname()
 		reply(w, 200, contract.ServerConfig{DefaultCwd: c.DefaultCwd, Hostname: hostname, Workspace: wire.Capability(workspaces.Capability()), Tunnel: s.tunnelInfo()})

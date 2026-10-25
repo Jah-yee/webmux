@@ -45,7 +45,7 @@ func newFixture(t *testing.T, extra string) *fixture {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	f := &fixture{dir: dir, config: filepath.Join(dir, "config.toml"), state: filepath.Join(dir, "state")}
-	content := fmt.Sprintf("listen = '127.0.0.1:0'\ntoken = %q\ndefault_cwd = %q\nstate_dir = %q\nshell = '/bin/sh'\n%s", fixtureToken, dir, f.state, extra)
+	content := fmt.Sprintf("listen = '127.0.0.1:0'\ntoken = %q\ndefault_cwd = %q\nstate_dir = %q\n%s", fixtureToken, dir, f.state, extra)
 	if err := os.WriteFile(f.config, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestServerLocalAPIStatusAndStop(t *testing.T) {
 	defer cancel()
 	client := f.local(t)
 	var info contract.SessionInfo
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"cat"}}, &info); err != nil {
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, &info); err != nil {
 		t.Fatalf("create over socket without token: %v", err)
 	}
 	terminal(t, ctx, client, info.ID)
@@ -304,13 +304,13 @@ func TestSessionProcessesCannotStopOrReadToken(t *testing.T) {
 	out := filepath.Join(f.dir, "inside.txt")
 	stop, _ := json.Marshal([]string{"stop", "--config", f.config})
 	script := `curl -s -o /dev/null -w "token=%{http_code}\n" --unix-socket "$1" http://webmux/local/v1/token
-curl -s -o /dev/null -w "create=%{http_code}\n" --unix-socket "$1" -H 'Content-Type: application/json' -d '{"preset":"custom","cmd":["true"]}' http://webmux/api/sessions
+curl -s -o /dev/null -w "create=%{http_code}\n" --unix-socket "$1" -H 'Content-Type: application/json' -d '{"cmd":["true"]}' http://webmux/api/sessions
 WEBMUX_TEST_EXEC="$3" "$2" 2>&1; echo "stop=$?"`
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client := f.local(t)
 	cmd := []string{"/bin/sh", "-c", "{\n" + script + "\n} > \"$4.tmp\"; mv \"$4.tmp\" \"$4\"", "sh", record.Socket, os.Args[0], string(stop), out}
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": cmd}, nil); err != nil {
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": cmd}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var result []byte
@@ -527,7 +527,7 @@ func TestBridgeCarriesHTTPAndWebSocket(t *testing.T) {
 		}
 	}
 	var info contract.SessionInfo
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"cat"}}, &info); err != nil {
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, &info); err != nil {
 		t.Fatal(err)
 	}
 	dialer.mu.Lock()
@@ -577,7 +577,7 @@ func TestServeLogFileSurvivesClosedPipes(t *testing.T) {
 	// Session creation and exit produce output after the pipes closed.
 	client := f.local(t)
 	for range 3 {
-		if err := client.Do(context.Background(), http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"true"}}, nil); err != nil {
+		if err := client.Do(context.Background(), http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"true"}}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

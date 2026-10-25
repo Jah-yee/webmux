@@ -48,7 +48,6 @@ type Info struct {
 	Generation   string
 	Title        string
 	Cwd          string
-	Preset       string
 	Cmd          []string
 	Status       Status
 	ExitCode     *int
@@ -131,7 +130,7 @@ type startOptions struct {
 	env map[string]string
 }
 
-func start(id, cwd, preset, name string, argv []string, capacity int, options startOptions) (*Session, error) {
+func start(id, cwd, name string, argv []string, capacity int, options startOptions) (*Session, error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
 	cmd.Env = sessionEnv(os.Environ(), id, options.agentProtocol, options.env)
@@ -165,7 +164,6 @@ func start(id, cwd, preset, name string, argv []string, capacity int, options st
 			Generation:   hex.EncodeToString(raw[:]),
 			Title:        filepath.Base(cwd),
 			Cwd:          cwd,
-			Preset:       preset,
 			Cmd:          append([]string(nil), argv...),
 			Status:       StatusRunning,
 			CreatedAt:    now,

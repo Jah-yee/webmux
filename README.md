@@ -67,7 +67,7 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 
 - **持久会话**：浏览器断开后会话继续运行；短暂断线或回到前台时只续接缺失的输出，否则清屏并回放服务端缓冲（默认每会话 2 MiB）。
 - **会话总览**：按仓库 / 工作树分组展示所有会话，实时显示标题、状态（运行中 / 可能在等你 / 空闲 / 已退出）和终端屏幕预览。
-- **agent 预设**：内置 Shell、Claude Code、Codex CLI、omp 预设，也可直接输入自定义 argv。
+- **自定义启动配置**：在设置页保存 Shell、Open Code、Claude Code、Codex、omp 等程序的完整命令与环境变量，新建会话时统一选用；也可填写一次性命令，不再提供内置启动预设。
 - **Git worktree 管理**：登记已有仓库，创建 / 安全删除 worktree，并在其中直接启动 agent。
 - **只读代码工作区**：在终端旁浏览文件和 Git 修改、查看 Diff，把 `路径:行号` 引用一键插入终端。
 - **草稿模式**：先在多行输入框里编写、组合引用和上传路径，再一次性发送给 agent；草稿保存在本机，发送有送达确认。
@@ -172,11 +172,9 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 | `scrollback_bytes`   | `2097152`                                       | 每会话保留的原始终端字节数                     |
 | `default_cwd`        | `~`                                             | 新建会话的默认目录                             |
 | `state_dir`          | `$XDG_STATE_HOME/webmux`                        | 仓库清单与启动配置目录；不保存会话或终端内容   |
-| `shell`              | `$SHELL` 或 `/bin/bash`                         | Shell 预设使用的程序，以 `-l -i` 启动          |
 | `idle_after_seconds` | `30`                                            | 无等待特征时判定为空闲的阈值                   |
 | `prompt_patterns`    | 常见提示符 / 确认模式                           | 判定“可能在等你”的 Go 正则列表                 |
 | `allowed_origins`    | `[]`                                            | 额外允许的完整 Origin（如 HTTPS 反向代理域名） |
-| `presets`            | shell / claude / codex / omp                    | 启动预设（argv 数组），配置后替换默认列表      |
 
 完整说明、systemd / launchd 服务、Tailscale 与 HTTPS 配置见 [部署指南](docs/deployment.md)。
 
@@ -206,7 +204,7 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 <details>
 <summary><b>创建会话时找不到 claude / codex？</b></summary>
 
-systemd 和 launchd 不会加载你的交互 shell 配置。检查 `which claude` 的结果，并把所在目录加入服务的 `PATH`，参见 [部署指南](docs/deployment.md#agent-的-path)。
+systemd 和 launchd 不会加载你的交互 shell 配置。可在自定义启动配置中显式使用 `bash -ic 'exec opencode "$@"' opencode` 来加载 `~/.bashrc` 中的 PATH 和环境变量，或把程序目录加入服务的 `PATH`，参见 [部署指南](docs/deployment.md#agent-的-path)。
 
 </details>
 

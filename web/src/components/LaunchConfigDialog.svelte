@@ -10,13 +10,8 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import * as Dialog from "$lib/components/ui/dialog";
   import InlineNotice from "./InlineNotice.svelte";
-  import { api, APIError, joinArgs, parseArgs } from "../api";
-  import {
-    LaunchConfigSchema,
-    PresetsSchema,
-    type LaunchConfig,
-    type Preset,
-  } from "../schemas";
+  import { api, APIError, joinArgs } from "../api";
+  import { LaunchConfigSchema, type LaunchConfig } from "../schemas";
   import {
     LAUNCH_ENV_MAX,
     validateLaunchDraft,
@@ -43,13 +38,6 @@
   let loadError = $state("");
   let error = $state("");
   let busy = $state(false);
-  let presets = $state<Preset[]>([]);
-  let presetsLoading = $state(false);
-  let presetsError = $state("");
-  let presetName = $state("");
-  let presetArgs = $state("");
-  let fillError = $state("");
-  const selectedPreset = $derived(presets.find((p) => p.name === presetName));
   const draft = $derived(validateLaunchDraft(name, command, rows));
 
   function row(name = "", value = ""): EnvRow {
@@ -69,9 +57,6 @@
       revealed = {};
       error = "";
       loadError = "";
-      fillError = "";
-      presetName = "";
-      presetArgs = "";
       busy = false;
       loading = !!configId;
       if (configId)
@@ -96,34 +81,9 @@
           .finally(() => {
             if (!controller.signal.aborted) loading = false;
           });
-      presetsLoading = true;
-      presetsError = "";
-      api("/presets", PresetsSchema, "GET", undefined, controller.signal)
-        .then((list) => {
-          presets = list;
-        })
-        .catch((err: unknown) => {
-          if (!controller.signal.aborted)
-            presetsError = `无法读取内置预设：${(err as Error).message}`;
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) presetsLoading = false;
-        });
     });
     return () => controller.abort();
   });
-
-  function fillFromPreset() {
-    if (!selectedPreset) return;
-    fillError = "";
-    try {
-      const extra = selectedPreset.allowArgs ? parseArgs(presetArgs) : [];
-      command = joinArgs([...selectedPreset.cmd, ...extra]);
-      if (!name.trim()) name = selectedPreset.label;
-    } catch (err) {
-      fillError = (err as Error).message;
-    }
-  }
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -187,60 +147,6 @@
                 {draft.errors.name}
               </p>{/if}
           </div>
-          <div class="grid min-w-0 gap-2 rounded-lg border p-3">
-            <p id="launch-config-presets" class="text-sm font-medium">
-              从内置预设填入
-            </p>
-            {#if presetsError}
-              <p class="text-xs text-muted-foreground">{presetsError}</p>
-            {:else if presetsLoading}
-              <p class="text-xs text-muted-foreground">正在读取内置预设…</p>
-            {:else if !presets.length}
-              <p class="text-xs text-muted-foreground">没有内置预设。</p>
-            {:else}
-              <div
-                class="flex flex-wrap gap-2"
-                role="group"
-                aria-labelledby="launch-config-presets"
-              >
-                {#each presets as preset (preset.name)}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={presetName === preset.name ? "default" : "outline"}
-                    aria-pressed={presetName === preset.name}
-                    onclick={() => {
-                      presetName = preset.name;
-                      presetArgs = "";
-                      fillError = "";
-                    }}>{preset.label}</Button
-                  >
-                {/each}
-              </div>
-              {#if selectedPreset?.allowArgs}
-                <Input
-                  aria-label="预设追加参数"
-                  bind:value={presetArgs}
-                  placeholder="追加参数，例如 --resume"
-                  autocapitalize="off"
-                  autocorrect="off"
-                  spellcheck={false}
-                />
-              {/if}
-              <div class="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={!selectedPreset}
-                  onclick={fillFromPreset}>填入命令</Button
-                >
-                {#if fillError}<span class="text-xs text-destructive"
-                    >{fillError}</span
-                  >{/if}
-              </div>
-            {/if}
-          </div>
           <div class="grid gap-2">
             <Label for="launch-config-command">启动命令</Label>
             <Textarea
@@ -265,8 +171,8 @@
               id="launch-config-command-help"
               class="text-xs text-muted-foreground"
             >
-              支持引号和转义；直接执行程序，不展开 shell
-              变量或管道。保存的是此刻命令的副本，之后修改或删除内置预设不会影响它。
+              支持引号和转义；直接执行程序，不展开 shell 变量或管道。需要 shell
+              语法时，请显式使用 bash -lc '命令'。
             </p>
           </div>
           <fieldset class="grid min-w-0 gap-2">

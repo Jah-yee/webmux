@@ -48,7 +48,7 @@ test("an older config without hostname keeps creation available", async ({
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("invalid config can be retried without blocking loaded presets", async ({
+test("invalid config can be retried without blocking temporary commands", async ({
   page,
 }) => {
   let invalid = true;
@@ -58,7 +58,7 @@ test("invalid config can be retried without blocking loaded presets", async ({
   });
   await page.goto("/");
   await expect(
-    page.getByText("部分启动配置加载失败，相关创建操作暂不可用。"),
+    page.getByText("服务端设置加载失败，可重试；仍可使用临时命令创建会话。"),
   ).toBeVisible();
   await expect(page.getByText("invalid_type", { exact: false })).toHaveCount(0);
   await expect(
@@ -69,7 +69,7 @@ test("invalid config can be retried without blocking loaded presets", async ({
   await page.getByRole("button", { name: "重试", exact: true }).click();
   await expect(page.getByRole("button", { name: "添加仓库" })).toBeEnabled();
   await expect(
-    page.getByText("部分启动配置加载失败，相关创建操作暂不可用。"),
+    page.getByText("服务端设置加载失败，可重试；仍可使用临时命令创建会话。"),
   ).toHaveCount(0);
 });
 
@@ -107,7 +107,6 @@ test("search and status filters compose and follow live session changes", async 
     const response = await request.post("/api/sessions", {
       data: {
         cwd: workDir,
-        preset: "custom",
         // Keep activity deterministic: an idle shell prompt can become
         // "waiting" while a slower browser is still exercising the filters.
         cmd: [
@@ -192,7 +191,7 @@ test("branch search reveals a collapsed repository and preserves its layout", as
   const repo = repositories[0];
   const created = await request.post("/api/sessions", {
     data: {
-      preset: "shell",
+      cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
       name: "Repository agent",
       workspace: { repositoryId: repo.id, worktreeId: repo.worktrees[0].id },
     },

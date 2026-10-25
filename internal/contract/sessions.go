@@ -13,7 +13,6 @@ type SessionInfo struct {
 	Generation   string              `json:"generation"`
 	Title        string              `json:"title"`
 	Cwd          string              `json:"cwd"`
-	Preset       string              `json:"preset"`
 	Cmd          []string            `json:"cmd"`
 	Status       string              `json:"status"`
 	ExitCode     *int                `json:"exitCode"`
@@ -50,14 +49,6 @@ type SessionReportedCwd struct {
 	Since  time.Time `json:"since"`
 }
 
-// Preset is one configured launch command in GET /api/presets.
-type Preset struct {
-	Name      string   `json:"name"`
-	Label     string   `json:"label"`
-	Cmd       []string `json:"cmd"`
-	AllowArgs bool     `json:"allowArgs"`
-}
-
 // WorkspaceReference selects a registered worktree.
 type WorkspaceReference struct {
 	RepositoryID string `json:"repositoryId"`
@@ -65,13 +56,11 @@ type WorkspaceReference struct {
 }
 
 // CreateSessionRequest is the body of POST /api/sessions. ConfigID excludes
-// Preset, Cmd, Args and Env. omitempty only shapes what Go clients send;
+// Cmd and Env. omitempty only shapes what Go clients send;
 // the server treats an absent field like its zero value.
 type CreateSessionRequest struct {
 	Cwd       string              `json:"cwd"`
-	Preset    string              `json:"preset"`
 	Cmd       []string            `json:"cmd"`
-	Args      []string            `json:"args,omitempty"`
 	Name      string              `json:"name,omitempty"`
 	Workspace *WorkspaceReference `json:"workspace,omitempty"`
 	Env       map[string]string   `json:"env,omitempty"`

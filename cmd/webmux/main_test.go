@@ -54,24 +54,23 @@ func TestVersionCommand(t *testing.T) {
 func TestConfigurationPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
-	t.Setenv("SHELL", "/bin/sh")
 	file := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(file, []byte("listen = '127.0.0.1:9000'\ntoken = 'file-token'\nshell = '/bin/bash'\n"), 0600); err != nil {
+	if err := os.WriteFile(file, []byte("listen = '127.0.0.1:9000'\ntoken = 'file-token'\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range []struct {
-		name                 string
-		args                 []string
-		listen, token, shell string
-		generated            bool
+		name          string
+		args          []string
+		listen, token string
+		generated     bool
 	}{
-		{"defaults", nil, "0.0.0.0:7681", "", "/bin/sh", true},
-		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", "/bin/bash", false},
-		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", "/bin/bash", false},
-		{"explicit empty token on loopback", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", "/bin/bash", false},
-		{"explicit empty token on localhost", []string{"--config", file, "--listen", "localhost:9002", "--token="}, "localhost:9002", "", "/bin/bash", false},
-		{"explicit empty token on IPv6 wildcard", []string{"--config", file, "--listen", "[::]:9003", "--token="}, "[::]:9003", "", "/bin/bash", true},
-		{"explicit empty token on VPN address", []string{"--config", file, "--listen", "100.64.0.5:9004", "--token="}, "100.64.0.5:9004", "", "/bin/bash", true},
+		{"defaults", nil, "0.0.0.0:7681", "", true},
+		{"file", []string{"--config", file}, "127.0.0.1:9000", "file-token", false},
+		{"flags", []string{"--config", file, "--listen", "127.0.0.1:9001", "--token", "flag-token"}, "127.0.0.1:9001", "flag-token", false},
+		{"explicit empty token on loopback", []string{"--config", file, "--token="}, "127.0.0.1:9000", "", false},
+		{"explicit empty token on localhost", []string{"--config", file, "--listen", "localhost:9002", "--token="}, "localhost:9002", "", false},
+		{"explicit empty token on IPv6 wildcard", []string{"--config", file, "--listen", "[::]:9003", "--token="}, "[::]:9003", "", true},
+		{"explicit empty token on VPN address", []string{"--config", file, "--listen", "100.64.0.5:9004", "--token="}, "100.64.0.5:9004", "", true},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			c, err := loadConfig(row.args)
@@ -84,11 +83,11 @@ func TestConfigurationPrecedence(t *testing.T) {
 			if !row.generated && c.Token != row.token {
 				t.Fatalf("token %q, want %q", c.Token, row.token)
 			}
-			if c.Listen != row.listen || c.Shell != row.shell {
-				t.Fatalf("configuration: listen=%q shell=%q", c.Listen, c.Shell)
+			if c.Listen != row.listen {
+				t.Fatalf("configuration: listen=%q", c.Listen)
 			}
-			if c.DefaultCwd != dir || !reflect.DeepEqual(c.Presets[0].Cmd, []string{row.shell, "-l", "-i"}) {
-				t.Fatalf("unresolved defaults: cwd=%q shell argv=%q", c.DefaultCwd, c.Presets[0].Cmd)
+			if c.DefaultCwd != dir {
+				t.Fatalf("unresolved default cwd=%q", c.DefaultCwd)
 			}
 		})
 	}

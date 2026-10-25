@@ -79,9 +79,9 @@ func startService(t *testing.T, m *session.Manager, server *pushServer, log *slo
 	return s
 }
 
-func newManager(t *testing.T, presets ...session.Preset) *session.Manager {
+func newManager(t *testing.T) *session.Manager {
 	t.Helper()
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: presets})
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
@@ -93,14 +93,14 @@ func newManager(t *testing.T, presets ...session.Preset) *session.Manager {
 func TestServicePushesNewQuestionOnce(t *testing.T) {
 	question := `printf '\033]777;notify;warp://cli-agent;{"v":1,"event":"question_asked"}\007'; ` +
 		`stty raw -echo; while :; do printf '\r|'; sleep 0.05; printf '\r/'; sleep 0.05; done`
-	m := newManager(t, session.Preset{Name: "agent", Cmd: []string{"/bin/bash", "-c", question}})
+	m := newManager(t)
 	server := newPushServer(t, nil)
 	s := startService(t, m, server, nil)
 	p256dh, auth, ua := browserKeys(t)
 	if _, err := s.Register(server.URL+"/device", p256dh, auth, "https://term.example.com"); err != nil {
 		t.Fatal(err)
 	}
-	created, err := m.Create("", "agent", nil, nil, "deploy", nil)
+	created, err := m.Create("", []string{"/bin/bash", "-c", question}, "deploy", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

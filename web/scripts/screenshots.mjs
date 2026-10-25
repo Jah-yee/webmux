@@ -188,7 +188,7 @@ async function startBackend() {
   const port = await freePort();
   writeFileSync(
     config,
-    `listen = "127.0.0.1:${port}"\ndefault_cwd = ${JSON.stringify(demo)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\nshell = "/bin/bash"\n`,
+    `listen = "127.0.0.1:${port}"\ndefault_cwd = ${JSON.stringify(demo)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\n`,
   );
   const child = spawn(binary, ["--config", config], {
     cwd: demo,
@@ -213,13 +213,14 @@ async function startBackend() {
 const PROMPT =
   "export PS1='\\[\\e[1;32m\\]rain@dev\\[\\e[0m\\]:\\[\\e[1;34m\\]~/bookshelf-api\\[\\e[0m\\]\\$ '; clear";
 
-async function createSession(page, preset, name) {
+async function createSession(page, command, name) {
   await page.goto("/");
   await page
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
-  await page.getByRole("button", { name: preset, exact: true }).click();
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
+  await page.getByLabel("自定义启动命令", { exact: true }).fill(command);
   await page.getByLabel("工作目录", { exact: true }).fill(demo);
   await page.getByLabel("会话名称", { exact: false }).fill(name);
   await page.getByRole("button", { name: "创建并进入 →", exact: true }).click();
@@ -277,7 +278,7 @@ async function main() {
     const mobile = await contexts.mobile.newPage();
 
     // Background sessions that make the overview interesting.
-    await createSession(desktop, "Shell", "go test");
+    await createSession(desktop, "/bin/bash --noprofile --norc -i", "go test");
     await type(desktop, PROMPT);
     await delay(500);
     await type(desktop, "go test ./... 2>&1 | head -5");
@@ -286,7 +287,7 @@ async function main() {
       desktop,
       "echo; echo 'Proceed with deploy? [y/N]' ; read -r answer",
     );
-    await createSession(desktop, "Shell", "build");
+    await createSession(desktop, "/bin/bash --noprofile --norc -i", "build");
     await type(desktop, PROMPT);
     await delay(500);
     await type(
@@ -305,7 +306,11 @@ async function main() {
     await shoot(desktop, "desktop-omp.png");
 
     // Shell session.
-    const shellId = await createSession(desktop, "Shell", "shell");
+    const shellId = await createSession(
+      desktop,
+      "/bin/bash --noprofile --norc -i",
+      "shell",
+    );
     await type(desktop, PROMPT);
     await delay(500);
     for (const command of [

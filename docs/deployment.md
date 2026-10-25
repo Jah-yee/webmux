@@ -51,19 +51,17 @@ JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置�
 | `scrollback_bytes`   | `2097152`                                                  | 每会话保留的原始终端字节数（不是行数）                                                                                                                               |
 | `default_cwd`        | `~`                                                        | 新建会话的默认目录，支持 `~` 展开                                                                                                                                    |
 | `state_dir`          | `$XDG_STATE_HOME/webmux`，未设置时 `~/.local/state/webmux` | 仓库清单、启动配置等服务端状态目录                                                                                                                                   |
-| `shell`              | `$SHELL` 或 `/bin/bash`                                    | Shell 预设使用的程序，以 `-l -i` 启动                                                                                                                                |
 | `idle_after_seconds` | `30`                                                       | 无等待特征时判定为空闲的秒数                                                                                                                                         |
 | `prompt_patterns`    | 常见提示符 / 确认模式                                      | 判定“可能在等你”的 Go 正则列表                                                                                                                                       |
 | `agent_protocol`     | `true`                                                     | 在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，让 agent 发出结构化提醒事件                                                                                    |
 | `bell_attention`     | `true`                                                     | 把终端响铃（输入 1 秒后）视为需要介入                                                                                                                                |
 | `allowed_origins`    | `[]`                                                       | 额外允许的完整 Origin，例如 `https://myhost.example`                                                                                                                 |
-| `presets`            | shell / claude / codex / omp                               | `name`、`label`、`cmd`（argv 数组）、`allow_args`；配置后替换默认列表；作为内置预设实时提供                                                                          |
 | `tunnel`             | 未启用                                                     | Cloudflare Tunnel，见下文“公网访问（Cloudflare Tunnel）”                                                                                                             |
 | `push`               | 启用                                                       | 注意力 Web Push，见下文“手机推送（Web Push）”                                                                                                                        |
 
-`custom` 是保留预设名。追加参数按引号与反斜杠规则拆分为 argv，不经 shell 求值。要改变 shell 的启动参数，可为 shell 预设显式设置 `cmd = ["/bin/zsh", "-l", "-i"]`。
+所有启动命令都由使用者自定义：在设置页保存“名称 + 完整命令 + 环境变量”，新建会话时选用，或直接填写不保存的临时命令。首次启动没有自动生成的启动配置，不再读取 `[[presets]]` 或 `shell` 来提供内置启动命令；旧配置请改为在设置页保存。
 
-claude、codex 与 omp 预设以 `bash -ic 'exec <程序> "$@"' <程序>` 启动（如 `bash -ic 'exec claude "$@"' claude`），从而加载 `~/.bashrc` 中的环境变量与 `PATH`；末尾的程序名是 `bash -c` 的 `$0` 占位符，追加参数经 `"$@"` 原样传给 agent。
+完整命令按引号与反斜杠规则拆分为 argv，不经 shell 求值。需要加载 `~/.bashrc` 的 Open Code 配置可填写 `bash -ic 'exec opencode "$@"' opencode`，对应 argv 为 `["bash", "-ic", "exec opencode \"$@\"", "opencode"]`。末尾的程序名是 `bash -c` 的 `$0` 占位符，后接参数经 `"$@"` 原样传给 agent。WebMux 不改写 `~/.bashrc`；其中的输出、环境覆盖或提前退出同样会影响启动。
 
 ### 状态目录
 
@@ -71,8 +69,8 @@ claude、codex 与 omp 预设以 `bash -ic 'exec <程序> "$@"' <程序>` 启动
 
 - 同一状态目录只能由一个实例使用；多个实例请配置不同的 `state_dir`。第二个实例照常提供终端服务，但不写运行时记录、不创建本机套接字，并在日志中警告。
 - 清单损坏、文件锁冲突或存储不可用时，仓库管理功能被禁用，但终端服务照常运行，损坏的清单不会被覆盖。
-- 启动配置同理：文件损坏、`launch-configs.lock` 被另一实例持有或目录不可读写时，只有启动配置功能返回 503，内置预设与会话照常可用；损坏的文件不会被覆盖或改名，修复或删除后重启服务即可。启动配置的环境变量以明文保存在该 0600 文件中。
-- TOML `[[presets]]` 不会复制进 `launch-configs.json`；首次启动时启动配置为空，第一次保存时才创建文件。
+- 启动配置同理：文件损坏、`launch-configs.lock` 被另一实例持有或目录不可读写时，只有保存的启动配置功能返回 503，显式临时命令与已运行会话照常可用；损坏的文件不会被覆盖或改名，修复或删除后重启服务即可。启动配置的环境变量以明文保存在该 0600 文件中。
+- 首次启动时启动配置为空，第一次保存时才创建 `launch-configs.json`，不会自动导入旧 TOML 的启动预设。
 
 ## 服务管理命令
 
@@ -94,7 +92,7 @@ webmux service uninstall
 - 已有服务定义需要 `service install --force` 才能替换，并会重启服务。`service install --dry-run` 只输出服务定义，不写文件、不创建配置、不操作服务；可与 `--config` 配合使用。
 - `stop`、`restart`、覆盖安装和卸载会结束当前所有终端会话，滚屏不会在重启后恢复。`uninstall` 保留二进制、配置、日志和状态目录。
 - 安装会保存当前 PATH 中的绝对目录，并补充常见 agent 安装目录，只保存 PATH、shell、locale 和 `XDG_STATE_HOME` 等指定环境变量。更新 agent 安装路径后可重新执行 `install --force`。
-- 服务工作目录为用户主目录；配置中的 `default_cwd`、`state_dir` 建议使用绝对路径或支持的 `~` 路径；自定义 shell/预设的可执行程序使用绝对路径或 PATH 中的命令名，避免依赖安装时的工作目录。
+- 服务工作目录为用户主目录；配置中的 `default_cwd`、`state_dir` 建议使用绝对路径或支持的 `~` 路径；自定义启动命令的可执行程序使用绝对路径或 PATH 中的命令名，避免依赖安装时的工作目录。
 - Linux 需要可用的 systemd 用户管理器；macOS 需要已登录的 GUI 会话。服务启用成功不代表 HTTP 端口已成功监听，遇到端口冲突等启动失败时查看 `status` 和 `logs`。
 
 `webmux help` 显示命令概览；`webmux service install --help` 等显示子命令参数。
@@ -223,10 +221,10 @@ WebMux 运行时，菜单中的“公网隧道（Cloudflare）”在不重启、
 
 ## agent 的 PATH
 
-systemd 和 launchd 都不会加载交互 shell 的初始化文件。服务模板的 `PATH` 已包含 `~/.local/bin`、pnpm / npm 全局目录（macOS 另含 Homebrew）。如果 agent 安装在 nvm 等其他位置：
+systemd 和 launchd 都不会加载交互 shell 的初始化文件。需要从 `~/.bashrc` 获取 PATH 与环境变量时，在自定义启动配置中显式填写 `bash -ic 'exec opencode "$@"' opencode`（其他 agent 替换程序名）。不使用 Bash 包装时，可直接指定程序绝对路径或调整服务的 PATH。服务模板的 `PATH` 已包含 `~/.local/bin`、pnpm / npm 全局目录（macOS 另含 Homebrew）。如果 agent 安装在 nvm 等其他位置：
 
 ```sh
-which claude codex
+which claude codex opencode
 systemctl --user edit webmux    # Linux：添加 drop-in
 ```
 
@@ -320,4 +318,4 @@ macOS 上：
 - 没有 subreaper，脱离父进程的后代由 launchd 回收。
 - 内核不公开其他进程的环境变量，`WEBMUX_SESSION_ID` 无法用于清理；关闭会话时按终端会话 ID 与进程树查找后代。先 `setsid` 再让父进程退出的自守护程序不会被清理。
 - 临时目录位于 `/var → /private/var` 符号链接下，WebMux 报告规范化后的真实路径。
-- Apple 自带的 `/bin/bash` 为 3.2 版本；默认 Shell 预设使用 `$SHELL`（通常为 `/bin/zsh`）。
+- Apple 自带的 `/bin/bash` 为 3.2 版本；如需 zsh，请在自定义启动命令中显式填写 `/bin/zsh -l -i`。

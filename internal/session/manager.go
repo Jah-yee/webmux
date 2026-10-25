@@ -17,16 +17,9 @@ import (
 	"github.com/rainchan/webmux/internal/pathutil"
 )
 
-type Preset struct {
-	Name      string
-	Label     string
-	Cmd       []string
-	AllowArgs bool
-}
 type Options struct {
 	ScrollbackBytes int
 	DefaultCwd      string
-	Presets         []Preset
 	IdleAfter       time.Duration
 	PromptPatterns  []string
 	// Zero values keep both signal sources enabled.
@@ -85,7 +78,7 @@ func NewManager(o Options) *Manager {
 
 // Create starts a session. env holds explicit variables added to the
 // server's environment for this session only (see ValidateEnv).
-func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, env map[string]string) (*Session, error) {
+func (m *Manager) Create(cwd string, cmd []string, name string, env map[string]string) (*Session, error) {
 	if m.initErr != nil {
 		return nil, fmt.Errorf("process reaper: %w", m.initErr)
 	}
@@ -106,33 +99,8 @@ func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, en
 	if !stat.IsDir() {
 		return nil, errors.New("path is not a directory")
 	}
-	var argv []string
-	if preset == "custom" {
-		if len(cmd) == 0 || cmd[0] == "" {
-			return nil, errors.New("custom command requires an executable")
-		}
-		if len(args) > 0 {
-			return nil, errors.New("custom command does not accept preset arguments")
-		}
-		argv = cmd
-	} else {
-		if cmd != nil {
-			return nil, errors.New("command is only allowed with the custom preset")
-		}
-		for _, p := range m.options.Presets {
-			if p.Name == preset {
-				if len(args) > 0 && !p.AllowArgs {
-					return nil, errors.New("preset does not allow arguments")
-				}
-				argv = make([]string, len(p.Cmd)+len(args))
-				copy(argv, p.Cmd)
-				copy(argv[len(p.Cmd):], args)
-				break
-			}
-		}
-		if len(argv) == 0 || argv[0] == "" {
-			return nil, errors.New("unknown or empty preset")
-		}
+	if len(cmd) == 0 || cmd[0] == "" {
+		return nil, errors.New("command requires an executable")
 	}
 	var raw [5]byte
 	if _, err = rand.Read(raw[:]); err != nil {
@@ -144,7 +112,7 @@ func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, en
 	if m.stopped {
 		return nil, errors.New("server is shutting down")
 	}
-	s, err := start(id, cwd, preset, name, argv, m.options.ScrollbackBytes, startOptions{
+	s, err := start(id, cwd, name, cmd, m.options.ScrollbackBytes, startOptions{
 		agentProtocol: !m.options.DisableAgentProtocol,
 		bellAttention: !m.options.DisableBellAttention,
 		env:           env,
@@ -155,7 +123,7 @@ func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, en
 	m.sessions[id] = s
 	info := s.Info()
 	m.publishLocked(Event{Type: "created", Session: &info})
-	slog.Info("session created", "id", id, "preset", preset)
+	slog.Info("session created", "id", id)
 	return s, nil
 }
 

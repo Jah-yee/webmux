@@ -33,13 +33,6 @@ export function store(key: string, value: string) {
     /* private-mode storage is optional */
   }
 }
-export function unstore(key: string) {
-  try {
-    localStorage.removeItem("webmux." + key);
-  } catch {
-    /* private-mode storage is optional */
-  }
-}
 const tokenFragment = "#token=";
 
 // Adopts a `#token=` link: fragments never reach the server, and the token is

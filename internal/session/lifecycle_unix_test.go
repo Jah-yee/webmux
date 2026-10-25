@@ -13,13 +13,13 @@ import (
 
 func TestLeaderExitWithInheritedPTY(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "child", Cmd: []string{"/bin/bash", "-c", "trap '' HUP; sleep 30 & printf 'CHILD_STARTED\\n'; exit 4"}}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "child", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", "trap '' HUP; sleep 30 & printf 'CHILD_STARTED\\n'; exit 4"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,11 +45,11 @@ func assertNoSessionProcesses(t *testing.T, s *Session) {
 
 func TestCloseReapsSeparateJobGroups(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "job", Cmd: []string{"/bin/bash", "-c", `set -m; (trap '' HUP; printf 'CHILD_READY\n'; exec sleep 30) & wait`}}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
 	defer m.Shutdown(ctx)
-	s, err := m.Create("", "job", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", `set -m; (trap '' HUP; printf 'CHILD_READY\n'; exec sleep 30) & wait`}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,13 +71,13 @@ func TestCloseReapsSeparateJobGroups(t *testing.T) {
 
 func TestCancelledPTYWriteDoesNotHoldInputGate(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "blocked", Cmd: []string{"/bin/bash", "-c", `stty raw -echo; printf READY; sleep 30`}}}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", "blocked", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", `stty raw -echo; printf READY; sleep 30`}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,20 +120,17 @@ func waitForOutput(t *testing.T, s *Session, text string) {
 }
 
 func TestUnattendedSleepIsNotUserWait(t *testing.T) {
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{
-		{Name: "sleeper", Cmd: []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf 'background timer\\n'; sleep 60"}},
-		{Name: "reader", Cmd: []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf READY; read -r value"}},
-	}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	sleeper, err := m.Create("", "sleeper", nil, nil, "", nil)
+	sleeper, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf 'background timer\\n'; sleep 60"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := m.Create("", "reader", nil, nil, "", nil)
+	reader, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf READY; read -r value"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,20 +176,17 @@ func directChildren(pid int, table processTable) map[int]processState {
 
 func TestRealProcessTreeWaiting(t *testing.T) {
 	t.Parallel()
-	m := NewManager(Options{DefaultCwd: t.TempDir(), Presets: []Preset{
-		{Name: "reader", Cmd: []string{"/bin/bash", "-c", `printf READY; read -r value`}},
-		{Name: "busy", Cmd: []string{"/bin/bash", "-c", `printf READY; while :; do :; done`}},
-	}})
+	m := NewManager(Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	reader, err := m.Create("", "reader", nil, nil, "", nil)
+	reader, err := m.Create("", []string{"/bin/bash", "-c", `printf READY; read -r value`}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	busy, err := m.Create("", "busy", nil, nil, "", nil)
+	busy, err := m.Create("", []string{"/bin/bash", "-c", `printf READY; while :; do :; done`}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

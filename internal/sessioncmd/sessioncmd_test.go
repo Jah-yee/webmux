@@ -98,7 +98,7 @@ func TestRunSendsArgvCwdEnvAndDetaches(t *testing.T) {
 	if code != 0 || stdout.String() != "newsess1\thttp://127.0.0.1:7681/s/newsess1\n" {
 		t.Fatalf("detach %d %q", code, stdout.String())
 	}
-	want := map[string]any{"preset": "custom", "cmd": []any{"printf", "%s;$(id)", "a b"}, "cwd": "/mnt/c/work/app", "name": "review", "env": map[string]any{"A": "1", "B": "x=y"}}
+	want := map[string]any{"cmd": []any{"printf", "%s;$(id)", "a b"}, "cwd": "/mnt/c/work/app", "name": "review", "env": map[string]any{"A": "1", "B": "x=y"}}
 	if !reflect.DeepEqual(f.bodies[0], want) {
 		t.Fatalf("request %#v", f.bodies[0])
 	}

@@ -56,7 +56,7 @@ func newFixture() *fixture {
 	c.StateDir = filepath.Join(root, "state")
 	c.Token = token
 	c.ScrollbackBytes = capacity
-	c.Shell = "/bin/bash"
+
 	must(c.Validate())
 	f.manager = session.NewManager(assemble.SessionOptions(c))
 	f.workspace = workspace.New(c.StateDir, f.manager, nil, root)
@@ -98,7 +98,7 @@ func (f *fixture) request(method, path string, body any, want int) []byte {
 }
 func decode[T any](data []byte) T { var v T; must(json.Unmarshal(data, &v)); return v }
 func (f *fixture) create(script string) string {
-	v := decode[session.Info](f.request("POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/bash", "--noprofile", "--norc", "-c", script}}, 201))
+	v := decode[session.Info](f.request("POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/bash", "--noprofile", "--norc", "-c", script}}, 201))
 	return v.ID
 }
 func (f *fixture) info(id string) session.Info {

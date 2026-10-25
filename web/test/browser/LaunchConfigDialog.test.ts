@@ -2,17 +2,8 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import LaunchConfigDialog from "../../src/components/LaunchConfigDialog.svelte";
-import type { LaunchConfig, Preset } from "../../src/schemas";
+import type { LaunchConfig } from "../../src/schemas";
 
-const presets: Preset[] = [
-  {
-    name: "shell",
-    label: "Shell",
-    cmd: ["bash", "-l", "-i"],
-    allowArgs: false,
-  },
-  { name: "claude", label: "Claude Code", cmd: ["claude"], allowArgs: true },
-];
 const saved: LaunchConfig = {
   id: "abcdefg2",
   name: "Claude 恢复",
@@ -36,8 +27,6 @@ function serve(routes: Record<string, Handler>) {
       const method = init?.method ?? "GET";
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
       requests.push({ method, path, body });
-      if (path === "/api/presets" && !routes[path])
-        return Response.json(presets);
       const response = await routes[path]?.(method, body);
       if (!response) throw new Error(`Unexpected request: ${method} ${path}`);
       return response;
@@ -93,7 +82,7 @@ test("masks env values by default and validates variable names", async () => {
   await expect.element(save()).toBeEnabled();
 });
 
-test("fills the command from a built-in preset and its label", async () => {
+test("saves a full custom command with argument boundaries intact", async () => {
   const onsaved = vi.fn();
   const requests = serve({
     "/api/launch-configs": (method, body) =>
@@ -102,21 +91,18 @@ test("fills the command from a built-in preset and its label", async () => {
         : undefined,
   });
   render(LaunchConfigDialog, { open: true, configId: undefined, onsaved });
-  await page.getByRole("button", { name: "Claude Code", exact: true }).click();
-  await page.getByLabelText("预设追加参数").fill(`--resume "a b" ''`);
-  await page.getByRole("button", { name: "填入命令" }).click();
-  await expect
-    .element(page.getByLabelText("启动命令"))
-    .toHaveValue("claude --resume 'a b' ''");
-  await expect.element(page.getByLabelText("名称")).toHaveValue("Claude Code");
+  await page.getByLabelText("名称").fill("Open Code");
+  await page
+    .getByLabelText("启动命令")
+    .fill(`bash -ic 'exec opencode "$@"' opencode`);
   await save().click();
   await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
   expect(requests.at(-1)).toEqual({
     method: "POST",
     path: "/api/launch-configs",
     body: {
-      name: "Claude Code",
-      cmd: ["claude", "--resume", "a b", ""],
+      name: "Open Code",
+      cmd: ["bash", "-ic", 'exec opencode "$@"', "opencode"],
       env: {},
     },
   });

@@ -69,6 +69,8 @@ Oxlint（`pnpm --dir web lint`）仍是通用 lint。它只读取 `.svelte` 的 
 | `Item`              | `variant="card"`、`size="flush"`                            | 卡片表面、悬停高亮的列表项；内容自带内边距（如整行链接）                                                  |
 | `Input`、`Label`    | `size="sm"`                                                 | 代码导航等紧凑面板                                                                                        |
 | `NativeSelect`      | `size="sm"`                                                 | 原生下拉选择；手机保留系统选择器                                                                          |
+| `Select`            | —                                                           | 需要跨平台一致样式、同时展示名称与命令或路径的下拉框；保留完整内容提示与键盘选择                          |
+| `Tabs.List`         | `size="form"`                                               | 新建会话等表单中的分组切换，使用控件尺寸令牌；默认尺寸保持其他页面的紧凑布局                              |
 | `Checkbox`          | —                                                           | 复选框，配合 `Label` 使用                                                                                 |
 | `ListButton`        | `row` / `text` / `content` / `option` / `tab` / `tab-close` | 列表、标签栏与卡片中的可点击区域。它不带控件尺寸，虚拟列表的固定行高不受影响；独立的操作按钮仍用 `Button` |
 

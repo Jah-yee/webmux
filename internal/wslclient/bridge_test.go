@@ -52,7 +52,7 @@ func newInstance(t *testing.T) *instance {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	in := &instance{dir: dir, config: filepath.Join(dir, "config.toml"), state: filepath.Join(dir, "state")}
-	content := fmt.Sprintf("listen = '127.0.0.1:0'\ndefault_cwd = %q\nstate_dir = %q\nshell = '/bin/sh'\n", dir, in.state)
+	content := fmt.Sprintf("listen = '127.0.0.1:0'\ndefault_cwd = %q\nstate_dir = %q\n", dir, in.state)
 	if err := os.WriteFile(in.config, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestBridgeDialerRequestsSubscriptionAndStop(t *testing.T) {
 	if err != nil || status.State != contract.StateRunning || !status.LocalAPI {
 		t.Fatalf("status %+v %v", status, err)
 	}
-	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"cat"}}, nil); err != nil {
+	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"cmd": []string{"cat"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, data, err := subscription.Read(ctx); err != nil || !strings.Contains(string(data), `"created"`) {

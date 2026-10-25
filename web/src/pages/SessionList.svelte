@@ -7,11 +7,9 @@
   import { api } from "../api";
   import {
     LaunchConfigsSchema,
-    PresetsSchema,
     ConfigSchema,
     SessionEventSchema,
     RepositoriesSchema,
-    type Preset,
     type SessionInfo,
     type Repository,
     type Worktree,
@@ -37,8 +35,6 @@
 
   let sessions = $state.raw<SessionInfo[]>([]);
   let repositories = $state.raw<Repository[]>([]);
-  let presets = $state.raw<Preset[]>([]);
-  // Loaded independently of presets: a failure only disables that group.
   let launchConfigs = $state<LaunchConfigsState>({ status: "loading" });
   let cwd = $state("~");
   let hostname = $state("");
@@ -183,9 +179,6 @@
     if (setupBusy) return;
     setupBusy = true;
     const results = await Promise.allSettled([
-      api("/presets", PresetsSchema, "GET", undefined, signal).then((p) => {
-        if (!disposed) presets = p;
-      }),
       api("/config", ConfigSchema, "GET", undefined, signal).then((c) => {
         if (disposed) return;
         cwd = c.defaultCwd;
@@ -201,7 +194,7 @@
       setupBusy = false;
       setupSettled = true;
       setupError = results.some((result) => result.status === "rejected")
-        ? "部分启动配置加载失败，相关创建操作暂不可用。"
+        ? "服务端设置加载失败，可重试；仍可使用临时命令创建会话。"
         : "";
     }
   }
@@ -274,7 +267,7 @@
     {connection}
     {hostname}
     {setupSettled}
-    canStart={presets.length > 0}
+    canStart
     onstart={() => start()}
   />
   {#if connection === "reconnecting"}<div
@@ -394,7 +387,7 @@
           />{/if}
         {#if (filtering && !visible.length) || (!repositories.length && !list.length)}<SessionListEmpty
             filtered={filtering && !visible.length}
-            canStart={presets.length > 0}
+            canStart
             onclear={clearFilters}
             onstart={() => start()}
           />{/if}
@@ -410,7 +403,6 @@
     onclose={() => (creating = null)}
   >
     {#snippet children(page)}<page.default
-        {presets}
         {launchConfigs}
         {repositories}
         defaultCwd={cwd}

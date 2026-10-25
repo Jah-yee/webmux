@@ -42,13 +42,13 @@ func TestColorSchemeReportsMode(t *testing.T) {
 func TestColorSchemeReportsOutliveReplayAndFollowOutput(t *testing.T) {
 	t.Parallel()
 	script := `printf '\033[?2031h'; head -c 4096 /dev/zero | tr '\0' x; IFS= read -r _; printf '\033[?2031l'; exec sleep 30`
-	m := NewManager(Options{ScrollbackBytes: 256, DefaultCwd: t.TempDir(), Presets: []Preset{{Name: "agent", Cmd: []string{"/bin/bash", "-c", script}}}})
+	m := NewManager(Options{ScrollbackBytes: 256, DefaultCwd: t.TempDir()})
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", "agent", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", script}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

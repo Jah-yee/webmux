@@ -33,7 +33,7 @@ func TestConfigShowAndPath(t *testing.T) {
 	}
 	stdout, _, code = runConfig(t, "show", "--json")
 	var shown contract.ConfigV1
-	if err := json.Unmarshal([]byte(stdout), &shown); err != nil || code != 0 || shown.Exists || shown.Listen != "0.0.0.0:7681" || shown.TokenConfigured || shown.StateDir != filepath.Join(home, ".local", "state", "webmux") || len(shown.Presets) != 4 {
+	if err := json.Unmarshal([]byte(stdout), &shown); err != nil || code != 0 || shown.Exists || shown.Listen != "0.0.0.0:7681" || shown.TokenConfigured || shown.StateDir != filepath.Join(home, ".local", "state", "webmux") {
 		t.Fatalf("defaults %d %s", code, stdout)
 	}
 	if _, _, code := runConfig(t, "show", "--config", filepath.Join(home, "missing.toml")); code != 1 {
@@ -41,7 +41,7 @@ func TestConfigShowAndPath(t *testing.T) {
 	}
 
 	path := filepath.Join(home, "custom.toml")
-	content := "token = 'very-secret-token'\nlisten = '0.0.0.0:9000'\n[[presets]]\nname = 'tool'\nlabel = 'Tool'\ncmd = ['tool', '--flag value']\nallow_args = true\n"
+	content := "token = 'very-secret-token'\nlisten = '0.0.0.0:9000'\n"
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -52,8 +52,7 @@ func TestConfigShowAndPath(t *testing.T) {
 		}
 		if args[len(args)-1] == "--json" {
 			var custom contract.ConfigV1
-			if err := json.Unmarshal([]byte(stdout), &custom); err != nil || !custom.TokenConfigured || custom.Path != path || len(custom.Presets) != 1 ||
-				custom.Presets[0].Argv[1] != "--flag value" || !custom.Presets[0].AllowArgs {
+			if err := json.Unmarshal([]byte(stdout), &custom); err != nil || !custom.TokenConfigured || custom.Path != path {
 				t.Fatalf("custom %s", stdout)
 			}
 		}
@@ -66,9 +65,8 @@ func TestConfigValidate(t *testing.T) {
 	for name, row := range map[string]struct {
 		content, want string
 	}{
-		"syntax":         {"listen = '127.0.0.1:7681'\nscrollback_bytes = 10\ntoken = \"unterminated\n", ":3:"},
-		"invalid preset": {"[[presets]]\nname = 'custom'\ncmd = ['x']\n", "reserved"},
-		"short tunnel":   {"token = 'short'\n[tunnel]\nenabled = true\n", "at least 43"},
+		"syntax":       {"listen = '127.0.0.1:7681'\nscrollback_bytes = 10\ntoken = \"unterminated\n", ":3:"},
+		"short tunnel": {"token = 'short'\n[tunnel]\nenabled = true\n", "at least 43"},
 	} {
 		path := filepath.Join(dir, name+".toml")
 		if err := os.WriteFile(path, []byte(row.content), 0600); err != nil {

@@ -23,7 +23,6 @@ test("agent attention survives spinner output and clears on user input", async (
   const created = await request.post("/api/sessions", {
     data: {
       cwd: workDir,
-      preset: "custom",
       cmd: ["/bin/bash", "-c", agent],
       name: "E2E agent",
     },
@@ -80,7 +79,6 @@ test("opening a session does not clear attention through terminal replies", asyn
   const created = await request.post("/api/sessions", {
     data: {
       cwd: workDir,
-      preset: "custom",
       cmd: ["/bin/bash", "-c", queryingAgent],
       name: "E2E querying agent",
     },

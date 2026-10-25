@@ -15,12 +15,12 @@ import (
 )
 
 func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
-	presets := []session.Preset{{Name: "output", Cmd: []string{"/bin/bash", "-c", "printf abcde"}}}
-	m := session.NewManager(session.Options{ScrollbackBytes: 4, DefaultCwd: t.TempDir(), Presets: presets})
+
+	m := session.NewManager(session.Options{ScrollbackBytes: 4, DefaultCwd: t.TempDir()})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	defer m.Shutdown(ctx)
-	s, err := m.Create("", "output", nil, nil, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", "printf abcde"}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

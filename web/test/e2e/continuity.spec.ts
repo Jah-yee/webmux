@@ -67,7 +67,6 @@ test("returning to the foreground appends missed output without a full replay", 
   const response = await request.post("/api/sessions", {
     data: {
       cwd: workDir,
-      preset: "custom",
       name: "Resume",
       cmd: [
         "/bin/bash",

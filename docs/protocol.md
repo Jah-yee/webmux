@@ -24,22 +24,20 @@
 | GET    | `/api/sessions/{id}/buffer`   | 下载完整原始缓冲（`application/octet-stream`）   |
 | POST   | `/api/sessions/{id}/upload`   | 上传文件，见下文                                 |
 
-创建请求有三种互斥形式：
+创建请求有两种互斥形式：
 
 ```jsonc
-// 预设
-{ "cwd": "/home/u/proj", "preset": "claude", "args": ["--resume"], "name": "可选" }
-// 自定义命令
-{ "cwd": "/home/u/proj", "preset": "custom", "cmd": ["bash", "-lc", "make dev"], "name": "可选" }
+// 显式自定义命令
+{ "cwd": "/home/u/proj", "cmd": ["bash", "-lc", "make dev"], "name": "可选" }
 // 已保存的启动配置
 { "cwd": "/home/u/proj", "configId": "k3m9q2x7", "name": "可选" }
 ```
 
-自定义命令必须包含非空可执行程序，且不能同时传非空 `args`；预设形式不能传 `cmd`。可附加 `workspace: {repositoryId, worktreeId}`：省略 `cwd` 时使用工作树根目录，提供时必须位于该工作树内。
+自定义命令必须包含非空可执行程序，`cmd` 是完整 argv，不经 shell 展开；不再接收 `preset` 或单独的预设 `args`。可附加 `workspace: {repositoryId, worktreeId}`：省略 `cwd` 时使用工作树根目录，提供时必须位于该工作树内。
 
-预设与自定义命令形式都可附加可选的 `env: {"NAME": "value"}`：只为该会话在服务环境之上追加或覆盖显式列出的变量（名称须匹配 `[A-Za-z_][A-Za-z0-9_]*`，值不含 NUL，`WEBMUX_SESSION_ID` 保留），不复制调用方的环境，也不出现在 `SessionInfo` 中。不认识该字段的旧版服务端以 400 拒绝请求。
+显式命令可附加可选的 `env: {"NAME": "value"}`：只为该会话在服务环境之上追加或覆盖显式列出的变量（名称须匹配 `[A-Za-z_][A-Za-z0-9_]*`，值不含 NUL，`WEBMUX_SESSION_ID` 保留），不复制调用方的环境，也不出现在 `SessionInfo` 中。
 
-`configId` 形式按已保存配置的完整 argv 与环境变量启动，会话记录为 `preset: "custom"`。此时 `preset` 须为空、`cmd`/`args` 须为空数组或省略、`env` 须省略或为 `{}`，否则 400；空字符串 `configId` 400，未知 ID 404，启动配置存储不可用 503。这些检查都在目录与 Git 操作之前完成。之后修改或删除该配置不影响已启动的会话。
+`configId` 形式按已保存配置的完整 argv 与环境变量启动。此时 `cmd` 须为空数组或省略，`env` 须省略或为 `{}`，否则 400；空字符串 `configId` 400，未知 ID 404，启动配置存储不可用 503。这些检查都在目录与 Git 操作之前完成。之后修改或删除该配置不影响已启动的会话。
 
 **上传**：`multipart/form-data`，恰好一个文件字段 `file`。成功返回 201 `{"path": "<服务器绝对路径>"}`。单文件上限 100 MiB（超限 413），读期限 5 分钟（超时 408）；无效请求 400，会话不存在 404，会话已退出 409。
 
@@ -49,7 +47,6 @@ interface SessionInfo {
   generation: string; // 本次运行的代际，16 位十六进制；输出 offset 与提交都绑定它
   title: string;
   cwd: string;
-  preset: string; // 预设名或 "custom"
   cmd: string[];
   status: "running" | "waiting" | "idle" | "exited"; // waiting 表示提示符、终端读取或 attention；计时休眠不是 waiting
   exitCode: number | null;
@@ -86,7 +83,6 @@ interface SessionInfo {
 | 方法 | 路径                   | 说明                                                                                                                |
 | ---- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | GET  | `/api/health`          | `{ok: true, sessions: n}`                                                                                           |
-| GET  | `/api/presets`         | `Preset[]`：`{name, label, cmd, allowArgs}`                                                                         |
 | GET  | `/api/config`          | `{defaultCwd, hostname, workspace: {gitAvailable, registryAvailable, gitError, registryError}, tunnel}`，不含 token |
 | GET  | `/api/fs/dirs?prefix=` | 匹配前缀的全部子目录（含符号链接目录），普通目录优先，按名称排序                                                    |
 | POST | `/api/fs/mkdir`        | `{path}`，204                                                                                                       |
@@ -95,7 +91,7 @@ interface SessionInfo {
 
 ### 启动配置
 
-启动配置保存在服务端 `<state_dir>/launch-configs.json`，在所有已认证设备间共享。TOML `[[presets]]` 仍由 `/api/presets` 提供，不复制进启动配置。
+启动配置保存在服务端 `<state_dir>/launch-configs.json`，在所有已认证设备间共享。只提供用户自定义的启动配置，不再提供内置预设或 `/api/presets` 路由。
 
 | 方法   | 路径                       | 说明                                                                      |
 | ------ | -------------------------- | ------------------------------------------------------------------------- |
@@ -369,4 +365,4 @@ curl --unix-socket ~/.local/state/webmux/run/webmux.sock http://webmux/api/sessi
 
 `stop`：`{"v": 1, "result": "stopped" | "killed" | "not-running" | "refused" | "error", "message": "..."}`。
 
-`config show`：`{"v", "path", "exists", "listen", "tokenConfigured", "defaultCwd", "stateDir", "allowedOrigins", "presets": [{"name", "label", "argv", "allowArgs"}]}`，不含 Token。`config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。
+`config show`：`{"v", "path", "exists", "listen", "tokenConfigured", "defaultCwd", "stateDir", "allowedOrigins"}`，不含 Token。`config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。

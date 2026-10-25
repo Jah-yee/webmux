@@ -416,9 +416,8 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 	t.Cleanup(pushService.Close)
 	rec.norm.path(pushService.URL, "<push-service>")
 
-	presets := []config.Preset{{Name: "shell", Label: "Shell", Cmd: []string{"/bin/sh"}, AllowArgs: true}}
 	c := config.Config{
-		Listen: "127.0.0.1:7681", Token: "secret", DefaultCwd: root, Presets: presets,
+		Listen: "127.0.0.1:7681", Token: "secret", DefaultCwd: root,
 		Push: config.PushConfig{Enabled: true, Subject: config.DefaultPushSubject, Kinds: config.DefaultPushKinds()},
 	}
 	m := session.NewManager(testSessionOptions(c))
@@ -613,7 +612,7 @@ func wireSessions(f *wireFixture) {
 	// Session list events: the empty snapshot, then one session's life.
 	list := f.dial("/ws/sessions")
 	f.event(list, "ws-sessions-snapshot-empty", func(e map[string]any) bool { return e["type"] == "snapshot" })
-	exited := f.call("session-create-exiting", "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh", "-c", "exit 3"}, "name": "exiting"}, 201)
+	exited := f.call("session-create-exiting", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "exit 3"}, "name": "exiting"}, 201)
 	exitedID := str(exited, "id")
 	f.event(list, "ws-sessions-created", func(e map[string]any) bool { return e["type"] == "created" })
 	f.event(list, "ws-sessions-updated", func(e map[string]any) bool {
@@ -632,7 +631,7 @@ func wireSessions(f *wireFixture) {
 	_ = list.CloseNow()
 
 	f.call("sessions-list-empty", "GET", "/api/sessions", nil, 200)
-	running := f.call("session-create", "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh", "-c", "sleep 60"}, "name": "wire", "env": map[string]string{"WIRE": "1"}}, 201)
+	running := f.call("session-create", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "sleep 60"}, "name": "wire", "env": map[string]string{"WIRE": "1"}}, 201)
 	runningID := str(running, "id")
 	f.call("sessions-list", "GET", "/api/sessions", nil, 200)
 	f.call("session-get", "GET", "/api/sessions/"+runningID, nil, 200)
@@ -684,7 +683,6 @@ func wireBasics(f *wireFixture) {
 	t := f.t
 	// REST basics.
 	f.call("health", "GET", "/api/health", nil, 200)
-	f.call("presets", "GET", "/api/presets", nil, 200)
 	f.call("config", "GET", "/api/config", nil, 200)
 
 	// Session errors.
@@ -692,7 +690,7 @@ func wireBasics(f *wireFixture) {
 	f.call("error-400-session-json", "POST", "/api/sessions", `{"cwd":`, 400)
 	f.call("error-400-session-conflict", "POST", "/api/sessions", map[string]any{"configId": "abcdefgh", "cmd": []string{"/bin/sh"}}, 400)
 	f.call("error-400-session-config-empty", "POST", "/api/sessions", map[string]any{"configId": ""}, 400)
-	f.call("error-400-session-env", "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh"}, "env": map[string]string{"WEBMUX_SESSION_ID": "forged"}}, 400)
+	f.call("error-400-session-env", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh"}, "env": map[string]string{"WEBMUX_SESSION_ID": "forged"}}, 400)
 	f.call("error-401", "GET", "/api/health", nil, 401, withToken(""))
 	f.call("error-403-origin", "GET", "/api/health", nil, 403, withOrigin("http://evil.example"))
 	f.call("error-404-session", "GET", "/api/sessions/missing", nil, 404)
@@ -756,7 +754,7 @@ func wireWorkspace(f *wireFixture) {
 	treeID := str(tree, "id")
 	f.call("error-400-worktree", "POST", base+"/worktrees", map[string]string{"path": filepath.Join(filepath.Dir(f.root), "bad"), "mode": "new", "branch": "--force", "base": "HEAD"}, 400)
 	f.call("error-404-repository", "GET", "/api/repositories/missing/worktrees", nil, 404)
-	f.call("session-create-workspace", "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh", "-c", "sleep 60"}, "workspace": map[string]string{"repositoryId": repositoryID, "worktreeId": treeID}}, 201)
+	f.call("session-create-workspace", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "sleep 60"}, "workspace": map[string]string{"repositoryId": repositoryID, "worktreeId": treeID}}, 201)
 	treeURL := base + "/worktrees/" + treeID
 	preview := f.call("worktree-removal-preview", "POST", treeURL+"/removal-preview", map[string]any{}, 200)
 	f.call("error-409-worktree-remove", "POST", treeURL+"/remove", map[string]any{"confirmationId": str(preview, "confirmationId"), "mode": "safe"}, 409)
@@ -810,7 +808,7 @@ func wirePush(f *wireFixture) {
 // These groups need a live session, not the sessions group's lifecycle or IDs.
 func (f *wireFixture) startSession() string {
 	f.t.Helper()
-	item, err := f.manager.Create(f.root, "custom", []string{"/bin/sh", "-c", "sleep 60"}, nil, "wire", nil)
+	item, err := f.manager.Create(f.root, []string{"/bin/sh", "-c", "sleep 60"}, "wire", nil)
 	if err != nil {
 		f.t.Fatal(err)
 	}

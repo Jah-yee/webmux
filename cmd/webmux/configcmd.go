@@ -118,13 +118,6 @@ func configShow(args []string, stdout, stderr io.Writer) int {
 	for _, origin := range view.AllowedOrigins {
 		line("Allowed origin:  %s", origin)
 	}
-	for _, preset := range view.Presets {
-		extra := ""
-		if preset.AllowArgs {
-			extra = " (accepts arguments)"
-		}
-		line("Preset %s: %s %q%s", preset.Name, preset.Label, preset.Argv, extra)
-	}
 	return contract.ExitOK
 }
 
@@ -138,10 +131,6 @@ func configView(path string, c config.Config) contract.ConfigV1 {
 		DefaultCwd:      c.DefaultCwd,
 		StateDir:        c.StateDir,
 		AllowedOrigins:  append([]string{}, c.AllowedOrigins...),
-		Presets:         []contract.PresetV1{},
-	}
-	for _, p := range c.Presets {
-		view.Presets = append(view.Presets, contract.PresetV1{Name: p.Name, Label: p.Label, Argv: append([]string{}, p.Cmd...), AllowArgs: p.AllowArgs})
 	}
 	return view
 }

@@ -112,8 +112,8 @@ func TestWorkspaceAPIRoutesAndErrorBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := &contract.WorkspaceReference{RepositoryID: repository.ID, WorktreeID: tree.ID}
-	workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cwd": root, "preset": "custom", "cmd": []string{"/bin/sh"}, "workspace": ref}, 400)
-	started := workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh", "-c", "printf READY; read value"}, "workspace": ref}, 201)
+	workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cwd": root, "cmd": []string{"/bin/sh"}, "workspace": ref}, 400)
+	started := workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "printf READY; read value"}, "workspace": ref}, 201)
 	var info contract.SessionInfo
 	if err := json.Unmarshal(started.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestWorkspaceAPIRoutesAndErrorBoundaries(t *testing.T) {
 	if _, err := os.Stat(tree.Path); err != nil {
 		t.Fatal("unregister deleted tree", err)
 	}
-	legacy := workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cwd": root, "preset": "custom", "cmd": []string{"/bin/sh", "-c", "printf LEGACY"}}, 201)
+	legacy := workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cwd": root, "cmd": []string{"/bin/sh", "-c", "printf LEGACY"}}, 201)
 	if !strings.Contains(legacy.Body.String(), `"workspace":null`) {
 		t.Fatal("legacy JSON missing explicit null workspace")
 	}
@@ -194,10 +194,10 @@ func TestWorkspaceAPIConfigDegradationAndTimeout(t *testing.T) {
 		t.Fatalf("capability/credential response: %s", response.Body.String())
 	}
 	workspaceRequest(t, handler, "GET", "/api/repositories", nil, 503)
-	workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"/bin/sh", "-c", "printf DIRECT"}}, 201)
+	workspaceRequest(t, handler, "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "printf DIRECT"}}, 201)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	request := httptest.NewRequest("POST", "/api/sessions", strings.NewReader(`{"preset":"custom","cmd":["/bin/sh"]}`)).WithContext(ctx)
+	request := httptest.NewRequest("POST", "/api/sessions", strings.NewReader(`{"cmd":["/bin/sh"]}`)).WithContext(ctx)
 	request.Header.Set("Authorization", "Bearer secret")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -233,7 +233,7 @@ func TestWorkspaceMetadataUsesExistingWebSocketProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	item, err := service.CreateSession(context.Background(), workspace.SessionInput{Cwd: root, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf READY; read value"}})
+	item, err := service.CreateSession(context.Background(), workspace.SessionInput{Cwd: root, Cmd: []string{"/bin/sh", "-c", "printf READY; read value"}})
 	if err != nil {
 		t.Fatal(err)
 	}

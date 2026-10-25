@@ -48,7 +48,7 @@ func newBackend(t *testing.T) *backend {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Listen, c.Token, c.StateDir, c.DefaultCwd, c.Shell = l.Addr().String(), token, t.TempDir(), t.TempDir(), "/bin/sh"
+	c.Listen, c.Token, c.StateDir, c.DefaultCwd = l.Addr().String(), token, t.TempDir(), t.TempDir()
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestRelayCarriesRESTAndTerminal(t *testing.T) {
 	base := "http://" + relay
 	self := base
 
-	resp := request(t, http.MethodPost, base+"/api/sessions", "", self, token, strings.NewReader(`{"preset":"custom","cmd":["cat"]}`))
+	resp := request(t, http.MethodPost, base+"/api/sessions", "", self, token, strings.NewReader(`{"cmd":["cat"]}`))
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("create through relay: %d %s", resp.StatusCode, body)

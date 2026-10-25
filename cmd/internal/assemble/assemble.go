@@ -11,14 +11,9 @@ import (
 
 // SessionOptions converts the loaded configuration for session.NewManager.
 func SessionOptions(c config.Config) session.Options {
-	presets := make([]session.Preset, 0, len(c.Presets))
-	for _, p := range c.Presets {
-		presets = append(presets, session.Preset{Name: p.Name, Label: p.Label, Cmd: p.Cmd, AllowArgs: p.AllowArgs})
-	}
 	return session.Options{
 		ScrollbackBytes: c.ScrollbackBytes,
 		DefaultCwd:      c.DefaultCwd,
-		Presets:         presets,
 		IdleAfter:       time.Duration(c.IdleAfterSeconds) * time.Second,
 		PromptPatterns:  c.PromptPatterns,
 

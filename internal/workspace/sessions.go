@@ -140,12 +140,10 @@ func (s *Service) reassociate(ctx context.Context) {
 }
 
 // SessionInput describes a session to start. ConfigID selects a saved launch
-// config instead of Preset, Cmd, Args and Env.
+// config instead of Cmd and Env.
 type SessionInput struct {
 	Cwd       string
-	Preset    string
 	Cmd       []string
-	Args      []string
 	Name      string
 	Workspace *Reference
 	Env       map[string]string
@@ -154,32 +152,32 @@ type SessionInput struct {
 
 // resolveCommand applies a saved launch config and validates the explicit
 // environment. It runs before any filesystem or Git work.
-func (s *Service) resolveCommand(in SessionInput) (preset string, cmd, args []string, env map[string]string, err error) {
-	preset, cmd, args, env = in.Preset, in.Cmd, in.Args, in.Env
+func (s *Service) resolveCommand(in SessionInput) (cmd []string, env map[string]string, err error) {
+	cmd, env = in.Cmd, in.Env
 	if in.ConfigID != nil {
 		if *in.ConfigID == "" {
-			return "", nil, nil, nil, problem(ErrInvalid, "configId must not be empty")
+			return nil, nil, problem(ErrInvalid, "configId must not be empty")
 		}
-		if in.Preset != "" || len(in.Cmd) > 0 || len(in.Args) > 0 || len(in.Env) > 0 {
-			return "", nil, nil, nil, problem(ErrInvalid, "configId cannot be combined with preset, cmd, args or env")
+		if len(in.Cmd) > 0 || len(in.Env) > 0 {
+			return nil, nil, problem(ErrInvalid, "configId cannot be combined with cmd or env")
 		}
 		// A nil store answers launch.ErrUnavailable.
 		saved, err := s.launches.Get(*in.ConfigID)
 		if err != nil {
-			return "", nil, nil, nil, err
+			return nil, nil, err
 		}
-		preset, cmd, args, env = "custom", saved.Cmd, nil, saved.Env
+		cmd, env = saved.Cmd, saved.Env
 	}
 	if err := session.ValidateEnv(env); err != nil {
-		return "", nil, nil, nil, problem(ErrInvalid, "%v", err)
+		return nil, nil, problem(ErrInvalid, "%v", err)
 	}
-	return preset, cmd, args, env, nil
+	return cmd, env, nil
 }
 
 // CreateSession starts a session in the selected directory or worktree.
 // Launch config errors keep their launch error kinds.
 func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.Session, error) {
-	preset, cmd, args, env, err := s.resolveCommand(in)
+	cmd, env, err := s.resolveCommand(in)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +240,7 @@ func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.
 	if err := requestCtx.Err(); err != nil {
 		return nil, err
 	}
-	item, err := s.manager.Create(path, preset, cmd, args, name, env)
+	item, err := s.manager.Create(path, cmd, name, env)
 	if err != nil {
 		return nil, problem(ErrInvalid, "启动会话失败: %v", err)
 	}

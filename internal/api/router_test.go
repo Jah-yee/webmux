@@ -88,7 +88,7 @@ func TestProtocolAndSecurity(t *testing.T) {
 	if err = json.Unmarshal(raw, &snapshot); err != nil || snapshot.Type != "snapshot" || snapshot.Sessions == nil {
 		t.Fatalf("empty snapshot: %s", raw)
 	}
-	res := request("POST", "/api/sessions", `{"preset":"shell"}`, "secret", "")
+	res := request("POST", "/api/sessions", `{"cmd":["/bin/sh"]}`, "secret", "")
 	if res.StatusCode != 201 {
 		t.Fatal(res.Status)
 	}
@@ -238,7 +238,7 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 		m.Shutdown(ctx)
 	}()
 	cmd := []string{"./report", "two words", `"quoted value"`, "$HOME", "*", "$(touch sentinel)", "; exit 9"}
-	body, err := json.Marshal(map[string]any{"cwd": cwd, "preset": "custom", "cmd": cmd, "args": []string{}, "name": "My command"})
+	body, err := json.Marshal(map[string]any{"cwd": cwd, "cmd": cmd, "name": "My command"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.Preset != "custom" || info.Cwd != cwd || info.Title != "My command" || !reflect.DeepEqual(info.Cmd, cmd) {
+	if info.Cwd != cwd || info.Title != "My command" || !reflect.DeepEqual(info.Cmd, cmd) {
 		t.Fatalf("custom session info: %+v", info)
 	}
 	item, err := m.Get(info.ID)
@@ -289,29 +289,18 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 }
 
 func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
-	presets := []config.Preset{
-		{Name: "fixed", Cmd: []string{"/bin/echo", "fixed"}},
-		{Name: "with-args", Cmd: []string{"/bin/echo", "preset"}, AllowArgs: true},
-	}
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: testPresets(presets)})
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	handler := New(testDeps(t, Deps{Config: config.Config{Presets: presets}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
+	handler := New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
 	for _, body := range []string{
-		`{"preset":"custom"}`,
-		`{"preset":"custom","cmd":[]}`,
-		`{"preset":"custom","cmd":[""]}`,
-		`{"preset":"custom","cmd":["/bin/echo"],"args":["extra"]}`,
-		`{"preset":"fixed","cmd":["/bin/echo"]}`,
-		`{"preset":"with-args","cmd":["/bin/echo"],"args":["extra"]}`,
-		`{"preset":"fixed","cmd":[]}`,
-		`{"cmd":["/bin/echo"]}`,
-		`{"preset":"fixed","args":["extra"]}`,
-		`{"preset":"missing"}`,
-		`{"preset":"custom","cmd":["/definitely/missing/webmux-executable"]}`,
+		`{"cmd":[]}`,
+		`{"cmd":[""]}`,
+		`{}`,
+		`{"cmd":["/definitely/missing/webmux-executable"]}`,
 	} {
 		t.Run(body, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
@@ -329,15 +318,15 @@ func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
 		t.Fatalf("invalid requests created sessions: %v", got)
 	}
 	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest("POST", "/api/sessions", strings.NewReader(`{"preset":"with-args","args":["two words","$HOME"]}`)))
+	handler.ServeHTTP(recorder, httptest.NewRequest("POST", "/api/sessions", strings.NewReader(`{"cmd":["/bin/echo","two words","$HOME"]}`)))
 	if recorder.Code != http.StatusCreated {
-		t.Fatalf("preset with allowed arguments: status %d: %s", recorder.Code, recorder.Body.String())
+		t.Fatalf("command with arguments: status %d: %s", recorder.Code, recorder.Body.String())
 	}
 	var info contract.SessionInfo
 	if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.Preset != "with-args" || !reflect.DeepEqual(info.Cmd, []string{"/bin/echo", "preset", "two words", "$HOME"}) {
-		t.Fatalf("preset arguments: %+v", info)
+	if !reflect.DeepEqual(info.Cmd, []string{"/bin/echo", "two words", "$HOME"}) {
+		t.Fatalf("command arguments: %+v", info)
 	}
 }

@@ -75,7 +75,7 @@ export async function startE2EServer({ noGit = false, token = "" } = {}) {
       mkdir(home),
       writeFile(
         config,
-        `listen = "127.0.0.1:0"\ntoken = ${JSON.stringify(token)}\ndefault_cwd = ${JSON.stringify(workDir)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\nshell = "/bin/bash"\nidle_after_seconds = 30\n\n[[presets]]\nname = "shell"\nlabel = "Shell"\ncmd = ["/bin/bash", "--noprofile", "--norc", "-i"]\n`,
+        `listen = "127.0.0.1:0"\ntoken = ${JSON.stringify(token)}\ndefault_cwd = ${JSON.stringify(workDir)}\nstate_dir = ${JSON.stringify(join(root, "state"))}\nidle_after_seconds = 30\n`,
       ),
     ]);
     async function launchBackend(listen) {

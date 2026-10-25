@@ -39,7 +39,7 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 				}
 			}
 			configPath := filepath.Join(dir, "config.toml")
-			content := fmt.Sprintf("listen = '127.0.0.1:0'\ndefault_cwd = %q\nstate_dir = %q\nshell = '/bin/sh'\n", dir, state)
+			content := fmt.Sprintf("listen = '127.0.0.1:0'\ndefault_cwd = %q\nstate_dir = %q\n", dir, state)
 			if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -103,7 +103,7 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 			if err != nil || settings.Workspace.GitAvailable || settings.Workspace.RegistryAvailable == brokenState {
 				t.Fatalf("degraded capability: %+v %v", settings, err)
 			}
-			response, err = client.Post(url+"/api/sessions", "application/json", strings.NewReader(`{"preset":"custom","cmd":["/bin/sh","-c","printf REAL_DEGRADED"]}`))
+			response, err = client.Post(url+"/api/sessions", "application/json", strings.NewReader(`{"cmd":["/bin/sh","-c","printf REAL_DEGRADED"]}`))
 			if err != nil {
 				t.Fatal(err)
 			}

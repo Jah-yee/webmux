@@ -7,7 +7,6 @@ const session = {
   generation: "0123456789abcdef",
   title: "omp",
   cwd: "/work",
-  preset: "omp",
   cmd: ["omp"],
   status: "waiting",
   exitCode: null,

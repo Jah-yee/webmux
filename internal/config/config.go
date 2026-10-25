@@ -21,23 +21,13 @@ type Config struct {
 	ScrollbackBytes  int          `toml:"scrollback_bytes"`
 	DefaultCwd       string       `toml:"default_cwd"`
 	StateDir         string       `toml:"state_dir"`
-	Shell            string       `toml:"shell"`
 	IdleAfterSeconds int          `toml:"idle_after_seconds"`
 	PromptPatterns   []string     `toml:"prompt_patterns"`
 	AgentProtocol    bool         `toml:"agent_protocol"`
 	BellAttention    bool         `toml:"bell_attention"`
 	AllowedOrigins   []string     `toml:"allowed_origins"`
-	Presets          []Preset     `toml:"presets"`
 	Tunnel           TunnelConfig `toml:"tunnel"`
 	Push             PushConfig   `toml:"push"`
-}
-
-// Preset is a configured launch command.
-type Preset struct {
-	Name      string   `toml:"name"`
-	Label     string   `toml:"label"`
-	Cmd       []string `toml:"cmd"`
-	AllowArgs bool     `toml:"allow_args"`
 }
 
 // TunnelConfig selects a Cloudflare Tunnel. An empty Token means a Quick
@@ -127,13 +117,6 @@ func DefaultStateDir() string {
 	return filepath.Join(home, ".local", "state", "webmux")
 }
 
-// bashrcCommand runs program through an interactive bash so it sees the
-// environment and PATH from ~/.bashrc, which a service manager never loads.
-// The trailing program is bash -c's $0; appended arguments reach it via "$@".
-func bashrcCommand(program string) []string {
-	return []string{"bash", "-ic", `exec ` + program + ` "$@"`, program}
-}
-
 func Load(path string, required bool) (Config, error) {
 	c := Config{
 		Listen:           "0.0.0.0:7681",
@@ -145,12 +128,6 @@ func Load(path string, required bool) (Config, error) {
 		PromptPatterns: []string{
 			`[$#%>❯›?:]\s*$`,
 			`(?i)\(y/n\)|\[y/n\]|yes.*no|press enter`,
-		},
-		Presets: []Preset{
-			{Name: "shell", Label: "Shell", Cmd: []string{}},
-			{Name: "claude", Label: "Claude Code", Cmd: bashrcCommand("claude"), AllowArgs: true},
-			{Name: "codex", Label: "Codex CLI", Cmd: bashrcCommand("codex"), AllowArgs: true},
-			{Name: "omp", Label: "omp", Cmd: bashrcCommand("omp"), AllowArgs: true},
 		},
 		Push: PushConfig{
 			Enabled:      true,
@@ -185,29 +162,6 @@ func (c *Config) Validate() error {
 	// Storage accessibility is a workspace capability, not a startup prerequisite.
 	if expanded, expandErr := pathutil.Expand(c.StateDir); expandErr == nil {
 		c.StateDir = expanded
-	}
-	if c.Shell == "" {
-		c.Shell = os.Getenv("SHELL")
-	}
-	if c.Shell == "" {
-		c.Shell = "/bin/bash"
-	}
-	seen := map[string]bool{}
-	for i := range c.Presets {
-		p := &c.Presets[i]
-		if p.Name == "" || seen[p.Name] {
-			return errors.New("preset names must be nonempty and unique")
-		}
-		if p.Name == "custom" {
-			return errors.New("preset name custom is reserved for custom commands")
-		}
-		seen[p.Name] = true
-		if p.Name == "shell" && len(p.Cmd) == 0 {
-			p.Cmd = []string{c.Shell, "-l", "-i"}
-		}
-		if len(p.Cmd) == 0 || p.Cmd[0] == "" {
-			return fmt.Errorf("preset %s has no command", p.Name)
-		}
 	}
 	for _, pattern := range c.PromptPatterns {
 		if _, err := regexp.Compile(pattern); err != nil {

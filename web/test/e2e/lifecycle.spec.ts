@@ -44,7 +44,11 @@ for (const initialization of ["connected", "font-pending"] as const) {
     }
     const name = `Back navigation ${initialization}`;
     const created = await request.post("/api/sessions", {
-      data: { cwd: workDir, preset: "shell", name },
+      data: {
+        cwd: workDir,
+        cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+        name,
+      },
     });
     expect(created.status()).toBe(201);
     const { id } = await created.json();
@@ -79,7 +83,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
       await expect(create).toBeEnabled();
       await create.click();
       await expect(
-        page.getByRole("button", { name: "Shell", exact: true }),
+        page.getByRole("tab", { name: "手动填写", exact: true }),
       ).toBeVisible();
       await page.getByRole("button", { name: "取消", exact: true }).click();
       await page
@@ -142,7 +146,6 @@ test("real shell output survives reload, then closes and is removed", async ({
     id,
     title: marker,
     cwd: workDir,
-    preset: "shell",
     cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
   });
 

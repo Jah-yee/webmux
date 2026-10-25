@@ -14,7 +14,6 @@ const base: SessionInfo = {
   generation: "0123456789abcdef",
   title: "omp agent",
   cwd: "/work",
-  preset: "omp",
   cmd: ["omp"],
   status: "waiting",
   exitCode: null,

@@ -9,7 +9,6 @@ default_cwd = "~"
 # Default: $XDG_STATE_HOME/webmux, or ~/.local/state/webmux.
 # Use a separate state_dir for each server instance. Git is optional.
 # state_dir = "~/.local/state/webmux"
-shell = ""
 idle_after_seconds = 30
 prompt_patterns = ['[$#%>❯›?:]\s*$', '(?i)\(y/n\)|\[y/n\]|yes.*no|press enter']
 allowed_origins = []
@@ -46,29 +45,8 @@ bell_attention = true
 # kinds = ["question", "permission", "error", "done", "notify"]  # also "bell"
 # include_title = true                                # false: title "WebMux"
 
-# Built-in presets shown in the new-session form. Changes apply after a
-# restart. Saved launch configs (Settings → 启动配置) live separately in
-# <state_dir>/launch-configs.json and never copy or follow these presets.
-[[presets]]
-name = "shell"
-label = "Shell"
-cmd = []
-allow_args = false
-
-[[presets]]
-name = "claude"
-label = "Claude Code"
-cmd = ["bash", "-ic", "exec claude \"$@\"", "claude"]
-allow_args = true
-
-[[presets]]
-name = "codex"
-label = "Codex CLI"
-cmd = ["bash", "-ic", "exec codex \"$@\"", "codex"]
-allow_args = true
-
-[[presets]]
-name = "omp"
-label = "omp"
-cmd = ["bash", "-ic", "exec omp \"$@\"", "omp"]
-allow_args = true
+# Save custom launch configurations in Settings → 启动配置.
+# Their complete argv and optional environment are stored separately in
+# <state_dir>/launch-configs.json; a new installation has no launch commands.
+# Commands run directly, without an implicit shell. To load ~/.bashrc for
+# Open Code, save argv ["bash", "-ic", "exec opencode \"$@\"", "opencode"].

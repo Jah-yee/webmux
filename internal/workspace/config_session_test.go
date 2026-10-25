@@ -45,12 +45,10 @@ func TestConfigIDRulesRunBeforeDirectoryChecks(t *testing.T) {
 		text string
 	}{
 		{"empty", SessionInput{Cwd: missing, ConfigID: &empty}, ErrInvalid, "configId must not be empty"},
-		{"with preset", SessionInput{Cwd: missing, ConfigID: &id, Preset: "custom"}, ErrInvalid, "configId cannot be combined with preset, cmd, args or env"},
-		{"with cmd", SessionInput{Cwd: missing, ConfigID: &id, Cmd: []string{"x"}}, ErrInvalid, "configId cannot be combined with preset, cmd, args or env"},
-		{"with args", SessionInput{Cwd: missing, ConfigID: &id, Args: []string{"x"}}, ErrInvalid, "configId cannot be combined with preset, cmd, args or env"},
-		{"with env", SessionInput{Cwd: missing, ConfigID: &id, Env: map[string]string{"A": "1"}}, ErrInvalid, "configId cannot be combined with preset, cmd, args or env"},
+		{"with cmd", SessionInput{Cwd: missing, ConfigID: &id, Cmd: []string{"x"}}, ErrInvalid, "configId cannot be combined with cmd or env"},
+		{"with env", SessionInput{Cwd: missing, ConfigID: &id, Env: map[string]string{"A": "1"}}, ErrInvalid, "configId cannot be combined with cmd or env"},
 		{"unknown", SessionInput{Cwd: missing, ConfigID: &unknown}, launch.ErrNotFound, launch.ErrNotFound.Error()},
-		{"forged env", SessionInput{Cwd: missing, Preset: "custom", Cmd: []string{"/bin/sh"}, Env: map[string]string{"WEBMUX_SESSION_ID": "x"}}, ErrInvalid, ""},
+		{"forged env", SessionInput{Cwd: missing, Cmd: []string{"/bin/sh"}, Env: map[string]string{"WEBMUX_SESSION_ID": "x"}}, ErrInvalid, ""},
 	} {
 		_, err := s.CreateSession(context.Background(), row.in)
 		if !errors.Is(err, row.kind) || (row.text != "" && err.Error() != row.text) {
@@ -62,7 +60,7 @@ func TestConfigIDRulesRunBeforeDirectoryChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	info := item.Info()
-	if info.Preset != "custom" || !reflect.DeepEqual(info.Cmd, saved.Cmd) || info.Cwd != cwd {
+	if !reflect.DeepEqual(info.Cmd, saved.Cmd) || info.Cwd != cwd {
 		t.Fatalf("session from config: %+v", info)
 	}
 }

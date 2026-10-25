@@ -167,7 +167,7 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 	if _, e := s.Raw(context.Background(), id, deleted.Snapshot, "new"); errorKind(e) != ErrNotFound {
 		t.Fatalf("empty side: %v", e)
 	}
-	other, e := s.manager.Create(root, "custom", []string{"/bin/sh"}, nil, "", nil)
+	other, e := s.manager.Create(root, []string{"/bin/sh"}, "", nil)
 	if e != nil {
 		t.Fatal(e)
 	}

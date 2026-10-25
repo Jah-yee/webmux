@@ -8,7 +8,6 @@ package wire
 
 import (
 	"github.com/rainchan/webmux/internal/codeview"
-	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
@@ -31,7 +30,7 @@ func each[S, D any](in []S, f func(S) D) []D {
 // Session converts one session snapshot.
 func Session(i session.Info) contract.SessionInfo {
 	out := contract.SessionInfo{
-		ID: i.ID, Generation: i.Generation, Title: i.Title, Cwd: i.Cwd, Preset: i.Preset,
+		ID: i.ID, Generation: i.Generation, Title: i.Title, Cwd: i.Cwd,
 		Cmd: i.Cmd, Status: string(i.Status), ExitCode: i.ExitCode, Preview: i.Preview,
 		CreatedAt: i.CreatedAt, LastActiveAt: i.LastActiveAt, Cols: i.Cols, Rows: i.Rows, Clients: i.Clients,
 	}
@@ -51,13 +50,9 @@ func Session(i session.Info) contract.SessionInfo {
 
 func Sessions(in []session.Info) []contract.SessionInfo { return each(in, Session) }
 
-func Presets(in []config.Preset) []contract.Preset {
-	return each(in, func(p config.Preset) contract.Preset { return contract.Preset(p) })
-}
-
 // SessionInput converts the body of POST /api/sessions.
 func SessionInput(r contract.CreateSessionRequest) workspace.SessionInput {
-	in := workspace.SessionInput{Cwd: r.Cwd, Preset: r.Preset, Cmd: r.Cmd, Args: r.Args, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID}
+	in := workspace.SessionInput{Cwd: r.Cwd, Cmd: r.Cmd, Name: r.Name, Env: r.Env, ConfigID: r.ConfigID}
 	if r.Workspace != nil {
 		ref := workspace.Reference(*r.Workspace)
 		in.Workspace = &ref

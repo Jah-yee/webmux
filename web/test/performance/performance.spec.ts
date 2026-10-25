@@ -46,20 +46,17 @@ for (const theme of ["light", "dark"] as const) {
     await page.addInitScript((theme) => {
       localStorage.setItem("webmux.theme", theme);
     }, theme);
-    await page.route(
-      /\/api\/(health|config|repositories|presets)$/,
-      async (route) => {
-        await delay(750);
-        if (new URL(route.request().url()).pathname === "/api/config") {
-          const response = await route.fetch();
-          const config = await response.json();
-          await route.fulfill({
-            response,
-            json: { ...config, hostname: "demo-host" },
-          });
-        } else await route.continue();
-      },
-    );
+    await page.route(/\/api\/(health|config|repositories)$/, async (route) => {
+      await delay(750);
+      if (new URL(route.request().url()).pathname === "/api/config") {
+        const response = await route.fetch();
+        const config = await response.json();
+        await route.fulfill({
+          response,
+          json: { ...config, hostname: "demo-host" },
+        });
+      } else await route.continue();
+    });
     await page.route("**/fonts/*.woff2", async (route) => {
       await delay(650);
       await route.continue();
@@ -98,7 +95,6 @@ test("4x CPU: background output and status updates do not move session cards", a
   for (const name of ["background-output", "stable-neighbour"]) {
     const response = await request.post("/api/sessions", {
       data: {
-        preset: "custom",
         name,
         cwd: workDir,
         cmd: [
@@ -246,7 +242,7 @@ test("4x CPU: delayed repository discovery and Git refresh stay stable", async (
   const [repository] = await (await request.get("/api/repositories")).json();
   const created = await request.post("/api/sessions", {
     data: {
-      preset: "shell",
+      cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
       name: "Repository CPU 4x",
       workspace: {
         repositoryId: repository.id,
@@ -279,7 +275,11 @@ test("4x CPU: a stalled repository request cannot block existing terminals", asy
   workDir,
 }, testInfo) => {
   const created = await request.post("/api/sessions", {
-    data: { preset: "shell", name: "Always reachable", cwd: workDir },
+    data: {
+      cmd: ["/bin/bash", "--noprofile", "--norc", "-i"],
+      name: "Always reachable",
+      cwd: workDir,
+    },
   });
   expect(created.status()).toBe(201);
   const held = Promise.withResolvers<void>();

@@ -28,15 +28,15 @@ type launchHarness struct {
 
 func newLaunchHarness(t *testing.T, store *launch.Service) *launchHarness {
 	t.Helper()
-	presets := []config.Preset{{Name: "fixed", Cmd: []string{"/bin/echo", "fixed"}}}
+
 	cwd := t.TempDir()
-	m := session.NewManager(session.Options{DefaultCwd: cwd, Presets: testPresets(presets)})
+	m := session.NewManager(session.Options{DefaultCwd: cwd})
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	c := config.Config{Token: "secret", Presets: presets, DefaultCwd: cwd}
+	c := config.Config{Token: "secret", DefaultCwd: cwd}
 	return &launchHarness{t: t, handler: New(testDeps(t, Deps{Config: c, Manager: m, Launch: store})), manager: m, store: store, cwd: cwd}
 }
 
@@ -219,9 +219,7 @@ func TestLaunchConfigUnavailable(t *testing.T) {
 				}
 			}
 			h.expect("POST", "/api/sessions", `{"configId":"abcdefgh","cwd":"/definitely/missing"}`, 503)
-			// Built-in presets keep working.
-			h.expect("GET", "/api/presets", "", 200)
-			h.expect("POST", "/api/sessions", `{"preset":"fixed"}`, 201)
+			h.expect("POST", "/api/sessions", `{"cmd":["/bin/echo","fixed"]}`, 201)
 		})
 	}
 	if got, err := os.ReadFile(path); err != nil || string(got) != string(corrupt) {
@@ -268,11 +266,11 @@ func TestSessionFromLaunchConfig(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{"name": "env test", "cmd": []string{"/bin/sh", "-c", script, "sh", "", "two words"}, "env": map[string]string{"FOO": "from config"}})
 	cfg := h.create(string(body))
 	var info contract.SessionInfo
-	raw := h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`","cwd":"`+h.cwd+`","env":{},"cmd":[],"args":[],"preset":"","name":"From config"}`, 201)
+	raw := h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`","cwd":"`+h.cwd+`","env":{},"cmd":[],"name":"From config"}`, 201)
 	if err := json.Unmarshal(raw, &info); err != nil {
 		t.Fatal(err)
 	}
-	if info.Preset != "custom" || !reflect.DeepEqual(info.Cmd, cfg.Cmd) || info.Title != "From config" || info.Cwd != h.cwd {
+	if !reflect.DeepEqual(info.Cmd, cfg.Cmd) || info.Title != "From config" || info.Cwd != h.cwd {
 		t.Fatalf("session info %+v", info)
 	}
 	var fields map[string]any
@@ -327,10 +325,7 @@ func TestSessionConfigIDValidation(t *testing.T) {
 	ref := `"configId":"` + cfg.ID + `","cwd":"` + missing + `"`
 	for _, body := range []string{
 		`{"configId":"","cwd":"` + missing + `"}`,
-		`{` + ref + `,"preset":"fixed"}`,
-		`{` + ref + `,"preset":"custom"}`,
 		`{` + ref + `,"cmd":["/bin/echo"]}`,
-		`{` + ref + `,"args":["x"]}`,
 		`{` + ref + `,"env":{"FOO":"x"}}`,
 		`{` + ref + `,"launchConfig":"x"}`,
 	} {
@@ -349,10 +344,10 @@ func TestSessionConfigIDValidation(t *testing.T) {
 	// env: null and env: {} are not conflicts; the cwd error comes after.
 	h.expect("POST", "/api/sessions", `{`+ref+`,"env":null}`, 400)
 	h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`","env":null,"cmd":null}`, 201)
-	// The preset, custom command and env paths are unchanged.
-	h.expect("POST", "/api/sessions", `{"preset":"fixed"}`, 201)
+	// Direct commands retain their explicit environment.
+	h.expect("POST", "/api/sessions", `{"cmd":["/bin/echo","fixed"]}`, 201)
 	var info contract.SessionInfo
-	if err := json.Unmarshal(h.expect("POST", "/api/sessions", `{"preset":"custom","cmd":["/bin/sh","-c","printf '<%s>' \"$BAR\""],"env":{"BAR":"direct"}}`, 201), &info); err != nil {
+	if err := json.Unmarshal(h.expect("POST", "/api/sessions", `{"cmd":["/bin/sh","-c","printf '<%s>' \"$BAR\""],"env":{"BAR":"direct"}}`, 201), &info); err != nil {
 		t.Fatal(err)
 	}
 	item, err := h.manager.Get(info.ID)
@@ -362,5 +357,5 @@ func TestSessionConfigIDValidation(t *testing.T) {
 	if got := waitExit(t, item); !strings.Contains(got, "<direct>") {
 		t.Fatalf("direct env output %q", got)
 	}
-	h.expect("POST", "/api/sessions", `{"preset":"custom","cmd":["/bin/echo"],"env":{"WEBMUX_SESSION_ID":"forged"}}`, 400)
+	h.expect("POST", "/api/sessions", `{"cmd":["/bin/echo"],"env":{"WEBMUX_SESSION_ID":"forged"}}`, 400)
 }

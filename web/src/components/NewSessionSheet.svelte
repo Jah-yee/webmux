@@ -1,6 +1,5 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import IconChevronDown from "~icons/tabler/chevron-down";
   import {
     api,
     APIError,
@@ -10,30 +9,26 @@
     recentDirs,
     store,
     stored,
-    unstore,
   } from "../api";
   import type { LaunchConfigsState } from "../launchConfigs";
   import {
     NoContentSchema,
     SessionInfoSchema,
     WorktreeSchema,
-    type Preset,
     type Repository,
     type Worktree,
   } from "../schemas";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import { ListButton } from "$lib/components/ui/list-button";
-  import * as NativeSelect from "$lib/components/ui/native-select";
+  import * as Select from "$lib/components/ui/select";
+  import * as Tabs from "$lib/components/ui/tabs";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import * as Collapsible from "$lib/components/ui/collapsible";
   import DirectoryPicker from "./DirectoryPicker.svelte";
   import ResponsiveDialog from "./ResponsiveDialog.svelte";
   import WorktreeCreateFields from "./WorktreeCreateFields.svelte";
 
   let {
-    presets,
     launchConfigs,
     defaultCwd,
     repositories = [],
@@ -44,7 +39,6 @@
     onworktreecreated,
     onclose,
   }: {
-    presets: Preset[];
     launchConfigs: LaunchConfigsState;
     defaultCwd: string;
     repositories?: Repository[];
@@ -57,27 +51,17 @@
   } = $props();
   const recent = recentDirs();
   let cwd = $state(untrack(() => recent[0] || defaultCwd));
-  // The last launch choice: `preset:<name>`, `config:<id>` or `custom`. Only
-  // the choice is remembered, never config contents. A legacy `lastPreset`
-  // is migrated once and then removed.
-  const fallbackLaunch = untrack(() => `preset:${presets[0]?.name ?? "shell"}`);
-  let launch = $state(
-    untrack(() => {
-      let saved = stored("lastLaunch");
-      const legacy = stored("lastPreset");
-      if (!saved && legacy) {
-        saved = legacy === "custom" ? "custom" : `preset:${legacy}`;
-        store("lastLaunch", saved);
-      }
-      if (legacy) unstore("lastPreset");
-      return saved === "custom" ||
-        saved.startsWith("config:") ||
-        presets.some((p) => `preset:${p.name}` === saved)
-        ? saved
-        : fallbackLaunch;
-    }),
+  // Preserve the existing lastLaunch format, independently of the inactive tab.
+  const lastLaunch = untrack(() => stored("lastLaunch"));
+  let commandSource = $state(
+    !lastLaunch || (lastLaunch.startsWith("config:") && lastLaunch.length > 7)
+      ? "saved"
+      : "custom",
   );
-  let args = $state("");
+  let selectedConfigId = $state(
+    lastLaunch.startsWith("config:") ? lastLaunch.slice(7) : "",
+  );
+  let launchInitialized = $state(false);
   let command = $state(stored("customCommand"));
   let name = $state("");
   let mkdirOpen = $state(false);
@@ -86,26 +70,42 @@
   let mkdirMounted = $state(false);
   let error = $state("");
   let busy = $state(false);
-  const chosen = $derived(presets.find((p) => `preset:${p.name}` === launch));
   const configs = $derived(
     launchConfigs.status === "ready" ? launchConfigs.configs : [],
   );
   const chosenConfig = $derived(
-    configs.find((config) => `config:${config.id}` === launch),
+    configs.find((config) => config.id === selectedConfigId),
   );
-  const custom = $derived(launch === "custom");
-  let temporaryOpen = $state(untrack(() => launch === "custom"));
-  // A remembered config that was deleted, or a store that is unavailable,
-  // falls back to the first built-in preset once the summaries settle.
+  const custom = $derived(commandSource === "custom");
   $effect(() => {
-    if (
-      launch.startsWith("config:") &&
-      launchConfigs.status !== "loading" &&
-      !chosenConfig
-    )
-      launch = fallbackLaunch;
+    if (launchConfigs.status === "loading") return;
+    if (!launchInitialized) {
+      launchInitialized = true;
+      if (!lastLaunch && !selectedConfigId) {
+        selectedConfigId = configs[0]?.id || "";
+        if (!selectedConfigId) commandSource = "custom";
+      }
+    }
+    // Never silently replace a deleted or unavailable remembered selection.
+    if (selectedConfigId && !chosenConfig) {
+      selectedConfigId = "";
+      commandSource = "custom";
+    }
+  });
+  const commandReady = $derived.by(() => {
+    if (!custom) return !!chosenConfig;
+    try {
+      const argv = parseArgs(command);
+      return !!argv.length && !!argv[0];
+    } catch {
+      return false;
+    }
   });
   let mode = $state(untrack(() => initialMode));
+  let newPanelMounted = $state(untrack(() => initialMode === "new"));
+  $effect(() => {
+    if (mode === "new") newPanelMounted = true;
+  });
   let repositoryId = $state(
     untrack(() => initialRepositoryId || repositories[0]?.id || ""),
   );
@@ -122,6 +122,15 @@
       ? createdTree
       : repository?.worktrees.find((w) => w.id === worktreeId),
   );
+  const worktreeChoices = $derived.by(() => {
+    const trees = repository?.worktrees || [];
+    return createdTree && !trees.some((tree) => tree.id === createdTree?.id)
+      ? [...trees, createdTree]
+      : trees;
+  });
+  function worktreeLabel(tree: Worktree) {
+    return `${tree.kind === "main" ? "主工作区 · " : ""}${tree.branch || tree.head?.slice(0, 12) || "无提交"}`;
+  }
   const targetReady = $derived(
     mode === "direct" ||
       (mode === "existing"
@@ -130,6 +139,10 @@
   );
 
   async function create(makeDirectory = false, treeOnly = false) {
+    if (!treeOnly && !commandReady) {
+      error = "请选择有效启动配置，或输入可执行程序及参数。";
+      return;
+    }
     busy = true;
     error = "";
     try {
@@ -167,15 +180,14 @@
         mode === "direct"
           ? { cwd }
           : { workspace: { repositoryId, worktreeId } };
-      const payload = chosenConfig
-        ? { ...target, configId: chosenConfig.id, name }
-        : {
-            ...target,
-            preset: custom ? "custom" : chosen?.name,
-            args: !custom && chosen?.allowArgs ? parseArgs(args) : [],
-            ...(custom ? { cmd } : {}),
-            name,
-          };
+      const payload =
+        !custom && chosenConfig
+          ? { ...target, configId: chosenConfig.id, name }
+          : {
+              ...target,
+              cmd,
+              name,
+            };
       if (makeDirectory)
         await api("/fs/mkdir", NoContentSchema, "POST", { path: cwd });
       const session = await api(
@@ -193,7 +205,7 @@
           ),
         ),
       );
-      store("lastLaunch", launch);
+      store("lastLaunch", custom ? "custom" : `config:${selectedConfigId}`);
       if (custom) store("customCommand", command);
       navigate("/s/" + session.id);
     } catch (err) {
@@ -215,6 +227,58 @@
   }
 </script>
 
+{#snippet repositoryPicker(id: string, active: boolean)}
+  <div class="space-y-2">
+    <Label for={id}>仓库</Label>
+    <Select.Root
+      type="single"
+      bind:value={repositoryId}
+      onValueChange={() => {
+        worktreeId = "";
+        createdTree = null;
+      }}
+      disabled={busy || !active}
+      items={repositories.map((repo) => ({
+        value: repo.id,
+        label: repo.name,
+      }))}
+    >
+      <Select.Trigger {id}>
+        {#if repository}
+          {@render choiceDetails(repository.name, repository.anchorPath)}
+        {:else}
+          <span class="text-muted-foreground">选择仓库</span>
+        {/if}
+      </Select.Trigger>
+      <Select.Content>
+        {#each repositories as repo (repo.id)}
+          <Select.Item
+            value={repo.id}
+            label={repo.name}
+            aria-label={repo.name}
+            disabled={repo.availability !== "available"}
+          >
+            {@render choiceDetails(repo.name, repo.anchorPath)}
+          </Select.Item>
+        {/each}
+      </Select.Content>
+    </Select.Root>
+  </div>
+{/snippet}
+
+{#snippet choiceDetails(label: string, description: string, envCount = 0)}
+  <span class="grid min-w-0 flex-1 gap-0.5">
+    <span class="truncate text-sm font-medium" title={label}>{label}</span>
+    <span
+      class="line-clamp-2 font-mono text-xs break-all whitespace-pre-wrap text-muted-foreground"
+      title={description}>{description}</span
+    >
+    {#if envCount}
+      <span class="text-xs text-muted-foreground">{envCount} 个环境变量</span>
+    {/if}
+  </span>
+{/snippet}
+
 {#snippet fields()}
   <form
     class="space-y-5"
@@ -224,222 +288,206 @@
     }}
   >
     <fieldset disabled={busy} class="min-w-0 space-y-5">
-      <fieldset class="space-y-2" disabled={busy}>
-        <legend class="mb-2 text-sm font-medium">启动位置</legend>
-        <div class="flex flex-wrap gap-2">
-          {#each [{ value: "direct", label: "直接目录" }, { value: "existing", label: "已有工作树" }, { value: "new", label: "新工作树" }] as option}
-            <Button
-              type="button"
-              variant={mode === option.value ? "default" : "outline"}
-              aria-pressed={mode === option.value}
-              disabled={option.value !== "direct" && !repositories.length}
-              onclick={() => {
-                mode = option.value as typeof mode;
-                error = "";
-              }}>{option.label}</Button
-            >
-          {/each}
-        </div>
-      </fieldset>
-      {#if mode !== "direct"}
-        <div class="space-y-2">
-          <Label for="session-repository">仓库</Label>
-          <NativeSelect.Root
-            id="session-repository"
-            bind:value={repositoryId}
-            onchange={() => {
-              worktreeId = "";
-              createdTree = null;
-            }}
-            disabled={busy}
-            class="w-full"
+      <Tabs.Root
+        bind:value={mode}
+        onValueChange={() => {
+          error = "";
+        }}
+      >
+        <Tabs.List aria-label="启动位置" size="form" class="w-full">
+          <Tabs.Trigger value="direct">直接目录</Tabs.Trigger>
+          <Tabs.Trigger value="existing" disabled={!repositories.length}
+            >已有工作树</Tabs.Trigger
           >
-            <NativeSelect.Option value="">选择仓库</NativeSelect.Option>
-            {#each repositories as repo (repo.id)}<NativeSelect.Option
-                value={repo.id}
-                disabled={repo.availability !== "available"}
-                >{repo.name}</NativeSelect.Option
-              >{/each}
-          </NativeSelect.Root>
-        </div>
-        {#if mode === "existing"}
-          <div class="space-y-2">
-            <Label for="session-worktree">工作树</Label>
-            <NativeSelect.Root
-              id="session-worktree"
-              bind:value={worktreeId}
-              disabled={busy}
-              class="w-full"
-            >
-              <NativeSelect.Option value="">选择工作树</NativeSelect.Option>
-              {#each repository?.worktrees || [] as tree (tree.id)}<NativeSelect.Option
-                  value={tree.id}
-                  disabled={!tree.available || tree.kind === "bare"}
-                  >{tree.kind === "main" ? "主工作区 · " : ""}{tree.branch ||
-                    tree.head?.slice(0, 12) ||
-                    "无提交"} · {tree.path}</NativeSelect.Option
-                >{/each}
-              {#if createdTree && !repository?.worktrees.some((tree) => tree.id === createdTree?.id)}<NativeSelect.Option
-                  value={createdTree.id}
-                  >{createdTree.branch} · {createdTree.path}</NativeSelect.Option
-                >{/if}
-            </NativeSelect.Root>
-            {#if worktree}<p
-                class="font-mono text-xs break-all whitespace-pre-wrap"
+          <Tabs.Trigger value="new" disabled={!repositories.length}
+            >新工作树</Tabs.Trigger
+          >
+        </Tabs.List>
+        <Tabs.Content value="existing" class="space-y-3 pt-2">
+          <fieldset
+            disabled={busy || mode !== "existing"}
+            class="min-w-0 space-y-3"
+          >
+            {@render repositoryPicker(
+              "session-repository-existing",
+              mode === "existing",
+            )}
+            <div class="space-y-2">
+              <Label for="session-worktree">工作树</Label>
+              <Select.Root
+                type="single"
+                bind:value={worktreeId}
+                disabled={busy || mode !== "existing"}
+                items={worktreeChoices.map((tree) => ({
+                  value: tree.id,
+                  label: worktreeLabel(tree),
+                }))}
               >
-                {worktree.path}
-              </p>{/if}
-            <p class="text-xs text-muted-foreground">
-              同一工作树中的会话共享文件，各自使用独立终端。锁定只保护 Git
-              工作树，不表示会话独占。
-            </p>
-            {#if createdTree}<p role="status" class="text-sm text-primary">
-                工作树已创建。再次提交只启动会话，不会重复创建分支或目录。
-              </p>{/if}
-          </div>
-        {:else if repository}
-          {#key repository.id}<WorktreeCreateFields
-              {repository}
-              disabled={busy}
-              bind:path={newPath}
-              bind:mode={branchMode}
-              bind:branch
-              bind:base
-              bind:ready={worktreeReady}
-            />{/key}
-        {/if}
-      {:else}
-        <div class="space-y-2">
-          <Label for="cwd">工作目录</Label>
-          <div class="flex gap-2">
-            <Input
-              id="cwd"
-              bind:value={cwd}
-              placeholder="~/projects"
-              required
-              autocomplete="off"
-              autocapitalize="off"
-              autocorrect="off"
-              spellcheck={false}
-            />
-            <DirectoryPicker bind:value={cwd} />
-          </div>
-          {#if recent.length}
-            <div class="flex flex-wrap gap-1" aria-label="最近目录">
-              {#each recent.slice(0, 5) as dir (dir)}<Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="max-w-full"
-                  title={dir}
-                  onclick={() => {
-                    cwd = dir;
-                  }}
-                  ><span class="min-w-0 truncate"
-                    >{dir.split("/").pop() || "/"}</span
-                  ></Button
-                >{/each}
+                <Select.Trigger id="session-worktree">
+                  {#if worktree}
+                    {@render choiceDetails(
+                      worktreeLabel(worktree),
+                      worktree.path,
+                    )}
+                  {:else}
+                    <span class="text-muted-foreground">选择工作树</span>
+                  {/if}
+                </Select.Trigger>
+                <Select.Content>
+                  {#each worktreeChoices as tree (tree.id)}
+                    <Select.Item
+                      value={tree.id}
+                      label={worktreeLabel(tree)}
+                      aria-label={worktreeLabel(tree)}
+                      disabled={!tree.available || tree.kind === "bare"}
+                    >
+                      {@render choiceDetails(worktreeLabel(tree), tree.path)}
+                    </Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+              {#if worktree}<p
+                  class="font-mono text-xs break-all whitespace-pre-wrap"
+                >
+                  {worktree.path}
+                </p>{/if}
+              <p class="text-xs text-muted-foreground">
+                同一工作树中的会话共享文件，各自使用独立终端。锁定只保护 Git
+                工作树，不表示会话独占。
+              </p>
+              {#if createdTree}<p role="status" class="text-sm text-primary">
+                  工作树已创建。再次提交只启动会话，不会重复创建分支或目录。
+                </p>{/if}
             </div>
-          {/if}
-        </div>
-      {/if}
+          </fieldset>
+        </Tabs.Content>
+        <Tabs.Content value="new" class="space-y-3 pt-2">
+          <fieldset disabled={busy || mode !== "new"} class="min-w-0 space-y-3">
+            {@render repositoryPicker("session-repository-new", mode === "new")}
+            {#if newPanelMounted && repository}
+              {#key repository.id}<WorktreeCreateFields
+                  {repository}
+                  disabled={busy || mode !== "new"}
+                  bind:path={newPath}
+                  bind:mode={branchMode}
+                  bind:branch
+                  bind:base
+                  bind:ready={worktreeReady}
+                />{/key}
+            {/if}
+          </fieldset>
+        </Tabs.Content>
+        <Tabs.Content value="direct" class="pt-2">
+          <fieldset disabled={busy || mode !== "direct"} class="min-w-0">
+            <div class="space-y-2">
+              <Label for="cwd">工作目录</Label>
+              <div class="flex gap-2">
+                <Input
+                  id="cwd"
+                  bind:value={cwd}
+                  placeholder="~/projects"
+                  required
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck={false}
+                />
+                <DirectoryPicker bind:value={cwd} />
+              </div>
+              {#if recent.length}
+                <div class="flex flex-wrap gap-1" aria-label="最近目录">
+                  {#each recent.slice(0, 5) as dir (dir)}<Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      class="max-w-full"
+                      title={dir}
+                      onclick={() => {
+                        cwd = dir;
+                      }}
+                      ><span class="min-w-0 truncate"
+                        >{dir.split("/").pop() || "/"}</span
+                      ></Button
+                    >{/each}
+                </div>
+              {/if}
+            </div>
+          </fieldset>
+        </Tabs.Content>
+      </Tabs.Root>
       <fieldset class="min-w-0 space-y-4">
         <legend class="mb-2 text-sm font-medium">启动命令</legend>
-        <div class="space-y-2" role="group" aria-labelledby="launch-builtin">
-          <p id="launch-builtin" class="text-xs text-muted-foreground">
-            内置预设
-          </p>
-          <div class="flex flex-wrap gap-2">
-            {#each presets as p (p.name)}
-              <Button
-                type="button"
-                variant={launch === `preset:${p.name}` ? "default" : "outline"}
-                aria-pressed={launch === `preset:${p.name}`}
-                onclick={() => {
-                  launch = `preset:${p.name}`;
-                  args = "";
-                }}>{p.label}</Button
-              >
-            {/each}
-          </div>
-        </div>
-        <div
-          class="min-w-0 space-y-2"
-          role="group"
-          aria-labelledby="launch-saved"
-          aria-busy={launchConfigs.status === "loading"}
-        >
-          <p id="launch-saved" class="text-xs text-muted-foreground">
-            我的启动配置
-          </p>
-          {#if launchConfigs.status === "loading"}
-            <p role="status" class="text-xs text-muted-foreground">
-              正在读取启动配置…
-            </p>
-          {:else if launchConfigs.status === "unavailable"}
-            <p class="text-xs text-destructive wrap-anywhere">
-              启动配置暂不可用：{launchConfigs.error}
-            </p>
-          {:else if !configs.length}
-            <p class="text-xs text-muted-foreground">
-              还没有启动配置。<a
-                class="text-foreground underline underline-offset-2"
-                href="/settings#launch-configs">前往设置创建启动配置</a
-              >
-            </p>
-          {:else}
-            <div class="grid max-h-60 min-w-0 gap-2 overflow-y-auto p-0.5">
-              {#each configs as config (config.id)}
-                <ListButton
-                  variant="option"
-                  class="grid min-w-0"
-                  aria-label={`启动配置 ${config.name}`}
-                  aria-pressed={launch === `config:${config.id}`}
-                  onclick={() => {
-                    launch = `config:${config.id}`;
-                    args = "";
-                  }}
-                >
-                  <span class="truncate text-sm font-medium">{config.name}</span
-                  >
-                  <span class="truncate font-mono text-xs text-muted-foreground"
-                    >{joinArgs(config.cmd)}</span
-                  >
-                  {#if config.envNames.length}<span
-                      class="text-xs text-muted-foreground"
-                      >{config.envNames.length} 个环境变量</span
-                    >{/if}
-                </ListButton>
-              {/each}
-            </div>
-          {/if}
-        </div>
-        <Collapsible.Root bind:open={temporaryOpen} class="min-w-0 space-y-2">
-          <Collapsible.Trigger
-            class="group flex items-center gap-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        <Tabs.Root bind:value={commandSource}>
+          <Tabs.List aria-label="启动命令来源" size="form" class="w-full">
+            <Tabs.Trigger value="saved">预先输入</Tabs.Trigger>
+            <Tabs.Trigger value="custom">手动填写</Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content
+            value="saved"
+            class="min-w-0 space-y-2 pt-2"
+            aria-busy={launchConfigs.status === "loading"}
           >
-            <IconChevronDown
-              class="size-4 -rotate-90 transition-transform group-data-[state=open]:rotate-0"
-              aria-hidden="true"
-            />临时命令（不保存）
-          </Collapsible.Trigger>
-          <Collapsible.Content class="space-y-2">
-            <Button
-              type="button"
-              variant={custom ? "default" : "outline"}
-              aria-pressed={custom}
-              onclick={() => {
-                launch = "custom";
-                args = "";
-              }}>自定义</Button
-            >
-            {#if custom}
+            {#if launchConfigs.status === "loading"}
+              <p role="status" class="text-xs text-muted-foreground">
+                正在读取启动配置…
+              </p>
+            {:else if launchConfigs.status === "unavailable"}
+              <p class="text-xs text-destructive wrap-anywhere">
+                启动配置暂不可用：{launchConfigs.error}
+              </p>
+            {:else if !configs.length}
+              <p class="text-xs text-muted-foreground">
+                还没有启动配置。<a
+                  class="text-foreground underline underline-offset-2"
+                  href="/settings#launch-configs">前往设置创建启动配置</a
+                >
+              </p>
+            {:else}
+              <Select.Root
+                type="single"
+                bind:value={selectedConfigId}
+                disabled={busy || custom}
+                items={configs.map((config) => ({
+                  value: config.id,
+                  label: config.name,
+                }))}
+              >
+                <Select.Trigger aria-label="选择启动配置">
+                  {#if chosenConfig}
+                    {@render choiceDetails(
+                      chosenConfig.name,
+                      joinArgs(chosenConfig.cmd),
+                      chosenConfig.envNames.length,
+                    )}
+                  {:else}
+                    <span class="text-muted-foreground">选择启动配置</span>
+                  {/if}
+                </Select.Trigger>
+                <Select.Content>
+                  {#each configs as config (config.id)}
+                    <Select.Item
+                      value={config.id}
+                      label={config.name}
+                      aria-label={config.name}
+                    >
+                      {@render choiceDetails(
+                        config.name,
+                        joinArgs(config.cmd),
+                        config.envNames.length,
+                      )}
+                    </Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+            {/if}
+          </Tabs.Content>
+          <Tabs.Content value="custom" class="min-w-0 space-y-2 pt-2">
+            <fieldset disabled={busy || !custom} class="min-w-0 space-y-2">
               <Label for="custom-command">自定义启动命令</Label>
               <Input
                 id="custom-command"
                 bind:value={command}
                 placeholder="omp --resume 或 bash -lc 'npm run dev'"
-                required
                 autocomplete="off"
                 autocapitalize="off"
                 autocorrect="off"
@@ -450,31 +498,10 @@
                 shell 语法时请使用 bash -lc
                 '命令'。只在本浏览器记住，需要长期使用请在设置中保存为启动配置。
               </p>
-            {/if}
-          </Collapsible.Content>
-        </Collapsible.Root>
-        {#if chosen}
-          <p class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
-            {joinArgs(chosen.cmd)}{args ? " " + args : ""}
-          </p>
-        {:else if chosenConfig}
-          <p class="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
-            {joinArgs(chosenConfig.cmd)}
-          </p>
-        {/if}
+            </fieldset>
+          </Tabs.Content>
+        </Tabs.Root>
       </fieldset>
-      {#if chosen?.allowArgs}
-        <div class="space-y-2">
-          <Label for="args">追加参数</Label><Input
-            id="args"
-            bind:value={args}
-            placeholder="--resume 或带引号的参数"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck={false}
-          />
-        </div>
-      {/if}
       <div class="space-y-2">
         <Label for="session-name"
           >会话名称 <span class="text-muted-foreground">可选</span></Label
@@ -483,6 +510,11 @@
           bind:value={name}
           placeholder="留空则跟随终端标题"
         />
+        {#if !commandReady}
+          <p role="status" class="text-xs text-muted-foreground">
+            请选择有效启动配置，或输入可执行程序及参数。
+          </p>
+        {/if}
       </div>
       {#if error}<p role="alert" class="text-destructive">{error}</p>{/if}
       <div class="flex flex-wrap justify-end gap-2 pt-2">
@@ -498,11 +530,7 @@
             disabled={busy || !targetReady}
             onclick={() => create(false, true)}>仅创建工作树</Button
           >{/if}
-        <Button
-          type="submit"
-          disabled={busy ||
-            !targetReady ||
-            (!chosen && !custom && !chosenConfig)}
+        <Button type="submit" disabled={busy || !targetReady || !commandReady}
           >{busy ? "正在启动…" : "创建并进入 →"}</Button
         >
       </div>

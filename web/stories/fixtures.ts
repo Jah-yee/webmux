@@ -14,7 +14,6 @@ export const session = SessionInfoSchema.parse({
   generation: "0123456789abcdef",
   title: `正在检查终端任务 · ${longToken}`,
   cwd: longPath,
-  preset: "shell",
   cmd: ["/bin/sh"],
   status: "waiting",
   exitCode: null,

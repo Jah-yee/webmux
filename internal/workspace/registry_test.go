@@ -105,7 +105,7 @@ func TestRegistryIdentityPersistenceAndRemoval(t *testing.T) {
 	root := initRepo(t)
 	state := t.TempDir()
 	s, manager := testService(t, state, root)
-	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: root, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf BEFORE; read value; printf AFTER"}})
+	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: root, Cmd: []string{"/bin/sh", "-c", "printf BEFORE; read value; printf AFTER"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestRegistryFaultsDoNotPublishOrOverwrite(t *testing.T) {
 	if err := json.Unmarshal(original, &stored); err != nil || len(stored.Repositories) != 1 {
 		t.Fatalf("original registry: %v", err)
 	}
-	item, err := broken.CreateSession(context.Background(), SessionInput{Cwd: root, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf DEGRADED"}})
+	item, err := broken.CreateSession(context.Background(), SessionInput{Cwd: root, Cmd: []string{"/bin/sh", "-c", "printf DEGRADED"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestNoGitAndNonRepositoryRemainDirect(t *testing.T) {
 	if _, _, err := s.Register(context.Background(), root); errorKind(err) != ErrUnavailable {
 		t.Fatalf("missing Git error: %v", err)
 	}
-	item, err := s.CreateSession(context.Background(), SessionInput{Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf DIRECT"}})
+	item, err := s.CreateSession(context.Background(), SessionInput{Cmd: []string{"/bin/sh", "-c", "printf DIRECT"}})
 	if err != nil {
 		t.Fatal(err)
 	}

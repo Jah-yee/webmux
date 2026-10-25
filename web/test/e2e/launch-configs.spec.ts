@@ -32,9 +32,11 @@ async function startFromConfig(page: Page, name: string, cwd: string) {
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
+  await page.getByRole("tab", { name: "预先输入", exact: true }).click();
   await page
-    .getByRole("button", { name: `启动配置 ${name}`, exact: true })
+    .getByRole("combobox", { name: "选择启动配置", exact: true })
     .click();
+  await page.getByRole("option", { name, exact: true }).click();
   await page.getByLabel("工作目录", { exact: true }).fill(cwd);
   await page.getByLabel("会话名称", { exact: false }).fill("E2E config");
   const request = page.waitForRequest(
@@ -68,7 +70,6 @@ test("a saved launch config starts a session with its environment and survives r
   await runCommand(page, 'printf "VAR=%s\\n" "$E2E_LAUNCH_VAR"');
   await expectTerminalLine(page, `VAR=${secret}`);
   const info = await (await request.get(`/api/sessions/${id}`)).json();
-  expect(info.preset).toBe("custom");
   expect(info.cmd).toEqual(["/bin/bash", "--noprofile", "--norc", "-i"]);
 
   // Deleting the config leaves the running session alone.
@@ -94,7 +95,7 @@ test("a saved launch config starts a session with its environment and survives r
   ).not.toBe("exited");
 });
 
-test("configs persist across a settings reload and appear next to built-in presets", async ({
+test("configs persist across a settings reload and remain selectable alongside manual commands", async ({
   page,
 }) => {
   await createConfig(page, "E2E persisted");
@@ -107,10 +108,20 @@ test("configs persist across a settings reload and appear next to built-in prese
     .locator("header")
     .getByRole("button", { name: "＋ 新建会话", exact: true })
     .click();
+  await page.getByRole("tab", { name: "预先输入", exact: true }).click();
+  const select = page.getByRole("combobox", {
+    name: "选择启动配置",
+    exact: true,
+  });
+  await expect(select).toContainText("E2E persisted");
+  await expect(select).toContainText("/bin/bash --noprofile --norc -i");
+  await select.click();
   await expect(
-    page.getByRole("button", { name: "启动配置 E2E persisted", exact: true }),
+    page.getByRole("option", { name: "E2E persisted", exact: true }),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "手动填写", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Shell", exact: true }),
+    page.getByLabel("自定义启动命令", { exact: true }),
   ).toBeVisible();
 });

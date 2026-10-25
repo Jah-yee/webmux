@@ -20,7 +20,6 @@ test("4x CPU: a busy session among 120 cards keeps order, filtering and input re
     generation: "0123456789abcdef",
     title: `load-${index}`,
     cwd: "/work",
-    preset: "shell",
     cmd: ["bash"],
     status: "running",
     exitCode: null,
