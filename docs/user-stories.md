@@ -18,6 +18,8 @@
 
 本次局部核对（2026-10-25）：新建会话以 Tab 组织启动位置和命令来源，保存的启动配置使用同时展示名称与命令的下拉选择器，对应 US-B01–US-B03、US-B06；不改变启动配置存储和会话创建协议，未重新核对其余功能组。
 
+本次局部核对（2026-10-25）：Pullfrog workflow 显式选择 OpenCode Go 的 DeepSeek V4.1 Flash，对应新增 US-L07；本次仅核对配置与密钥名称，不代表已发起远程模型调用，未重新核对其余功能组。
+
 ## 阅读约定与产品边界
 
 - **使用者**：通过桌面、手机或平板浏览器使用服务器上的 Shell、CLI agent 和其他终端程序的人。
@@ -44,7 +46,7 @@
 | I    | 只读代码工作区、Diff 与引用      | US-I01–US-I15 |
 | J    | 仓库登记与 worktree 管理         | US-J01–US-J11 |
 | K    | 配置、运行与服务管理             | US-K01–US-K09 |
-| L    | 开发、验证与发布支持             | US-L01–US-L06 |
+| L    | 开发、验证与发布支持             | US-L01–US-L07 |
 | M    | 原生终端、CLI 与本机控制面       | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道              | US-N01–US-N08 |
 | O    | Windows/WSL 托盘管理             | US-O01–US-O11 |
@@ -236,8 +238,11 @@
 | US-L04 基线评测与多平台发布 | 作为维护者，我希望可复现地测量核心能力并构建各平台产物，以便比较回归和交付版本。                                                          | `make baseline` 使用隔离环境评估创建、输入、回放、生命周期、安全等能力，报告通过率与延迟边界；`BenchmarkAttachOutput` 用真实 PTY → Session → Attach → WebSocket 测量连续输出、控制边界及大块输出的分配，并校验字节与顺序；`make release` 禁用 CGO，构建 Linux/macOS 服务及 Windows CLI/托盘双架构产物，嵌入服务摘要并生成 SHA256SUMS；`make tray` 可单独构建托盘；现有 CI 执行相应质量检查。                                                                                                                                                                       |
 | US-L05 分层架构约束         | 作为贡献者，我希望 Controller 与 Service 的边界和线上 JSON 形状由测试守住，以便越界依赖或协议漂移在 `go test` 中就被发现，而不是靠评审。  | `go test ./...` 包含 `internal/archtest`：未归类或失效的包、越界依赖、Controller 直接 I/O 或使用未登记的 Service 包级函数、Service 携带 HTTP 状态、编解码非 `contract` 类型等违规一次列出位置、R0–R10 编号及修复提示。纯函数例外需理由且仍被使用；允许业务整数与非错误对象的领域 Status。R9 检查包级初始化及编码器函数值/方法值，登记函数不能借别名绕过。固定样例覆盖违规与合规写法。95 份线上快照分六组独立运行，仅归一化明确动态字段，业务正文、确定性 Git OID、摘要和固定输入保留；差异可见，有意变更用 `-update` 重新录制。                                    |
 | US-L06 前端架构守卫         | 作为贡献者或 coding agent，我希望在提交前得到复用组件、设计令牌和分层方面的具体报错，以便新增 UI 复用设计系统，而不是重造组件或复制样式。 | `pnpm --dir web check:arch` 依次运行 ESLint（`@shadcn/lint` 与 Svelte 模板规则）、dependency-cruiser、jscpd、knip 与 Vitest 架构测试，`make check` 与 CI 的格式/构建 job 同样执行；报错说明应复用的组件、size/variant 或主题令牌；提交的基线为空，任何违规都会失败；引入带存量违规的新规则时可先记录基线，`arch:ratchet` 只删除已修复的记录；oxlint 仍是通用 lint。                                                                                                                                                                                                |
+| US-L07 订阅模型辅助贡献     | 作为维护者，我希望 Pullfrog 使用自己的 OpenCode Go 订阅运行任务，以便通过指定的 DeepSeek Flash 模型辅助仓库维护。                         | Pullfrog workflow 接收 prompt 并显式指定 `opencode-go/deepseek-v4.1-flash`；使用 GitHub Actions Secret `OPENCODE_API_KEY`，不再注入 DeepSeek 直连密钥；配置说明列出 OpenCode Global 区域授权、Pullfrog BYOK 与 Custom 模型设置以及订阅额度限制。                                                                                                                                                                                                                                                                                                                   |
 
 依据：[Node.js 版本](../.nvmrc)、[CI 工具链](../.github/actions/setup/action.yml)、[Makefile](../Makefile)、[前端命令](../web/package.json)、[贡献指南](../CONTRIBUTING.md)、[Storybook](storybook.md)、[评测说明](../baseline/README.md)、[真实终端分配基准](../internal/hub/hub_bench_test.go)、[CI](../.github/workflows/test.yml)、[E2E 初始化](../web/test/e2e/global-setup.mjs)、[分层清单](../internal/archtest/layers_test.go)、[架构规则](../internal/archtest/arch_test.go)、[规则样例](../internal/archtest/testdata/fixture)、[线上快照测试](../internal/api/wire_snapshot_test.go)、[归一化回归测试](../internal/api/wire_normalizer_test.go)、[分层说明](architecture.md#分层与架构测试)、[前端架构守卫](frontend-architecture.md)、[ESLint 架构规则](../web/eslint.config.mjs)、[前端分层规则](../web/.dependency-cruiser.cjs)、[前端架构测试](../web/test/architecture.test.ts)。
+
+Pullfrog 依据：[workflow](../.github/workflows/pullfrog.yml)、[订阅模型配置](../CONTRIBUTING.md#pullfrog-模型配置)。
 
 ## M. 原生终端、CLI 与本机控制面
 
@@ -336,6 +341,7 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
 | Storybook、截图、baseline、CI 与 release                                   | US-L03–US-L04                                       |
 | 分层架构测试、线上 JSON 快照与重新录制                                     | US-L05                                              |
 | 前端架构守卫：设计系统 lint、分层、重复代码、未使用代码与基线              | US-L06                                              |
+| Pullfrog 指定订阅模型与 GitHub Actions 密钥                                | US-L07                                              |
 | URL token 片段消费与 WebSocket 子协议认证                                  | US-A06                                              |
 | 桌面代码独立窗口与收回                                                     | US-I13                                              |
 | run、显式环境、attach/observe、分离和控制交接                              | US-M01–US-M04                                       |

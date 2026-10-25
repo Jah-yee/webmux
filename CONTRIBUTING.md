@@ -85,6 +85,22 @@ CI 将各套件拆成并行 job：格式检查与前端构建、Go race、Vitest
 
 速度测量、用例一致性和整体 CI 的验收方法见 [CI 耗时优化](docs/ci-performance.md)。
 
+## Pullfrog 模型配置
+
+`.github/workflows/pullfrog.yml` 使用 OpenCode Go 订阅通道的
+`opencode-go/deepseek-v4.1-flash`。在仓库的 GitHub Actions Secrets 中设置
+`OPENCODE_API_KEY`，值为订阅所在 OpenCode workspace 的 API Key；不要使用
+DeepSeek 直连的 `DEEPSEEK_API_KEY`。
+
+在 OpenCode workspace 的 **Settings → Privacy → Regions** 中启用 **Global**，
+以允许 DeepSeek 请求。在 Pullfrog 控制台选择 **BYOK**，并将仓库模型设为
+**Custom (set in workflow)**，避免覆盖 workflow 中的模型选择。
+配置完成后，可从 GitHub Actions 的 Pullfrog workflow 手动输入 prompt 发起任务；
+模型调用受订阅额度限制。
+
+参考：[OpenCode Go](https://opencode.ai/v2/docs/console/go/)、
+[Pullfrog 模型设置](https://docs.pullfrog.com/models#custom-providers)。
+
 ## 代码规范
 
 - Go 使用 gofmt；前端使用 Oxfmt（80 列、两空格缩进、分号、尾随逗号）。提交前运行 `make format`。
