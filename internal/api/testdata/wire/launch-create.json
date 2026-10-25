@@ -1,0 +1,16 @@
+{
+  "status": 201,
+  "body": {
+    "cmd": [
+      "claude",
+      "--resume"
+    ],
+    "createdAt": "<time>",
+    "env": {
+      "API_KEY": "value"
+    },
+    "id": "<id#6>",
+    "name": "Claude",
+    "updatedAt": "<time>"
+  }
+}

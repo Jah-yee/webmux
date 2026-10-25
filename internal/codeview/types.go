@@ -15,30 +15,51 @@ const MaxLines = 20000
 const CacheBytes = 64 * 1024 * 1024
 const Lifetime = 10 * time.Minute
 
+// Error kinds. Each wraps a transport-neutral category; the controller maps
+// kinds to HTTP statuses.
+var (
+	ErrInvalid     = errors.New("invalid code view request")
+	ErrForbidden   = errors.New("code view access denied")
+	ErrNotFound    = errors.New("code view item not found")
+	ErrConflict    = errors.New("code view state conflict")
+	ErrGone        = errors.New("code view snapshot expired")
+	ErrTooLarge    = errors.New("code view content too large")
+	ErrBusy        = errors.New("code view busy")
+	ErrInternal    = errors.New("code view internal error")
+	ErrUnavailable = errors.New("code view unavailable")
+	ErrTimeout     = errors.New("code view operation timed out")
+)
+
+// Error carries the user-facing message; its kind is reachable through
+// errors.Is.
 type Error struct {
-	Code    int
-	Message string
+	kind    error
+	message string
 }
 
-func (e *Error) Error() string { return e.Message }
-func problem(code int, format string, args ...any) error {
-	return &Error{code, fmt.Sprintf(format, args...)}
+func (e *Error) Error() string { return e.message }
+func (e *Error) Unwrap() error { return e.kind }
+func problem(kind error, format string, args ...any) error {
+	return &Error{kind, fmt.Sprintf(format, args...)}
 }
-func Status(err error) int {
+
+// errorKind classifies err like the controller does. Workspace size and timeout
+// failures keep their meaning; other workspace errors are internal.
+func errorKind(err error) error {
 	var e *Error
-	if errors.As(err, &e) {
-		return e.Code
+	switch {
+	case errors.As(err, &e):
+		return e.kind
+	case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled):
+		return ErrTimeout
+	case errors.Is(err, os.ErrNotExist):
+		return ErrNotFound
+	case errors.Is(err, workspace.ErrTooLarge):
+		return ErrTooLarge
+	case errors.Is(err, workspace.ErrTimeout):
+		return ErrTimeout
 	}
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return 504
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return 404
-	}
-	if workspace.Status(err) == 413 || workspace.Status(err) == 504 {
-		return workspace.Status(err)
-	}
-	return 500
+	return ErrInternal
 }
 
 type Context struct {
@@ -142,11 +163,11 @@ type Diff struct {
 	Change   Change    `json:"change"`
 }
 type CheckRequest struct {
-	Context        string            `json:"contextId"`
-	Snapshots      []string          `json:"snapshotIds"`
-	Directories    map[string]string `json:"directories"`
-	Changes        string            `json:"changesVersion"`
-	IncludeIgnored bool              `json:"includeIgnored"`
+	Context        string
+	Snapshots      []string
+	Directories    map[string]string
+	Changes        string
+	IncludeIgnored bool
 }
 type Check struct {
 	Snapshots   map[string]string `json:"snapshots"`

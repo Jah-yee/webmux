@@ -13,12 +13,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
 )
 
@@ -44,16 +46,16 @@ const ResizeInterval = 250 * time.Millisecond
 
 // Frame types of docs/protocol.md.
 const (
-	frameOutput   = 0x00
-	frameSnapshot = 0x01
-	frameExit     = 0x03
-	frameControl  = 0x06
+	frameOutput   = contract.FrameOutput
+	frameSnapshot = contract.FrameSnapshot
+	frameExit     = contract.FrameExit
+	frameControl  = contract.FrameControl
 
-	sendInput   = 0x00
-	sendResize  = 0x01
-	sendResync  = 0x02
-	sendControl = 0x05
-	sendReply   = 0x06
+	sendInput   = contract.FrameInput
+	sendResize  = contract.FrameResize
+	sendResync  = contract.FrameReplay
+	sendControl = contract.FrameClaim
+	sendReply   = contract.FrameReply
 )
 
 // Close codes of /ws/s/{id}.
@@ -180,7 +182,7 @@ func (a *attachment) send(ctx context.Context, frame []byte) error {
 // resize sends the terminal size when it changed, or always when forced.
 func (a *attachment) resize(ctx context.Context, force bool) {
 	cols, rows, err := a.term.Size()
-	if err != nil || cols <= 0 || rows <= 0 {
+	if err != nil || cols <= 0 || rows <= 0 || cols > math.MaxUint16 || rows > math.MaxUint16 {
 		return
 	}
 	a.sizeMu.Lock()
@@ -190,7 +192,7 @@ func (a *attachment) resize(ctx context.Context, force bool) {
 	if !changed {
 		return
 	}
-	body, _ := json.Marshal(map[string]int{"cols": cols, "rows": rows})
+	body, _ := json.Marshal(contract.TerminalResize{Cols: uint16(cols), Rows: uint16(rows)})
 	_ = a.send(ctx, append([]byte{sendResize}, body...))
 }
 
@@ -336,13 +338,7 @@ func (a *attachment) takeControl(ctx context.Context) error {
 // them. The program may have asked before this terminal attached, or been
 // answered with another device's theme.
 func (a *attachment) applyControl(body []byte) (controlling, probe bool) {
-	var state struct {
-		Controller *struct {
-			ClientID string `json:"clientId"`
-			Label    string `json:"label"`
-		} `json:"controller"`
-		ColorSchemeReports bool `json:"colorSchemeReports"`
-	}
+	var state contract.ControlState
 	if json.Unmarshal(body, &state) != nil {
 		return a.isControlling(), false
 	}
@@ -549,9 +545,7 @@ func (a *attachment) pumpOutput(ctx context.Context) readResult {
 			// A full replay: reset the terminal first, as xterm.js does.
 			out = append([]byte("\x1bc"), frame[1:]...)
 		case frameExit:
-			var body struct {
-				ExitCode int `json:"exitCode"`
-			}
+			var body contract.ExitFrame
 			_ = json.Unmarshal(frame[1:], &body)
 			exit = &Result{Exited: true, ExitCode: body.ExitCode}
 		case frameControl:

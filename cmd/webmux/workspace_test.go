@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
@@ -107,7 +107,7 @@ func TestWorkspaceDegradedServerProcess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var info session.Info
+			var info contract.SessionInfo
 			err = json.NewDecoder(response.Body).Decode(&info)
 			_ = response.Body.Close()
 			if err != nil || response.StatusCode != 201 || info.Cwd != dir || info.Workspace != nil {

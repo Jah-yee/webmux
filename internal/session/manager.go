@@ -8,19 +8,20 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rainchan/webmux/internal/pathutil"
 )
 
 type Preset struct {
-	Name      string   `json:"name" toml:"name"`
-	Label     string   `json:"label" toml:"label"`
-	Cmd       []string `json:"cmd" toml:"cmd"`
-	AllowArgs bool     `json:"allowArgs" toml:"allow_args"`
+	Name      string
+	Label     string
+	Cmd       []string
+	AllowArgs bool
 }
 type Options struct {
 	ScrollbackBytes int
@@ -33,10 +34,10 @@ type Options struct {
 	DisableBellAttention bool
 }
 type Event struct {
-	Type     string `json:"type"`
-	Sessions []Info `json:"sessions,omitempty"`
-	Session  *Info  `json:"session,omitempty"`
-	ID       string `json:"id,omitempty"`
+	Type     string
+	Sessions []Info
+	Session  *Info
+	ID       string
 }
 type ListSubscriber struct {
 	Out    chan Event
@@ -82,18 +83,6 @@ func NewManager(o Options) *Manager {
 	return m
 }
 
-// ExpandPath expands a leading "~/" and makes the path absolute.
-func ExpandPath(path string) (string, error) {
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		path = filepath.Join(home, strings.TrimPrefix(path, "~"))
-	}
-	return filepath.Abs(path)
-}
-
 // Create starts a session. env holds explicit variables added to the
 // server's environment for this session only (see ValidateEnv).
 func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, env map[string]string) (*Session, error) {
@@ -106,7 +95,7 @@ func (m *Manager) Create(cwd, preset string, cmd, args []string, name string, en
 	if cwd == "" {
 		cwd = m.options.DefaultCwd
 	}
-	cwd, err := ExpandPath(cwd)
+	cwd, err := pathutil.Expand(cwd)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -220,7 +221,7 @@ func TestServiceQueueNeverBlocksAndCloseJoins(t *testing.T) {
 	}
 	start := time.Now()
 	for range queueSize + workers + 10 {
-		s.enqueue(Alert{SessionID: "abcdefgh", Kind: session.AttentionQuestion})
+		s.enqueue(Alert{SessionID: "abcdefgh", Kind: attentionkind.Question})
 	}
 	if time.Since(start) > time.Second {
 		t.Fatal("enqueue blocked on a slow push service")

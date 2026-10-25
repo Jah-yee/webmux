@@ -13,19 +13,19 @@ var ErrNotController = errors.New("connection does not control the terminal")
 // Controller is the browser client whose input and grid drive the PTY. It is
 // identified by a client ID that survives that client's reconnects.
 type Controller struct {
-	ClientID string    `json:"clientId"`
-	Label    string    `json:"label"`
-	Since    time.Time `json:"since"`
+	ClientID string
+	Label    string
+	Since    time.Time
 }
 
 // ControlState is the 0x06 frame: who controls the PTY, the grid that
 // observers render without resizing it, and whether the program asked for
 // color scheme change reports (DEC mode 2031).
 type ControlState struct {
-	Controller         *Controller `json:"controller"`
-	Cols               uint16      `json:"cols"`
-	Rows               uint16      `json:"rows"`
-	ColorSchemeReports bool        `json:"colorSchemeReports"`
+	Controller         *Controller
+	Cols               uint16
+	Rows               uint16
+	ColorSchemeReports bool
 }
 
 func randomClientID() string {
@@ -34,19 +34,21 @@ func randomClientID() string {
 	return "anon-" + hex.EncodeToString(raw[:])
 }
 
-func (s *Session) controlFrameLocked() []byte {
+func (s *Session) controlLocked() Message {
 	state := ControlState{Cols: s.info.Cols, Rows: s.info.Rows, ColorSchemeReports: s.preview.colorSchemeReports}
 	if s.control != nil {
 		controller := *s.control
 		state.Controller = &controller
 	}
-	return jsonFrame(6, state)
+	return Message{Control: &state}
 }
+
+func submissionMessage(status SubmissionStatus) Message { return Message{Submission: &status} }
 
 func (s *Session) setControlLocked(sub *Subscriber) {
 	s.control = &Controller{ClientID: sub.client, Label: sub.label, Since: time.Now()}
 	s.controlSub = sub
-	s.broadcastLocked(s.controlFrameLocked())
+	s.broadcastLocked(s.controlLocked())
 }
 
 // Claim makes the subscriber the controlling connection and reports whether
@@ -61,7 +63,7 @@ func (s *Session) Claim(sub *Subscriber) bool {
 		// Its earlier resizes were refused; the control frame makes it send
 		// its grid again.
 		s.controlSub = sub
-		s.sendLocked(sub, s.controlFrameLocked())
+		s.sendLocked(sub, s.controlLocked())
 		return false
 	}
 	s.setControlLocked(sub)
@@ -104,9 +106,9 @@ const (
 
 // SubmissionStatus is the 0x05 frame.
 type SubmissionStatus struct {
-	ID    string          `json:"id"`
-	State SubmissionState `json:"state"`
-	Error string          `json:"error,omitempty"`
+	ID    string
+	State SubmissionState
+	Error string
 }
 
 const (
@@ -180,13 +182,13 @@ func (s *Session) Submit(ctx context.Context, sub *Subscriber, id, generation st
 	s.mu.Lock()
 	if record := s.submissions.get(id, now); record != nil {
 		status := record.status
-		s.sendLocked(sub, jsonFrame(5, status))
+		s.sendLocked(sub, submissionMessage(status))
 		s.mu.Unlock()
 		return status
 	}
 	if generation != s.info.Generation {
 		status := SubmissionStatus{ID: id, State: SubmissionFailed, Error: "generation"}
-		s.sendLocked(sub, jsonFrame(5, status))
+		s.sendLocked(sub, submissionMessage(status))
 		s.mu.Unlock()
 		return status
 	}
@@ -212,7 +214,7 @@ func (s *Session) Submit(ctx context.Context, sub *Subscriber, id, generation st
 }
 
 func (s *Session) notifyClientLocked(record *submissionRecord) {
-	frame := jsonFrame(5, record.status)
+	frame := submissionMessage(record.status)
 	for other := range s.subs {
 		if _, watching := record.watchers[other.client]; watching || other.client == record.client {
 			s.sendLocked(other, frame)
@@ -224,7 +226,7 @@ func (s *Session) notifyClientLocked(record *submissionRecord) {
 func (s *Session) SendSubmissionStatus(sub *Subscriber, status SubmissionStatus) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.sendLocked(sub, jsonFrame(5, status))
+	s.sendLocked(sub, submissionMessage(status))
 }
 
 // QuerySubmissions answers the subscriber with the recorded status of each ID.
@@ -243,6 +245,6 @@ func (s *Session) QuerySubmissions(sub *Subscriber, ids []string) {
 				record.watchers[sub.client] = struct{}{}
 			}
 		}
-		s.sendLocked(sub, jsonFrame(5, status))
+		s.sendLocked(sub, submissionMessage(status))
 	}
 }

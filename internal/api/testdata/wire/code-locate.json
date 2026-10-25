@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "body": {
+    "kind": "file",
+    "nodeId": "c3ViL2IudHh0",
+    "path": "sub/b.txt"
+  }
+}

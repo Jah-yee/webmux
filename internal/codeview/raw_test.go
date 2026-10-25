@@ -79,7 +79,7 @@ func TestRawSourcesMatchSnapshotBytes(t *testing.T) {
 			t.Fatalf("%s new bytes differ", change.Group)
 		}
 		for _, side := range []string{"", "both"} {
-			if _, e := s.Raw(context.Background(), id, d.Snapshot, side); Status(e) != 400 {
+			if _, e := s.Raw(context.Background(), id, d.Snapshot, side); errorKind(e) != ErrInvalid {
 				t.Fatalf("side %q: %v", side, e)
 			}
 		}
@@ -125,7 +125,7 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 	// Rewritten after the snapshot, before the transfer opens.
 	later := time.Now().Add(2 * time.Second)
 	os.Chtimes(filepath.Join(root, "pic.png"), later, later)
-	if _, e := s.Raw(context.Background(), id, f.Snapshot, ""); Status(e) != 409 {
+	if _, e := s.Raw(context.Background(), id, f.Snapshot, ""); errorKind(e) != ErrConflict {
 		t.Fatalf("changed before open: %v", e)
 	}
 	// Rewritten while streaming.
@@ -145,7 +145,7 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 	if big.Document.Downloadable {
 		t.Fatal("over download limit marked downloadable")
 	}
-	if _, e := s.Raw(context.Background(), id, big.Snapshot, ""); Status(e) != 413 {
+	if _, e := s.Raw(context.Background(), id, big.Snapshot, ""); errorKind(e) != ErrTooLarge {
 		t.Fatalf("too large: %v", e)
 	}
 	changes, e := s.Changes(context.Background(), id, c.ID)
@@ -164,7 +164,7 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 	if deleted.Snapshot == "" {
 		t.Fatal("deletion not listed")
 	}
-	if _, e := s.Raw(context.Background(), id, deleted.Snapshot, "new"); Status(e) != 404 {
+	if _, e := s.Raw(context.Background(), id, deleted.Snapshot, "new"); errorKind(e) != ErrNotFound {
 		t.Fatalf("empty side: %v", e)
 	}
 	other, e := s.manager.Create(root, "custom", []string{"/bin/sh"}, nil, "", nil)
@@ -173,16 +173,16 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 	}
 	writeBytes(t, root, "small.png", pngBytes(t, 2))
 	small := open("small.png")
-	if _, e := s.Raw(context.Background(), other.Info().ID, small.Snapshot, ""); Status(e) != 400 {
+	if _, e := s.Raw(context.Background(), other.Info().ID, small.Snapshot, ""); errorKind(e) != ErrInvalid {
 		t.Fatalf("cross session: %v", e)
 	}
-	if _, e := s.Raw(context.Background(), id, "unknown", ""); Status(e) != 410 {
+	if _, e := s.Raw(context.Background(), id, "unknown", ""); errorKind(e) != ErrGone {
 		t.Fatalf("unknown: %v", e)
 	}
 	s.mu.Lock()
 	s.snapshots[small.Snapshot].created = time.Now().Add(-Lifetime - time.Second)
 	s.mu.Unlock()
-	if _, e := s.Raw(context.Background(), id, small.Snapshot, ""); Status(e) != 410 {
+	if _, e := s.Raw(context.Background(), id, small.Snapshot, ""); errorKind(e) != ErrGone {
 		t.Fatalf("expired: %v", e)
 	}
 
@@ -196,7 +196,7 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 		}
 		held = append(held, tr)
 	}
-	if _, e := s.Raw(context.Background(), id, fresh.Snapshot, ""); Status(e) != 429 {
+	if _, e := s.Raw(context.Background(), id, fresh.Snapshot, ""); errorKind(e) != ErrBusy {
 		t.Fatalf("slots: %v", e)
 	}
 	held[0].Close()
@@ -280,7 +280,7 @@ func TestRawCancellationStopsGit(t *testing.T) {
 	w := &hookWriter{hook: cancel}
 	start := time.Now()
 	e = tr.WriteTo(ctx, &slowWriter{w})
-	if Status(e) != 504 || time.Since(start) > 3*time.Second {
+	if errorKind(e) != ErrTimeout || time.Since(start) > 3*time.Second {
 		t.Fatalf("cancel: %v after %v", e, time.Since(start))
 	}
 	if w.n >= len(data) {

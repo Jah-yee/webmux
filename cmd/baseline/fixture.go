@@ -19,8 +19,12 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/cmd/internal/assemble"
 	"github.com/rainchan/webmux/internal/api"
+	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
 )
@@ -35,6 +39,7 @@ type fixture struct {
 	root        string
 	manager     *session.Manager
 	workspace   *workspace.Service
+	code        *codeview.Service
 	server      *httptest.Server
 	client      *http.Client
 }
@@ -53,9 +58,10 @@ func newFixture() *fixture {
 	c.ScrollbackBytes = capacity
 	c.Shell = "/bin/bash"
 	must(c.Validate())
-	f.manager = session.NewManager(c.SessionOptions())
-	f.workspace = workspace.New(c.StateDir, f.manager, root)
-	f.server = httptest.NewServer(api.New(c, f.manager, f.workspace, nil, nil, nil, nil))
+	f.manager = session.NewManager(assemble.SessionOptions(c))
+	f.workspace = workspace.New(c.StateDir, f.manager, nil, root)
+	f.code = codeview.New(f.manager)
+	f.server = httptest.NewServer(api.New(api.Deps{Config: c, Manager: f.manager, Workspace: f.workspace, Code: f.code, Files: files.New(c.DefaultCwd)}))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	f.stopSignals = stop
 	go func() { <-ctx.Done(); f.close() }()
@@ -70,6 +76,7 @@ func (f *fixture) close() {
 		f.server.Close()
 		f.client.CloseIdleConnections()
 		f.workspace.Close()
+		f.code.Close()
 		f.restoreEnv()
 		_ = os.RemoveAll(f.root)
 	})
@@ -150,7 +157,7 @@ func readContext(ctx context.Context, c *websocket.Conn) []byte {
 func write(c *websocket.Conn, p []byte) {
 	ctx, cancel := timeout()
 	defer cancel()
-	must(c.Write(ctx, websocket.MessageBinary, session.Frame(0, p)))
+	must(c.Write(ctx, websocket.MessageBinary, contract.Frame(0, p)))
 }
 func until(c *websocket.Conn, marker []byte) []byte {
 	ctx, cancel := timeout()

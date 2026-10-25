@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "WEBMUX_SESSION_ID is reserved"
+  }
+}

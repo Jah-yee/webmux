@@ -83,11 +83,11 @@ func TestLargeChangesPaginationLookupAndChecks(t *testing.T) {
 	if err != nil || filtered.Total != 1 || len(filtered.Entries) != 1 {
 		t.Fatal("path filter", err)
 	}
-	if _, err = s.Changes(context.Background(), id, c.ID, ChangeQuery{Cursor: first.Next, Q: "other"}); Status(err) != 409 {
+	if _, err = s.Changes(context.Background(), id, c.ID, ChangeQuery{Cursor: first.Next, Q: "other"}); errorKind(err) != ErrConflict {
 		t.Fatal("cursor reused across filters", err)
 	}
 	write(t, root, "new-file.txt", "new\n")
-	if _, err = s.Changes(context.Background(), id, c.ID, ChangeQuery{Cursor: first.Next}); Status(err) != 409 {
+	if _, err = s.Changes(context.Background(), id, c.ID, ChangeQuery{Cursor: first.Next}); errorKind(err) != ErrConflict {
 		t.Fatal("stale cursor", err)
 	}
 	gitTest(t, root, "add", ".")
@@ -100,7 +100,7 @@ func TestLargeChangesPaginationLookupAndChecks(t *testing.T) {
 		t.Fatal("large unborn staged pair", err)
 	}
 	for _, q := range []ChangeQuery{{Cursor: "bad"}, {Cursor: "bad:-1"}, {Group: "wrong"}, {NodeID: nodeID("../outside")}} {
-		if _, err = s.Changes(context.Background(), id, c.ID, q); Status(err) != 400 {
+		if _, err = s.Changes(context.Background(), id, c.ID, q); errorKind(err) != ErrInvalid {
 			t.Fatal("invalid query", q, err)
 		}
 	}

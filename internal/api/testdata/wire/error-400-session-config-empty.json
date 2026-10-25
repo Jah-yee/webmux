@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "configId must not be empty"
+  }
+}

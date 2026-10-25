@@ -20,7 +20,10 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/api"
+	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
 )
@@ -49,10 +52,10 @@ func newBackend(t *testing.T) *backend {
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	m := session.NewManager(c.SessionOptions())
-	ws := workspace.New(c.StateDir, m, c.DefaultCwd)
+	m := session.NewManager(session.Options{DefaultCwd: c.DefaultCwd, ScrollbackBytes: c.ScrollbackBytes})
+	ws := workspace.New(c.StateDir, m, nil, c.DefaultCwd)
 	b := &backend{addr: l.Addr().String()}
-	handler := api.New(c, m, ws, nil, nil, nil, nil)
+	handler := api.New(api.Deps{Config: c, Manager: m, Workspace: ws, Code: codeview.New(m), Files: files.New(c.DefaultCwd)})
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b.requests.Add(1)
 		handler.ServeHTTP(w, r)
@@ -132,7 +135,7 @@ func TestRelayCarriesRESTAndTerminal(t *testing.T) {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("create through relay: %d %s", resp.StatusCode, body)
 	}
-	var info session.Info
+	var info contract.SessionInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"github.com/rainchan/webmux/internal/codeview"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/wire"
 	"mime"
 	"net/http"
 	"strconv"
@@ -11,68 +13,82 @@ import (
 	"unicode/utf8"
 )
 
+// serveCode answers one code view JSON route within the 10 s bound. Each
+// route returns its concrete contract type; archtest rule R8 checks T at
+// every call.
+func serveCode[T any](mux *http.ServeMux, pattern string, fn func(context.Context, *http.Request) (T, error)) {
+	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		value, err := fn(ctx, r)
+		if err != nil {
+			failure(w, codeStatus(err), err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		reply(w, 200, value)
+	})
+}
+
 func (s *Server) codeRoutes(mux *http.ServeMux) {
-	handle := func(pattern string, fn func(context.Context, *http.Request) (any, error)) {
-		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-			defer cancel()
-			value, err := fn(ctx, r)
-			if err != nil {
-				failure(w, codeview.Status(err), err)
-				return
-			}
-			w.Header().Set("Cache-Control", "no-store")
-			reply(w, 200, value)
-		})
-	}
 	base := " /api/sessions/{id}/code"
-	handle("GET"+base+"/context", func(ctx context.Context, r *http.Request) (any, error) { return s.Code.Context(ctx, r.PathValue("id")) })
-	handle("GET"+base+"/tree", func(ctx context.Context, r *http.Request) (any, error) {
-		q := r.URL.Query()
-		return s.Code.Tree(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), q.Get("includeIgnored") == "true", q.Get("cursor"))
+	serveCode(mux, "GET"+base+"/context", func(ctx context.Context, r *http.Request) (contract.CodeContext, error) {
+		v, err := s.Code.Context(ctx, r.PathValue("id"))
+		return wire.CodeContext(v), err
 	})
-	handle("GET"+base+"/files", func(ctx context.Context, r *http.Request) (any, error) {
+	serveCode(mux, "GET"+base+"/tree", func(ctx context.Context, r *http.Request) (contract.CodeListing, error) {
 		q := r.URL.Query()
-		return s.Code.Search(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("q"), q.Get("includeIgnored") == "true")
+		v, err := s.Code.Tree(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), q.Get("includeIgnored") == "true", q.Get("cursor"))
+		return wire.CodeListing(v), err
 	})
-	handle("GET"+base+"/locate", func(ctx context.Context, r *http.Request) (any, error) {
+	serveCode(mux, "GET"+base+"/files", func(ctx context.Context, r *http.Request) (contract.CodeListing, error) {
 		q := r.URL.Query()
-		return s.Code.Locate(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("path"))
+		v, err := s.Code.Search(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("q"), q.Get("includeIgnored") == "true")
+		return wire.CodeListing(v), err
 	})
-	handle("GET"+base+"/file", func(ctx context.Context, r *http.Request) (any, error) {
+	serveCode(mux, "GET"+base+"/locate", func(ctx context.Context, r *http.Request) (contract.CodeLocation, error) {
+		q := r.URL.Query()
+		v, err := s.Code.Locate(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("path"))
+		return wire.CodeLocation(v), err
+	})
+	serveCode(mux, "GET"+base+"/file", func(ctx context.Context, r *http.Request) (contract.CodeFile, error) {
 		q := r.URL.Query()
 		source := q.Get("source")
 		if source == "" {
 			source = "worktree"
 		}
-		return s.Code.FileSource(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), source)
+		v, err := s.Code.FileSource(ctx, r.PathValue("id"), q.Get("contextId"), q.Get("nodeId"), source)
+		return wire.CodeFile(v), err
 	})
-	handle("GET"+base+"/changes", func(ctx context.Context, r *http.Request) (any, error) {
+	serveCode(mux, "GET"+base+"/changes", func(ctx context.Context, r *http.Request) (contract.CodeChanges, error) {
 		q := r.URL.Query()
-		return s.Code.Changes(ctx, r.PathValue("id"), q.Get("contextId"), codeview.ChangeQuery{Cursor: q.Get("cursor"), Q: q.Get("q"), NodeID: q.Get("nodeId"), Group: q.Get("group")})
+		v, err := s.Code.Changes(ctx, r.PathValue("id"), q.Get("contextId"), codeview.ChangeQuery{Cursor: q.Get("cursor"), Q: q.Get("q"), NodeID: q.Get("nodeId"), Group: q.Get("group")})
+		return wire.CodeChanges(v), err
 	})
-	handle("GET"+base+"/diff", func(ctx context.Context, r *http.Request) (any, error) {
-		return s.Code.Diff(ctx, r.PathValue("id"), r.URL.Query().Get("contextId"), r.URL.Query().Get("changeId"))
+	serveCode(mux, "GET"+base+"/diff", func(ctx context.Context, r *http.Request) (contract.CodeDiff, error) {
+		v, err := s.Code.Diff(ctx, r.PathValue("id"), r.URL.Query().Get("contextId"), r.URL.Query().Get("changeId"))
+		return wire.CodeDiff(v), err
 	})
-	handle("GET"+base+"/snapshots/{snapshotId}/file", func(ctx context.Context, r *http.Request) (any, error) {
-		return s.Code.SnapshotFile(ctx, r.PathValue("id"), r.PathValue("snapshotId"), r.URL.Query().Get("side"))
+	serveCode(mux, "GET"+base+"/snapshots/{snapshotId}/file", func(ctx context.Context, r *http.Request) (contract.CodeFile, error) {
+		v, err := s.Code.SnapshotFile(ctx, r.PathValue("id"), r.PathValue("snapshotId"), r.URL.Query().Get("side"))
+		return wire.CodeFile(v), err
 	})
 	// Raw bytes stream outside the 10 s JSON wrapper; GET also serves HEAD.
 	mux.HandleFunc("GET"+base+"/snapshots/{snapshotId}/raw", s.codeRaw)
 	mux.HandleFunc("POST"+base+"/check", func(w http.ResponseWriter, r *http.Request) {
-		var req codeview.CheckRequest
+		var req contract.CodeCheckRequest
 		if !decode(w, r, &req) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
-		v, e := s.Code.Check(ctx, r.PathValue("id"), req)
+		v, e := s.Code.Check(ctx, r.PathValue("id"), wire.CodeCheckRequest(req))
 		if e != nil {
-			failure(w, codeview.Status(e), e)
+			failure(w, codeStatus(e), e)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		reply(w, 200, v)
+		reply(w, 200, wire.CodeCheck(v))
 	})
 }
 
@@ -85,7 +101,7 @@ func (s *Server) codeRaw(w http.ResponseWriter, r *http.Request) {
 	t, err := s.Code.Raw(ctx, r.PathValue("id"), r.PathValue("snapshotId"), q.Get("side"))
 	cancel()
 	if err != nil {
-		failure(w, codeview.Status(err), err)
+		failure(w, codeStatus(err), err)
 		return
 	}
 	defer t.Close()

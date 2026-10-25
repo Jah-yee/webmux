@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "available": false,
+    "enabled": false,
+    "reason": "disabled",
+    "subscriptions": 0
+  }
+}

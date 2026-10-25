@@ -79,7 +79,7 @@ func TestStreamGitWriterErrorAndCancellationKillProcess(t *testing.T) {
 	defer cancel()
 	start = time.Now()
 	err = StreamGit(ctx, dir, &bytes.Buffer{}, "cat-file", "blob", "x")
-	if Status(err) != 504 || time.Since(start) > 3*time.Second {
+	if errorKind(err) != ErrTimeout || time.Since(start) > 3*time.Second {
 		t.Fatalf("cancellation: %v", err)
 	}
 }

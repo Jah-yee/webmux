@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "body": {
+    "defaultCwd": "<repo>",
+    "hostname": "<hostname>",
+    "tunnel": {
+      "enabled": false,
+      "hostname": "",
+      "named": false,
+      "state": "off"
+    },
+    "workspace": {
+      "gitAvailable": true,
+      "gitError": "",
+      "registryAvailable": true,
+      "registryError": ""
+    }
+  }
+}

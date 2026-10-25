@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "available": false,
+    "enabled": true,
+    "reason": "quick_tunnel",
+    "subscriptions": 0
+  }
+}

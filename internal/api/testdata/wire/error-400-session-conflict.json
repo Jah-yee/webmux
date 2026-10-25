@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "configId cannot be combined with preset, cmd, args or env"
+  }
+}

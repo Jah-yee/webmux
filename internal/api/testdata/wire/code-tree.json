@@ -1,0 +1,72 @@
+{
+  "status": 200,
+  "body": {
+    "checkedAt": "<time>",
+    "children": [
+      {
+        "gitStatus": "",
+        "ignored": false,
+        "kind": "directory",
+        "mediaType": "",
+        "name": ".hidden",
+        "nodeId": "LmhpZGRlbg",
+        "path": ".hidden",
+        "referenceable": true
+      },
+      {
+        "gitStatus": "",
+        "ignored": false,
+        "kind": "directory",
+        "mediaType": "",
+        "name": "beta",
+        "nodeId": "YmV0YQ",
+        "path": "beta",
+        "referenceable": true
+      },
+      {
+        "gitStatus": "",
+        "ignored": false,
+        "kind": "directory",
+        "mediaType": "",
+        "name": "made",
+        "nodeId": "bWFkZQ",
+        "path": "made",
+        "referenceable": true
+      },
+      {
+        "gitStatus": "",
+        "ignored": false,
+        "kind": "directory",
+        "mediaType": "",
+        "name": "sub",
+        "nodeId": "c3Vi",
+        "path": "sub",
+        "referenceable": true
+      },
+      {
+        "gitStatus": " M",
+        "ignored": false,
+        "kind": "file",
+        "mediaType": "",
+        "name": "a.txt",
+        "nodeId": "YS50eHQ",
+        "path": "a.txt",
+        "referenceable": true
+      },
+      {
+        "gitStatus": "??",
+        "ignored": false,
+        "kind": "file",
+        "mediaType": "",
+        "name": "new.txt",
+        "nodeId": "bmV3LnR4dA",
+        "path": "new.txt",
+        "referenceable": true
+      }
+    ],
+    "complete": true,
+    "contentVersion": "<contentVersion#1>",
+    "limited": false,
+    "nextCursor": ""
+  }
+}

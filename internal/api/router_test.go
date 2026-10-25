@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/wire"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,8 +32,8 @@ func TestProtocolAndSecurity(t *testing.T) {
 	if err = c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	m := session.NewManager(c.SessionOptions())
-	server := httptest.NewServer(New(c, m, testWorkspace(t, m, c.DefaultCwd), nil, nil, nil, nil))
+	m := session.NewManager(testSessionOptions(c))
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, c.DefaultCwd)})))
 	defer server.Close()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
@@ -80,7 +83,7 @@ func TestProtocolAndSecurity(t *testing.T) {
 	}
 	var snapshot struct {
 		Type     string
-		Sessions []session.Info
+		Sessions []contract.SessionInfo
 	}
 	if err = json.Unmarshal(raw, &snapshot); err != nil || snapshot.Type != "snapshot" || snapshot.Sessions == nil {
 		t.Fatalf("empty snapshot: %s", raw)
@@ -89,7 +92,7 @@ func TestProtocolAndSecurity(t *testing.T) {
 	if res.StatusCode != 201 {
 		t.Fatal(res.Status)
 	}
-	var info session.Info
+	var info contract.SessionInfo
 	_ = json.NewDecoder(res.Body).Decode(&info)
 	_ = res.Body.Close()
 	res = request("DELETE", "/api/sessions/"+info.ID+"?remove=1", "", "secret", "")
@@ -103,7 +106,7 @@ func TestProtocolAndSecurity(t *testing.T) {
 	if err != nil || kind != websocket.MessageBinary || p[0] != 1 {
 		t.Fatalf("initial frame %v %v %v", kind, p, err)
 	}
-	if err = conn.Write(ctx, websocket.MessageBinary, session.Frame(0, []byte("printf 'FINAL_OUTPUT_MARKER\\n'; exit 6\n"))); err != nil {
+	if err = conn.Write(ctx, websocket.MessageBinary, contract.Frame(0, []byte("printf 'FINAL_OUTPUT_MARKER\\n'; exit 6\n"))); err != nil {
 		t.Fatal(err)
 	}
 	for {
@@ -179,7 +182,7 @@ func TestDirectoryPickerListsAllDirectories(t *testing.T) {
 	for _, name := range allNames {
 		wantAll = append(wantAll, filepath.Join(root, name))
 	}
-	server := &Server{Config: config.Config{DefaultCwd: root}}
+	server := &Server{Deps: Deps{Config: config.Config{DefaultCwd: root}, Files: files.New(root)}}
 	for _, row := range []struct {
 		name, prefix string
 		want         []string
@@ -240,11 +243,11 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	New(config.Config{}, m, testWorkspace(t, m, cwd), nil, nil, nil, nil).ServeHTTP(recorder, httptest.NewRequest("POST", "/api/sessions", strings.NewReader(string(body))))
+	New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, cwd)})).ServeHTTP(recorder, httptest.NewRequest("POST", "/api/sessions", strings.NewReader(string(body))))
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
 	}
-	var info session.Info
+	var info contract.SessionInfo
 	if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}
@@ -260,11 +263,11 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 	deadline := time.After(5 * time.Second)
 	for {
 		select {
-		case frame := <-sub.Out:
-			if frame[0] != 3 {
+		case m := <-sub.Out:
+			if m.Exit == nil {
 				continue
 			}
-			info = item.Info()
+			info = wire.Session(item.Info())
 			if info.ExitCode == nil || *info.ExitCode != 0 {
 				t.Fatalf("custom command exit: %+v", info)
 			}
@@ -286,17 +289,17 @@ func TestCustomCommandExecutesLiteralArgvInSelectedDirectory(t *testing.T) {
 }
 
 func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
-	presets := []session.Preset{
+	presets := []config.Preset{
 		{Name: "fixed", Cmd: []string{"/bin/echo", "fixed"}},
 		{Name: "with-args", Cmd: []string{"/bin/echo", "preset"}, AllowArgs: true},
 	}
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: presets})
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: testPresets(presets)})
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	handler := New(config.Config{Presets: presets}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil)
+	handler := New(testDeps(t, Deps{Config: config.Config{Presets: presets}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
 	for _, body := range []string{
 		`{"preset":"custom"}`,
 		`{"preset":"custom","cmd":[]}`,
@@ -330,7 +333,7 @@ func TestSessionCreationRejectsCommandConflicts(t *testing.T) {
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("preset with allowed arguments: status %d: %s", recorder.Code, recorder.Body.String())
 	}
-	var info session.Info
+	var info contract.SessionInfo
 	if err := json.Unmarshal(recorder.Body.Bytes(), &info); err != nil {
 		t.Fatal(err)
 	}

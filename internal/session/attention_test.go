@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/attentionkind"
 )
 
 func attentionSession() *Session {
@@ -28,26 +30,26 @@ func agentEventOutput(event string) string {
 func TestAttentionPriority(t *testing.T) {
 	s := attentionSession()
 	start := time.Now()
-	s.raiseAttentionLocked(AttentionDone, SourceAgent, start)
-	s.raiseAttentionLocked(AttentionBell, SourceTerminal, start.Add(time.Second))
-	if a := s.info.Attention; a.Kind != AttentionDone || !a.Since.Equal(start) {
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, start)
+	s.raiseAttentionLocked(attentionkind.Bell, SourceTerminal, start.Add(time.Second))
+	if a := s.info.Attention; a.Kind != attentionkind.Done || !a.Since.Equal(start) {
 		t.Fatalf("weaker bell changed attention: %+v", a)
 	}
-	s.raiseAttentionLocked(AttentionDone, SourceAgent, start.Add(2*time.Second))
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, start.Add(2*time.Second))
 	if a := s.info.Attention; !a.Since.Equal(start) {
 		t.Fatalf("same kind refreshed since: %+v", a)
 	}
 	later := start.Add(3 * time.Second)
-	s.raiseAttentionLocked(AttentionPermission, SourceAgent, later)
-	if a := s.info.Attention; a.Kind != AttentionPermission || !a.Since.Equal(later) {
+	s.raiseAttentionLocked(attentionkind.Permission, SourceAgent, later)
+	if a := s.info.Attention; a.Kind != attentionkind.Permission || !a.Since.Equal(later) {
 		t.Fatalf("stronger signal did not replace: %+v", a)
 	}
-	s.raiseAttentionLocked(AttentionQuestion, SourceAgent, later.Add(time.Second))
-	if a := s.info.Attention; a.Kind != AttentionQuestion {
+	s.raiseAttentionLocked(attentionkind.Question, SourceAgent, later.Add(time.Second))
+	if a := s.info.Attention; a.Kind != attentionkind.Question {
 		t.Fatalf("equal-rank signal did not replace: %+v", a)
 	}
-	s.raiseAttentionLocked(AttentionError, SourceAgent, later.Add(2*time.Second))
-	if a := s.info.Attention; a.Kind != AttentionQuestion {
+	s.raiseAttentionLocked(attentionkind.Error, SourceAgent, later.Add(2*time.Second))
+	if a := s.info.Attention; a.Kind != attentionkind.Question {
 		t.Fatalf("error downgraded question: %+v", a)
 	}
 }
@@ -55,15 +57,15 @@ func TestAttentionPriority(t *testing.T) {
 func TestAgentEvents(t *testing.T) {
 	for _, row := range []struct {
 		events []string
-		want   AttentionKind
+		want   attentionkind.Kind
 	}{
-		{[]string{"question_asked"}, AttentionQuestion},
-		{[]string{"permission_request"}, AttentionPermission},
-		{[]string{"stop"}, AttentionDone},
-		{[]string{"idle_prompt"}, AttentionDone},
-		{[]string{"stop_failure"}, AttentionError},
-		{[]string{"question_asked", "tool_complete"}, AttentionQuestion},
-		{[]string{"permission_request", "something_new"}, AttentionPermission},
+		{[]string{"question_asked"}, attentionkind.Question},
+		{[]string{"permission_request"}, attentionkind.Permission},
+		{[]string{"stop"}, attentionkind.Done},
+		{[]string{"idle_prompt"}, attentionkind.Done},
+		{[]string{"stop_failure"}, attentionkind.Error},
+		{[]string{"question_asked", "tool_complete"}, attentionkind.Question},
+		{[]string{"permission_request", "something_new"}, attentionkind.Permission},
 		{[]string{"question_asked", "prompt_submit"}, ""},
 		{[]string{"permission_request", "permission_replied"}, ""},
 		{[]string{"stop", "session_start"}, ""},
@@ -72,7 +74,7 @@ func TestAgentEvents(t *testing.T) {
 		for _, event := range row.events {
 			feedSignals(s, agentEventOutput(event))
 		}
-		got := AttentionKind("")
+		got := attentionkind.Kind("")
 		if s.info.Attention != nil {
 			got = s.info.Attention.Kind
 			if s.info.Attention.Source != SourceAgent {
@@ -88,12 +90,12 @@ func TestAgentEvents(t *testing.T) {
 func TestTerminalNotifications(t *testing.T) {
 	s := attentionSession()
 	feedSignals(s, "\x1b]9;Waiting for input\a")
-	if a := s.info.Attention; a == nil || a.Kind != AttentionNotify || a.Source != SourceTerminal {
+	if a := s.info.Attention; a == nil || a.Kind != attentionkind.Notify || a.Source != SourceTerminal {
 		t.Fatalf("osc 9: %+v", a)
 	}
 	s.info.Attention = nil
 	feedSignals(s, "\x1b]777;notify;omp;Complete\a")
-	if a := s.info.Attention; a == nil || a.Kind != AttentionNotify {
+	if a := s.info.Attention; a == nil || a.Kind != attentionkind.Notify {
 		t.Fatalf("osc 777: %+v", a)
 	}
 }
@@ -107,7 +109,7 @@ func TestBellQuietPeriodAndSwitch(t *testing.T) {
 		t.Fatalf("completion bell raised attention: %+v", s.info.Attention)
 	}
 	s.bellLocked(now.Add(1500 * time.Millisecond))
-	if a := s.info.Attention; a == nil || a.Kind != AttentionBell || a.Source != SourceTerminal {
+	if a := s.info.Attention; a == nil || a.Kind != attentionkind.Bell || a.Source != SourceTerminal {
 		t.Fatalf("idle bell: %+v", a)
 	}
 	off := attentionSession()
@@ -214,10 +216,10 @@ func TestStatusWithAttention(t *testing.T) {
 
 func TestInfoAttentionIsCopied(t *testing.T) {
 	s := attentionSession()
-	s.raiseAttentionLocked(AttentionDone, SourceAgent, time.Now())
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, time.Now())
 	info := s.infoLocked()
-	info.Attention.Kind = AttentionBell
-	if s.info.Attention.Kind != AttentionDone {
+	info.Attention.Kind = attentionkind.Bell
+	if s.info.Attention.Kind != attentionkind.Done {
 		t.Fatal("Info exposed internal attention")
 	}
 	if sameAttention(info.Attention, s.info.Attention) || !sameAttention(nil, nil) || sameAttention(nil, s.info.Attention) {
@@ -287,7 +289,7 @@ func TestRealSessionAttentionSurvivesSpinner(t *testing.T) {
 	}
 	time.Sleep(2500 * time.Millisecond)
 	info := s.Info()
-	if info.Attention == nil || info.Attention.Kind != AttentionQuestion || info.Status != StatusWaiting {
+	if info.Attention == nil || info.Attention.Kind != attentionkind.Question || info.Status != StatusWaiting {
 		t.Fatalf("spinner masked attention: status %s, attention %+v", info.Status, info.Attention)
 	}
 	env, err := os.ReadFile(dir + "/env.txt")

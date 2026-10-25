@@ -23,30 +23,30 @@ func (s *Service) CreateWorktree(ctx context.Context, repositoryID string, req C
 		return Worktree{}, err
 	}
 	if req.Mode != "new" && req.Mode != "existing" {
-		return Worktree{}, problem(400, "请选择新分支或已有本地分支")
+		return Worktree{}, problem(ErrInvalid, "请选择新分支或已有本地分支")
 	}
 	if req.Branch == "" || strings.HasPrefix(req.Branch, "-") || strings.ContainsRune(req.Branch, '\x00') {
-		return Worktree{}, problem(400, "分支名无效")
+		return Worktree{}, problem(ErrInvalid, "分支名无效")
 	}
 	validatedBranch, err := s.git(ctx, r.entry.AnchorPath, "check-ref-format", "--branch", req.Branch)
 	if err != nil {
-		if Status(err) != 500 {
+		if errorKind(err) != ErrInternal {
 			return Worktree{}, err
 		}
-		return Worktree{}, problem(400, "分支名无效: %s", req.Branch)
+		return Worktree{}, problem(ErrInvalid, "分支名无效: %s", req.Branch)
 	}
 	if outputLine(validatedBranch) != req.Branch {
-		return Worktree{}, problem(400, "请使用明确分支名，不使用 checkout 简写")
+		return Worktree{}, problem(ErrInvalid, "请使用明确分支名，不使用 checkout 简写")
 	}
 	if req.Path == "" {
-		return Worktree{}, problem(400, "请明确选择工作树目标路径")
+		return Worktree{}, problem(ErrInvalid, "请明确选择工作树目标路径")
 	}
 	path, err := canonicalTarget(req.Path)
 	if err != nil {
-		return Worktree{}, problem(400, "目标路径无效: %v", err)
+		return Worktree{}, problem(ErrInvalid, "目标路径无效: %v", err)
 	}
 	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
-		return Worktree{}, problem(409, "目标路径已存在或无法确认可用，不会覆盖")
+		return Worktree{}, problem(ErrConflict, "目标路径已存在或无法确认可用，不会覆盖")
 	}
 	// Read other registered Git inventories without taking their operation gates;
 	// otherwise simultaneous creations in two repositories could deadlock.
@@ -55,7 +55,7 @@ func (s *Service) CreateWorktree(ctx context.Context, repositoryID string, req C
 	s.mu.Unlock()
 	for _, other := range entries {
 		if overlap(other.entry.AnchorPath, path) || overlap(other.entry.CommonDir, path) {
-			return Worktree{}, problem(409, "目标与已注册仓库目录相互嵌套: %s", other.entry.AnchorPath)
+			return Worktree{}, problem(ErrConflict, "目标与已注册仓库目录相互嵌套: %s", other.entry.AnchorPath)
 		}
 		trees := repository.Worktrees
 		if other != r {
@@ -70,7 +70,7 @@ func (s *Service) CreateWorktree(ctx context.Context, repositoryID string, req C
 		}
 		for _, tree := range trees {
 			if overlap(tree.Path, path) {
-				return Worktree{}, problem(409, "目标与已有工作树相互嵌套: %s", tree.Path)
+				return Worktree{}, problem(ErrConflict, "目标与已有工作树相互嵌套: %s", tree.Path)
 			}
 		}
 	}
@@ -83,32 +83,32 @@ func (s *Service) CreateWorktree(ctx context.Context, repositoryID string, req C
 		if branch.Name == req.Branch {
 			exists = true
 			if req.Mode == "existing" && len(branch.WorktreePaths) > 0 {
-				return Worktree{}, problem(409, "分支已被工作树占用: %s", req.Branch)
+				return Worktree{}, problem(ErrConflict, "分支已被工作树占用: %s", req.Branch)
 			}
 		}
 	}
 	argv := []string{"worktree", "add", "--no-guess-remote"}
 	if req.Mode == "new" {
 		if exists {
-			return Worktree{}, problem(409, "分支已存在，请选择已有本地分支模式")
+			return Worktree{}, problem(ErrConflict, "分支已存在，请选择已有本地分支模式")
 		}
 		if req.Base == "" || strings.HasPrefix(req.Base, "-") || strings.ContainsRune(req.Base, '\x00') {
-			return Worktree{}, problem(400, "请选择明确的本地提交基线")
+			return Worktree{}, problem(ErrInvalid, "请选择明确的本地提交基线")
 		}
 		oid, err := s.git(ctx, r.entry.AnchorPath, "rev-parse", "--verify", "--end-of-options", req.Base+"^{commit}")
 		if err != nil {
-			if Status(err) != 500 {
+			if errorKind(err) != ErrInternal {
 				return Worktree{}, err
 			}
-			return Worktree{}, problem(400, "基线无法解析为本地提交: %v", err)
+			return Worktree{}, problem(ErrInvalid, "基线无法解析为本地提交: %v", err)
 		}
 		argv = append(argv, "-b", req.Branch, "--", path, outputLine(oid))
 	} else {
 		if req.Base != "" {
-			return Worktree{}, problem(400, "已有分支模式不能指定基线")
+			return Worktree{}, problem(ErrInvalid, "已有分支模式不能指定基线")
 		}
 		if !exists {
-			return Worktree{}, problem(404, "本地分支不存在")
+			return Worktree{}, problem(ErrNotFound, "本地分支不存在")
 		}
 		argv = append(argv, "--", path, req.Branch)
 	}
@@ -123,19 +123,19 @@ func (s *Service) CreateWorktree(ctx context.Context, repositoryID string, req C
 	defer refreshCancel()
 	actual := s.readRepository(refreshCtx, r)
 	if operationErr != nil {
-		status := Status(operationErr)
-		if status == 500 {
-			status = 409
+		category := errorKind(operationErr)
+		if category == ErrInternal {
+			category = ErrConflict
 		}
-		return Worktree{}, problem(status, "%v；请刷新实际工作树/分支，可能存在残留", operationErr)
+		return Worktree{}, problem(category, "%v；请刷新实际工作树/分支，可能存在残留", operationErr)
 	}
 	if actual.Availability != "available" {
-		return Worktree{}, problem(500, "Git 创建已完成但刷新失败: %s", actual.Error)
+		return Worktree{}, problem(ErrInternal, "Git 创建已完成但刷新失败: %s", actual.Error)
 	}
 	for _, tree := range actual.Worktrees {
 		if tree.Path == path {
 			return tree, nil
 		}
 	}
-	return Worktree{}, problem(500, "Git 创建后未发现目标，请刷新实际状态")
+	return Worktree{}, problem(ErrInternal, "Git 创建后未发现目标，请刷新实际状态")
 }

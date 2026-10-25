@@ -12,7 +12,9 @@ import (
 	"unicode"
 
 	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/wire"
 )
 
 var (
@@ -48,11 +50,9 @@ func AttachOptions(q url.Values) session.AttachOptions {
 }
 
 type submission struct {
-	ID         string `json:"id"`
-	Generation string `json:"generation"`
-	BodyBytes  int    `json:"bodyBytes"`
-	body       []byte
-	submit     []byte
+	contract.SubmissionHeader
+	body   []byte
+	submit []byte
 }
 
 // parseSubmission splits a 0x03 payload: a JSON header line, then the body
@@ -60,7 +60,7 @@ type submission struct {
 func parseSubmission(p []byte) (*submission, bool) {
 	header, rest, found := bytes.Cut(p, []byte{'\n'})
 	var item submission
-	if !found || json.Unmarshal(header, &item) != nil || !clientPattern.MatchString(item.ID) {
+	if !found || json.Unmarshal(header, &item.SubmissionHeader) != nil || !clientPattern.MatchString(item.ID) {
 		return nil, false
 	}
 	if item.BodyBytes < 0 || item.BodyBytes > len(rest) || len(rest) == 0 {
@@ -74,6 +74,33 @@ type input struct {
 	data   []byte
 	reply  bool
 	submit *submission
+}
+
+// jsonFrame encodes a JSON control frame. Its value is a contract type,
+// which archtest rule R8 checks at every call.
+func jsonFrame(kind byte, v any) []byte {
+	data, _ := json.Marshal(v)
+	return contract.Frame(kind, data)
+}
+
+// encode turns a typed session message into its frame; exit reports the
+// final frame after which the connection closes.
+func encode(m session.Message) (frame []byte, exit bool) {
+	switch {
+	case m.Frame != nil:
+		return m.Frame, false
+	case m.Info != nil:
+		return jsonFrame(contract.FrameState, wire.Session(*m.Info)), false
+	case m.Exit != nil:
+		return jsonFrame(contract.FrameExit, contract.ExitFrame{ExitCode: *m.Exit}), true
+	case m.Position != nil:
+		return jsonFrame(contract.FramePosition, wire.StreamPosition(*m.Position)), false
+	case m.Submission != nil:
+		return jsonFrame(contract.FrameSubmission, wire.SubmissionStatus(*m.Submission)), false
+	case m.Control != nil:
+		return jsonFrame(contract.FrameControl, wire.ControlState(*m.Control)), false
+	}
+	return nil, false
 }
 
 func write(ctx context.Context, c *websocket.Conn, kind websocket.MessageType, p []byte) error {
@@ -136,31 +163,28 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 				continue
 			}
 			switch p[0] {
-			case 0:
+			case contract.FrameInput:
 				// User input takes control.
 				s.Claim(sub)
 				if !enqueue(input{data: p[1:]}) {
 					return
 				}
-			case 6:
+			case contract.FrameReply:
 				// Every attached xterm answers the same device queries; only
 				// the responsible connection's answers reach the PTY, and
 				// answering never takes control.
 				if s.Responds(sub) && !enqueue(input{data: p[1:], reply: true}) {
 					return
 				}
-			case 1:
-				var size struct {
-					Cols uint16 `json:"cols"`
-					Rows uint16 `json:"rows"`
-				}
+			case contract.FrameResize:
+				var size contract.TerminalResize
 				// Observers render the controller's grid and never resize it.
 				if json.Unmarshal(p[1:], &size) == nil {
 					_ = s.ResizeFrom(sub, size.Cols, size.Rows)
 				}
-			case 2:
+			case contract.FrameReplay:
 				s.Replay(sub)
-			case 3:
+			case contract.FrameSubmit:
 				item, ok := parseSubmission(p[1:])
 				if !ok {
 					if item != nil {
@@ -172,10 +196,8 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 				if !enqueue(input{submit: item}) {
 					return
 				}
-			case 4:
-				var query struct {
-					IDs []string `json:"ids"`
-				}
+			case contract.FrameQuery:
+				var query contract.SubmissionQuery
 				if json.Unmarshal(p[1:], &query) != nil || len(query.IDs) > 64 {
 					continue
 				}
@@ -186,7 +208,7 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 					}
 				}
 				s.QuerySubmissions(sub, ids)
-			case 5:
+			case contract.FrameClaim:
 				s.Claim(sub)
 			}
 		}
@@ -197,12 +219,12 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 		<-readerDone
 		<-inputDone
 	}()
-	var pending []byte
+	var pending *session.Message
 	var combinedBuffer []byte
 	for {
-		var frame []byte
+		var m session.Message
 		if pending != nil {
-			frame = pending
+			m = *pending
 			pending = nil
 		} else {
 			select {
@@ -211,10 +233,14 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 			case <-sub.Slow:
 				_ = c.Close(4408, "slow client")
 				return
-			case frame = <-sub.Out:
+			case m = <-sub.Out:
 			}
 		}
-		if frame[0] == 0 {
+		frame, exit := encode(m)
+		if frame == nil {
+			continue
+		}
+		if m.Frame != nil && frame[0] == contract.FrameOutput {
 			if combinedBuffer == nil {
 				combinedBuffer = make([]byte, 0, 65537)
 			}
@@ -224,11 +250,11 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 			for len(combined) < 65537 {
 				select {
 				case next := <-sub.Out:
-					if next[0] != 0 || len(combined)+len(next)-1 > 65537 {
-						pending = next
+					if next.Frame == nil || next.Frame[0] != contract.FrameOutput || len(combined)+len(next.Frame)-1 > 65537 {
+						pending = &next
 						break aggregate
 					}
-					combined = append(combined, next[1:]...)
+					combined = append(combined, next.Frame[1:]...)
 				case <-timer.C:
 					break aggregate
 				case <-ctx.Done():
@@ -247,7 +273,7 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 			_ = c.Close(4408, "write timeout")
 			return
 		}
-		if frame[0] == 3 {
+		if exit {
 			_ = c.Close(4410, "session exited")
 			return
 		}
@@ -270,7 +296,7 @@ func List(ctx context.Context, m *session.Manager, c *websocket.Conn) {
 			_ = c.Close(4408, "slow client")
 			return
 		case event := <-sub.Out:
-			data, err := json.Marshal(event)
+			data, err := json.Marshal(wire.SessionEvent(event))
 			if err != nil || write(ctx, c, websocket.MessageText, data) != nil {
 				_ = c.Close(4408, "write timeout")
 				return

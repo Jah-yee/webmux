@@ -1,0 +1,25 @@
+{
+  "body": {
+    "attention": null,
+    "clients": 1,
+    "cmd": [
+      "/bin/sh",
+      "-c",
+      "exit 3"
+    ],
+    "cols": 80,
+    "createdAt": "<time>",
+    "cwd": "<repo>",
+    "exitCode": 3,
+    "generation": "<generation#1>",
+    "id": "<id#1>",
+    "lastActiveAt": "<time>",
+    "preset": "custom",
+    "preview": "",
+    "reportedCwd": null,
+    "rows": 24,
+    "status": "exited",
+    "title": "exiting",
+    "workspace": null
+  }
+}

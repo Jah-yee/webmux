@@ -89,7 +89,7 @@ func TestPlainFilesBoundariesAndDetection(t *testing.T) {
 		t.Fatalf("nodes %+v", names)
 	}
 	for _, p := range []string{"../secret", ".git/secret", "link/secret", "fifo", "nested", "nested/.git/secret"} {
-		if _, e = s.File(context.Background(), id, c.ID, nodeID(p)); Status(e) != 400 {
+		if _, e = s.File(context.Background(), id, c.ID, nodeID(p)); errorKind(e) != ErrInvalid {
 			t.Errorf("path %q: %v", p, e)
 		}
 	}
@@ -142,7 +142,7 @@ func TestFileLimitsEncodingAndIdentity(t *testing.T) {
 	os.Rename(root, root+"-old")
 	defer os.RemoveAll(root + "-old")
 	os.Mkdir(root, 0700)
-	if _, e := s.Context(context.Background(), id); Status(e) != 409 {
+	if _, e := s.Context(context.Background(), id); errorKind(e) != ErrConflict {
 		t.Fatalf("root replacement: %v", e)
 	}
 }
@@ -232,7 +232,7 @@ func TestPaginationSearchAndExpiry(t *testing.T) {
 		t.Fatal(second, e)
 	}
 	write(t, root, "new.txt", "new")
-	if _, e = s.Tree(context.Background(), id, c.ID, "", false, first.Next); Status(e) != 409 {
+	if _, e = s.Tree(context.Background(), id, c.ID, "", false, first.Next); errorKind(e) != ErrConflict {
 		t.Fatal("stale cursor", e)
 	}
 	found, e := s.Search(context.Background(), id, c.ID, "file-", false)
@@ -247,18 +247,18 @@ func TestPaginationSearchAndExpiry(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.SnapshotFile(context.Background(), other.Info().ID, f.Snapshot, ""); Status(e) != 400 {
+	if _, e = s.SnapshotFile(context.Background(), other.Info().ID, f.Snapshot, ""); errorKind(e) != ErrInvalid {
 		t.Fatal("cross session", e)
 	}
 	s.mu.Lock()
 	s.snapshots[f.Snapshot].created = time.Now().Add(-Lifetime - time.Second)
 	s.mu.Unlock()
-	if _, e = s.SnapshotFile(context.Background(), id, f.Snapshot, ""); Status(e) != 410 {
+	if _, e = s.SnapshotFile(context.Background(), id, f.Snapshot, ""); errorKind(e) != ErrGone {
 		t.Fatal("expired", e)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, e = s.Search(ctx, id, c.ID, "", true); Status(e) != 504 {
+	if _, e = s.Search(ctx, id, c.ID, "", true); errorKind(e) != ErrTimeout {
 		t.Fatal("cancel", e)
 	}
 }
@@ -352,7 +352,7 @@ func TestCacheEvictionAndSessionCleanup(t *testing.T) {
 	for i := 0; i < 65; i++ {
 		s.put(&snapshot{session: id, context: c.ID, size: 1024 * 1024})
 	}
-	if _, e = s.get(id, f.Snapshot); Status(e) != 410 {
+	if _, e = s.get(id, f.Snapshot); errorKind(e) != ErrGone {
 		t.Fatalf("budget did not evict old snapshot: %v", e)
 	}
 	s.mu.Lock()
@@ -548,7 +548,7 @@ func TestCurrentIndexFileRefreshAndDetection(t *testing.T) {
 	if e != nil || head.Document.Text != "first\n" {
 		t.Fatal(head, e)
 	}
-	if _, e = s.FileSource(context.Background(), id, c.ID, nodeID("file.txt"), "HEAD~1"); Status(e) != 400 {
+	if _, e = s.FileSource(context.Background(), id, c.ID, nodeID("file.txt"), "HEAD~1"); errorKind(e) != ErrInvalid {
 		t.Fatal("arbitrary revision accepted", e)
 	}
 }
@@ -561,7 +561,7 @@ func TestGitAdministrationCannotBeBrowseRoot(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if _, e = s.Context(context.Background(), item.Info().ID); Status(e) != 409 {
+	if _, e = s.Context(context.Background(), item.Info().ID); errorKind(e) != ErrConflict {
 		t.Fatal("Git admin root accepted", e)
 	}
 }
@@ -712,18 +712,18 @@ func TestLocateResolvesLogicalBasesAgainstCanonicalRoot(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		id, input string
-		status    int
+		kind      error
 	}{
-		{launch, "missing.go", 404},
-		{launch, "main.go/child", 404},
-		{launch, "../..", 403},
-		{launch, filepath.Dir(root), 403},
-		{launch, "../.git/config", 400},
-		{launch, " ", 400},
-		{remote, "x.go", 409},
+		{launch, "missing.go", ErrNotFound},
+		{launch, "main.go/child", ErrNotFound},
+		{launch, "../..", ErrForbidden},
+		{launch, filepath.Dir(root), ErrForbidden},
+		{launch, "../.git/config", ErrInvalid},
+		{launch, " ", ErrInvalid},
+		{remote, "x.go", ErrConflict},
 	} {
-		if got, e := locate(tc.id, tc.input); Status(e) != tc.status {
-			t.Errorf("locate %q: want %d, got %+v %v", tc.input, tc.status, got, e)
+		if got, e := locate(tc.id, tc.input); errorKind(e) != tc.kind {
+			t.Errorf("locate %q: want %v, got %+v %v", tc.input, tc.kind, got, e)
 		}
 	}
 }

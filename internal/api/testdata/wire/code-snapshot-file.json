@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "body": {
+    "checkedAt": "<time>",
+    "document": {
+      "absolutePath": "<repo>/a.txt",
+      "contentVersion": "<contentVersion#5>",
+      "downloadable": true,
+      "kind": "text",
+      "lineCount": 2,
+      "mediaType": "",
+      "nodeId": "YS50eHQ",
+      "oid": "",
+      "path": "a.txt",
+      "reason": "",
+      "referenceable": true,
+      "size": 10,
+      "source": "worktree",
+      "text": "one\nthree\n"
+    },
+    "snapshotId": "<snapshotId#2>"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "status": 201,
+  "body": {
+    "path": "<tmp>/webmux-upload-<n>/note.txt"
+  }
+}

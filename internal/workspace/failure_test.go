@@ -51,14 +51,14 @@ func TestPublishedRegistryFailureDisablesFurtherWrites(t *testing.T) {
 	if s.Capability().RegistryAvailable {
 		t.Fatal("registry still allows writes from stale memory after publication failure")
 	}
-	if _, _, err := s.Register(context.Background(), root); Status(err) != 503 {
+	if _, _, err := s.Register(context.Background(), root); errorKind(err) != ErrUnavailable {
 		t.Fatalf("stale registry accepted another write: %v", err)
 	}
 	after, err := os.ReadFile(filepath.Join(state, "repositories.json"))
 	if err != nil || string(after) != string(data) {
 		t.Fatalf("failure state overwrote published data: %v", err)
 	}
-	item, err := s.CreateSession(context.Background(), root, "custom", []string{"/bin/sh", "-c", "printf DIRECT_AFTER_STORAGE_FAILURE"}, nil, "", nil, nil)
+	item, err := s.CreateSession(context.Background(), SessionInput{Cwd: root, Preset: "custom", Cmd: []string{"/bin/sh", "-c", "printf DIRECT_AFTER_STORAGE_FAILURE"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestCancelledGitCleansDescendantAfterLeaderExit(t *testing.T) {
 	cancel()
 	select {
 	case err := <-result:
-		if Status(err) != 504 {
+		if errorKind(err) != ErrTimeout {
 			t.Fatalf("cancellation error: %v", err)
 		}
 	case <-time.After(3 * time.Second):

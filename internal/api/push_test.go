@@ -30,18 +30,18 @@ func TestPushOrigin(t *testing.T) {
 		host, origin string
 		want, reason string
 	}{
-		{"named origin", &Server{Config: named}, "term.example.com", "https://term.example.com", "https://term.example.com", ""},
-		{"named without origin header", &Server{Config: named}, "term.example.com", "", "https://term.example.com", ""},
-		{"named http origin", &Server{Config: named}, "term.example.com", "http://term.example.com", "", pushUnsupportedOrigin},
-		{"quick tunnel", &Server{Public: quick}, "abc.trycloudflare.com", "https://abc.trycloudflare.com", "", pushQuickTunnel},
-		{"quick tunnel without origin header", &Server{Public: quick}, "abc.trycloudflare.com", "", "", pushQuickTunnel},
+		{"named origin", &Server{Deps: Deps{Config: named}}, "term.example.com", "https://term.example.com", "https://term.example.com", ""},
+		{"named without origin header", &Server{Deps: Deps{Config: named}}, "term.example.com", "", "https://term.example.com", ""},
+		{"named http origin", &Server{Deps: Deps{Config: named}}, "term.example.com", "http://term.example.com", "", pushUnsupportedOrigin},
+		{"quick tunnel", &Server{Deps: Deps{Public: quick}}, "abc.trycloudflare.com", "https://abc.trycloudflare.com", "", pushQuickTunnel},
+		{"quick tunnel without origin header", &Server{Deps: Deps{Public: quick}}, "abc.trycloudflare.com", "", "", pushQuickTunnel},
 		{"quick tunnel stopped", &Server{}, "abc.trycloudflare.com", "https://abc.trycloudflare.com", "", pushUnsupportedOrigin},
 		{"ipv4 loopback", &Server{}, "127.0.0.1:7681", "http://127.0.0.1:7681", "http://127.0.0.1:7681", ""},
 		{"ipv6 loopback", &Server{}, "[::1]:7681", "http://[::1]:7681", "http://[::1]:7681", ""},
 		{"localhost without origin header", &Server{}, "localhost:7681", "", "http://localhost:7681", ""},
-		{"vpn address", &Server{Config: config.Config{AllowedOrigins: []string{"http://100.64.0.2:7681"}}}, "100.64.0.2:7681", "http://100.64.0.2:7681", "", pushUnsupportedOrigin},
-		{"other https proxy", &Server{Config: named}, "box.tail1234.ts.net", "https://box.tail1234.ts.net", "", pushUnsupportedOrigin},
-		{"local socket", &Server{Config: named, local: true}, "webmux", "", "", pushUnsupportedOrigin},
+		{"vpn address", &Server{Deps: Deps{Config: config.Config{AllowedOrigins: []string{"http://100.64.0.2:7681"}}}}, "100.64.0.2:7681", "http://100.64.0.2:7681", "", pushUnsupportedOrigin},
+		{"other https proxy", &Server{Deps: Deps{Config: named}}, "box.tail1234.ts.net", "https://box.tail1234.ts.net", "", pushUnsupportedOrigin},
+		{"local socket", &Server{Deps: Deps{Config: named}, local: true}, "webmux", "", "", pushUnsupportedOrigin},
 	} {
 		r := httptest.NewRequest(http.MethodGet, "http://"+row.host+"/api/push", nil)
 		if row.origin != "" {
@@ -89,7 +89,7 @@ func TestPushAPI(t *testing.T) {
 	if err := public.Set("https://abc.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(cfg, m, testWorkspace(t, m, t.TempDir()), public, pushes, nil, nil)
+	handler := New(testDeps(t, Deps{Config: cfg, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Public: public, Push: pushes}))
 	var bodies strings.Builder
 	call := func(method, path, origin, token, body string) (int, map[string]any) {
 		t.Helper()
@@ -173,7 +173,7 @@ func TestPushAPI(t *testing.T) {
 func TestPushAPIWhenDisabled(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil)
+	handler := New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
 	for _, row := range []struct {
 		method, path, body string
 		want               int

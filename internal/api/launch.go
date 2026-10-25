@@ -1,11 +1,10 @@
 package api
 
 import (
-	"errors"
-	"log/slog"
 	"net/http"
 
-	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/wire"
 )
 
 // launchRoutes serves the saved launch configs. The list carries environment
@@ -17,7 +16,7 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 			launchFailure(w, err)
 			return
 		}
-		reply(w, http.StatusOK, list)
+		reply(w, http.StatusOK, wire.LaunchSummaries(list))
 	})
 	mux.HandleFunc("GET /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		item, err := s.Launch.Get(r.PathValue("id"))
@@ -25,31 +24,31 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 			launchFailure(w, err)
 			return
 		}
-		reply(w, http.StatusOK, item)
+		reply(w, http.StatusOK, wire.LaunchConfig(item))
 	})
 	mux.HandleFunc("POST /api/launch-configs", func(w http.ResponseWriter, r *http.Request) {
-		var req launch.Input
+		var req contract.LaunchConfigInput
 		if !decode(w, r, &req) {
 			return
 		}
-		item, err := s.Launch.Create(req)
+		item, err := s.Launch.Create(wire.LaunchInput(req))
 		if err != nil {
 			launchFailure(w, err)
 			return
 		}
-		reply(w, http.StatusCreated, item)
+		reply(w, http.StatusCreated, wire.LaunchConfig(item))
 	})
 	mux.HandleFunc("PUT /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var req launch.Input
+		var req contract.LaunchConfigInput
 		if !decode(w, r, &req) {
 			return
 		}
-		item, err := s.Launch.Update(r.PathValue("id"), req)
+		item, err := s.Launch.Update(r.PathValue("id"), wire.LaunchInput(req))
 		if err != nil {
 			launchFailure(w, err)
 			return
 		}
-		reply(w, http.StatusOK, item)
+		reply(w, http.StatusOK, wire.LaunchConfig(item))
 	})
 	mux.HandleFunc("DELETE /api/launch-configs/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.Launch.Delete(r.PathValue("id")); err != nil {
@@ -58,31 +57,4 @@ func (s *Server) launchRoutes(mux *http.ServeMux) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-}
-
-// launchStatus maps launch store errors to HTTP statuses; anything else is a
-// failed save.
-func launchStatus(err error) int {
-	switch {
-	case errors.Is(err, launch.ErrInvalid):
-		return http.StatusBadRequest
-	case errors.Is(err, launch.ErrNotFound):
-		return http.StatusNotFound
-	case errors.Is(err, launch.ErrDuplicate):
-		return http.StatusConflict
-	case errors.Is(err, launch.ErrUnavailable):
-		return http.StatusServiceUnavailable
-	default:
-		return http.StatusInternalServerError
-	}
-}
-
-// launchFailure answers err. Store errors name fields and paths, never
-// environment values.
-func launchFailure(w http.ResponseWriter, err error) {
-	status := launchStatus(err)
-	if status == http.StatusInternalServerError {
-		slog.Error("launch config save failed", "error", err)
-	}
-	failure(w, status, err)
 }

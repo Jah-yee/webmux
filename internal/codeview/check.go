@@ -8,7 +8,7 @@ import (
 func (s *Service) Check(ctx context.Context, id string, req CheckRequest) (Check, error) {
 	r := Check{Snapshots: map[string]string{}, Directories: map[string]string{}, Changes: "unchanged", Checked: time.Now().UTC()}
 	if len(req.Snapshots) > 40 || len(req.Directories) > 30 {
-		return r, problem(400, "检查数量超过限制")
+		return r, problem(ErrInvalid, "检查数量超过限制")
 	}
 	return withRoot(ctx, s, id, req.Context, func(b *binding) (Check, error) {
 		views := map[string]*snapshot{}
@@ -16,14 +16,14 @@ func (s *Service) Check(ctx context.Context, id string, req CheckRequest) (Check
 		for _, sid := range req.Snapshots {
 			v, err := s.get(id, sid)
 			if err != nil {
-				if Status(err) == 400 {
+				if errorKind(err) == ErrInvalid {
 					return r, err
 				}
 				r.Snapshots[sid] = "expired"
 				continue
 			}
 			if v.context != req.Context {
-				return r, problem(400, "快照上下文不匹配")
+				return r, problem(ErrInvalid, "快照上下文不匹配")
 			}
 			views[sid] = v
 			if v.diff != nil {
@@ -60,7 +60,7 @@ func (s *Service) Check(ctx context.Context, id string, req CheckRequest) (Check
 					next, e := b.sourceFile(ctx, d.rawPath, d.Source)
 					if e != nil {
 						state = "unknown"
-						if Status(e) == 404 {
+						if errorKind(e) == ErrNotFound {
 							state = "missing"
 						}
 					} else if next.Version != d.Version || next.Kind != d.Kind {
@@ -78,7 +78,7 @@ func (s *Service) Check(ctx context.Context, id string, req CheckRequest) (Check
 						next, e := b.read(found.NewPath)
 						if e != nil {
 							state = "unknown"
-							if Status(e) == 404 {
+							if errorKind(e) == ErrNotFound {
 								state = "missing"
 							}
 						} else if next.Version != v.diff.New.Version {

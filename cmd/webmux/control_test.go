@@ -23,7 +23,6 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
 	"github.com/rainchan/webmux/internal/runtime"
-	"github.com/rainchan/webmux/internal/session"
 )
 
 const fixtureToken = "fixture-token-0123456789"
@@ -192,7 +191,7 @@ func TestServerLocalAPIStatusAndStop(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	client := f.local(t)
-	var info session.Info
+	var info contract.SessionInfo
 	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"cat"}}, &info); err != nil {
 		t.Fatalf("create over socket without token: %v", err)
 	}
@@ -520,7 +519,7 @@ func TestBridgeCarriesHTTPAndWebSocket(t *testing.T) {
 			t.Fatalf("status over bridge: %+v %v", status, err)
 		}
 	}
-	var info session.Info
+	var info contract.SessionInfo
 	if err := client.Do(ctx, http.MethodPost, "/api/sessions", map[string]any{"preset": "custom", "cmd": []string{"cat"}}, &info); err != nil {
 		t.Fatal(err)
 	}

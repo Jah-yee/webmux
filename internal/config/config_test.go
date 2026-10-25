@@ -48,37 +48,6 @@ func TestStateDirectoryDefaultsAndOptionalStorage(t *testing.T) {
 	}
 }
 
-func TestAttentionSignalOptions(t *testing.T) {
-	dir := t.TempDir()
-	for _, row := range []struct {
-		name, body                  string
-		disableProtocol, disableBel bool
-	}{
-		{"defaults", "", false, false},
-		{"legacy file", "idle_after_seconds = 30\n", false, false},
-		{"disabled", "agent_protocol = false\nbell_attention = false\n", true, true},
-		{"protocol only off", "agent_protocol = false\n", true, false},
-	} {
-		t.Run(row.name, func(t *testing.T) {
-			path := filepath.Join(dir, row.name+".toml")
-			if err := os.WriteFile(path, []byte(row.body), 0600); err != nil {
-				t.Fatal(err)
-			}
-			c, err := Load(path, true)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := c.Validate(); err != nil {
-				t.Fatal(err)
-			}
-			o := c.SessionOptions()
-			if o.DisableAgentProtocol != row.disableProtocol || o.DisableBellAttention != row.disableBel {
-				t.Fatalf("options = %+v", o)
-			}
-		})
-	}
-}
-
 func TestTunnelConfiguration(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)

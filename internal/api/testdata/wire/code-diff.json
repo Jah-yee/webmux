@@ -1,0 +1,53 @@
+{
+  "status": 200,
+  "body": {
+    "change": {
+      "changeId": "<changeId#1>",
+      "group": "unstaged",
+      "newMode": "100644",
+      "newOid": "<newOid#1>",
+      "newPath": "a.txt",
+      "nodeId": "YS50eHQ",
+      "oldMode": "100644",
+      "oldOid": "<oldOid#1>",
+      "oldPath": "a.txt",
+      "status": "M"
+    },
+    "checkedAt": "<time>",
+    "kind": "text",
+    "new": {
+      "absolutePath": "<repo>/a.txt",
+      "contentVersion": "<contentVersion#5>",
+      "downloadable": true,
+      "kind": "text",
+      "lineCount": 2,
+      "mediaType": "",
+      "nodeId": "YS50eHQ",
+      "oid": "",
+      "path": "a.txt",
+      "reason": "",
+      "referenceable": true,
+      "size": 10,
+      "source": "worktree",
+      "text": "one\nthree\n"
+    },
+    "old": {
+      "absolutePath": "<repo>/a.txt",
+      "contentVersion": "<contentVersion#6>",
+      "downloadable": true,
+      "kind": "text",
+      "lineCount": 2,
+      "mediaType": "",
+      "nodeId": "YS50eHQ",
+      "oid": "<oldOid#1>",
+      "path": "a.txt",
+      "reason": "",
+      "referenceable": true,
+      "size": 8,
+      "source": "index",
+      "text": "one\ntwo\n"
+    },
+    "reason": "",
+    "snapshotId": "<snapshotId#2>"
+  }
+}

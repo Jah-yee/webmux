@@ -82,7 +82,7 @@ func (r *tunnelRun) waitTunnel(t *testing.T, state string) contract.TunnelStatus
 
 // configTunnel reads the browser-facing tunnel state from GET /api/config.
 // The response must never carry the WebMux or Cloudflare token.
-func (r *tunnelRun) configTunnel(t *testing.T) api.TunnelInfo {
+func (r *tunnelRun) configTunnel(t *testing.T) contract.TunnelInfo {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodGet, r.local+"/api/config", nil)
 	if err != nil {
@@ -106,7 +106,7 @@ func (r *tunnelRun) configTunnel(t *testing.T) api.TunnelInfo {
 		t.Fatalf("config leaks the token: %s", raw)
 	}
 	var body struct {
-		Tunnel api.TunnelInfo `json:"tunnel"`
+		Tunnel contract.TunnelInfo `json:"tunnel"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	if got := r.tunnel(t); got != (contract.TunnelStatus{State: contract.TunnelOff}) {
 		t.Fatalf("initial tunnel %+v", got)
 	}
-	if got := r.configTunnel(t); got != (api.TunnelInfo{State: contract.TunnelOff}) {
+	if got := r.configTunnel(t); got != (contract.TunnelInfo{State: contract.TunnelOff}) {
 		t.Fatalf("initial config tunnel %+v", got)
 	}
 	if got := r.status(t, publicHost); got != http.StatusForbidden {
@@ -157,7 +157,7 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	if got := r.waitTunnel(t, contract.TunnelReady); got != (contract.TunnelStatus{State: contract.TunnelReady, PublicURL: publicOrigin}) {
 		t.Fatalf("ready tunnel %+v", got)
 	}
-	if got := r.configTunnel(t); got != (api.TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: publicOrigin}) {
+	if got := r.configTunnel(t); got != (contract.TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: publicOrigin}) {
 		t.Fatalf("ready config tunnel %+v", got)
 	}
 	if got := r.status(t, publicHost); got != http.StatusOK {
@@ -177,7 +177,7 @@ func TestRuntimeTunnelStartStop(t *testing.T) {
 	if got := r.setTunnel(t, false); got.State != contract.TunnelOff {
 		t.Fatalf("stop reply %+v", got)
 	}
-	if got := r.configTunnel(t); got != (api.TunnelInfo{State: contract.TunnelOff}) {
+	if got := r.configTunnel(t); got != (contract.TunnelInfo{State: contract.TunnelOff}) {
 		t.Fatalf("stopped config tunnel %+v", got)
 	}
 	if got := r.status(t, publicHost); got != http.StatusForbidden {

@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -13,26 +14,26 @@ import (
 // command, preview or terminal text.
 type Alert struct {
 	SessionID string
-	Kind      session.AttentionKind
+	Kind      attentionkind.Kind
 	Source    session.AttentionSource
 	Since     time.Time
 	Title     string
 }
 
-var kindBodies = map[session.AttentionKind]string{
-	session.AttentionQuestion:   "需要回答",
-	session.AttentionPermission: "等待授权",
-	session.AttentionError:      "出错停止",
-	session.AttentionDone:       "回合结束",
-	session.AttentionNotify:     "有新通知",
-	session.AttentionBell:       "响铃提醒",
+var kindBodies = map[attentionkind.Kind]string{
+	attentionkind.Question:   "需要回答",
+	attentionkind.Permission: "等待授权",
+	attentionkind.Error:      "出错停止",
+	attentionkind.Done:       "回合结束",
+	attentionkind.Notify:     "有新通知",
+	attentionkind.Bell:       "响铃提醒",
 }
 
 // urgency asks push services to wake a sleeping device only for signals that
 // block the agent on the user.
-func urgency(kind session.AttentionKind) string {
+func urgency(kind attentionkind.Kind) string {
 	switch kind {
-	case session.AttentionQuestion, session.AttentionPermission, session.AttentionError:
+	case attentionkind.Question, attentionkind.Permission, attentionkind.Error:
 		return "high"
 	}
 	return "normal"
@@ -71,7 +72,7 @@ type notification struct {
 type alertMeta struct {
 	V         int                     `json:"v"`
 	SessionID string                  `json:"sessionId"`
-	Kind      session.AttentionKind   `json:"kind"`
+	Kind      attentionkind.Kind      `json:"kind"`
 	Source    session.AttentionSource `json:"source"`
 	Since     time.Time               `json:"since"`
 }
@@ -111,7 +112,7 @@ func testPayload(origin string) ([]byte, error) {
 }
 
 type attentionKey struct {
-	kind  session.AttentionKind
+	kind  attentionkind.Kind
 	since int64 // UnixNano; == on time.Time also compares monotonic readings
 }
 
@@ -119,15 +120,15 @@ type attentionKey struct {
 // changes only when a signal is newly raised or upgraded, so repeated reports,
 // spinner output and reconnect snapshots never alert twice.
 type Tracker struct {
-	kinds    map[session.AttentionKind]bool
+	kinds    map[attentionkind.Kind]bool
 	seen     map[string]attentionKey
 	baseline bool
 }
 
 func NewTracker(kinds []string) *Tracker {
-	t := &Tracker{kinds: map[session.AttentionKind]bool{}, seen: map[string]attentionKey{}}
+	t := &Tracker{kinds: map[attentionkind.Kind]bool{}, seen: map[string]attentionKey{}}
 	for _, kind := range kinds {
-		t.kinds[session.AttentionKind(kind)] = true
+		t.kinds[attentionkind.Kind(kind)] = true
 	}
 	return t
 }

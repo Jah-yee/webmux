@@ -16,24 +16,42 @@ const readTimeout = 10 * time.Second
 const writeTimeout = 30 * time.Second
 const confirmationLifetime = 5 * time.Minute
 
+// Error kinds. Each wraps a transport-neutral category; the controller maps
+// kinds to HTTP statuses.
+var (
+	ErrInvalid     = errors.New("invalid workspace request")
+	ErrNotFound    = errors.New("workspace item not found")
+	ErrConflict    = errors.New("workspace state conflict")
+	ErrTooLarge    = errors.New("workspace output too large")
+	ErrInternal    = errors.New("workspace internal error")
+	ErrUnavailable = errors.New("workspace unavailable")
+	ErrTimeout     = errors.New("workspace operation timed out")
+)
+
+// Error carries the user-facing message; its kind is reachable through
+// errors.Is.
 type Error struct {
-	Status  int
-	Message string
+	kind    error
+	message string
 }
 
-func (e *Error) Error() string { return e.Message }
-func problem(status int, format string, args ...any) error {
-	return &Error{status, fmt.Sprintf(format, args...)}
+func (e *Error) Error() string { return e.message }
+func (e *Error) Unwrap() error { return e.kind }
+func problem(kind error, format string, args ...any) error {
+	return &Error{kind, fmt.Sprintf(format, args...)}
 }
-func Status(err error) int {
+
+// errorKind classifies err like the controller does: its own kind, a timeout for
+// cancellation, otherwise an internal error.
+func errorKind(err error) error {
 	var e *Error
 	if errors.As(err, &e) {
-		return e.Status
+		return e.kind
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return 504
+		return ErrTimeout
 	}
-	return 500
+	return ErrInternal
 }
 
 type Capability struct {
@@ -85,20 +103,20 @@ type Branches struct {
 	DefaultParent string   `json:"defaultParent"`
 }
 type Reference struct {
-	RepositoryID string `json:"repositoryId"`
-	WorktreeID   string `json:"worktreeId"`
+	RepositoryID string
+	WorktreeID   string
 }
 type CreateRequest struct {
-	Path   string `json:"path"`
-	Mode   string `json:"mode"`
-	Branch string `json:"branch"`
-	Base   string `json:"base"`
+	Path   string
+	Mode   string
+	Branch string
+	Base   string
 }
 type RemoveRequest struct {
-	ConfirmationID string `json:"confirmationId"`
-	Mode           string `json:"mode"`
-	ConfirmPath    string `json:"confirmPath"`
-	CloseSessions  bool   `json:"closeSessions"`
+	ConfirmationID string
+	Mode           string
+	ConfirmPath    string
+	CloseSessions  bool
 }
 type Preview struct {
 	ConfirmationID string         `json:"confirmationId"`

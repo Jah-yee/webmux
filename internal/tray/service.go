@@ -176,16 +176,7 @@ func (s *WSLService) Watch(ctx context.Context, sessions func(int)) error {
 		if err != nil {
 			return err
 		}
-		var event struct {
-			Type     string `json:"type"`
-			Sessions []struct {
-				ID string `json:"id"`
-			} `json:"sessions"`
-			Session struct {
-				ID string `json:"id"`
-			} `json:"session"`
-			ID string `json:"id"`
-		}
+		var event contract.SessionEvent
 		if json.Unmarshal(data, &event) != nil {
 			continue
 		}
@@ -196,6 +187,9 @@ func (s *WSLService) Watch(ctx context.Context, sessions func(int)) error {
 				ids[item.ID] = true
 			}
 		case "created", "updated":
+			if event.Session == nil {
+				continue
+			}
 			ids[event.Session.ID] = true
 		case "removed":
 			delete(ids, event.ID)

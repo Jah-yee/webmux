@@ -66,7 +66,7 @@ func TestStreamedGitHasNoTotalOutputLimitAndCancels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	if err = ReadGitRecords(ctx, dir, func(string) error { return nil }, "ls-files"); Status(err) != 504 || time.Since(start) > 2*time.Second {
+	if err = ReadGitRecords(ctx, dir, func(string) error { return nil }, "ls-files"); errorKind(err) != ErrTimeout || time.Since(start) > 2*time.Second {
 		t.Fatal("cancellation", err)
 	}
 }

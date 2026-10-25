@@ -15,7 +15,7 @@ func (s *Service) beginStart(path string) error {
 	defer s.coord.Unlock()
 	for reserved := range s.reservations {
 		if within(reserved, path) {
-			return problem(409, "目标工作树正在删除，请稍后刷新")
+			return problem(ErrConflict, "目标工作树正在删除，请稍后刷新")
 		}
 	}
 	s.starts[path]++
@@ -35,7 +35,7 @@ func (s *Service) reserve(ctx context.Context, path string) error {
 	for reserved := range s.reservations {
 		if overlap(reserved, path) {
 			s.coord.Unlock()
-			return problem(409, "重叠工作树已有删除操作")
+			return problem(ErrConflict, "重叠工作树已有删除操作")
 		}
 	}
 	s.reservations[path] = true
@@ -138,7 +138,52 @@ func (s *Service) reassociate(ctx context.Context) {
 		s.commitAssociation(info, association, true)
 	}
 }
-func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, args []string, name string, reference *Reference, env map[string]string) (*session.Session, error) {
+
+// SessionInput describes a session to start. ConfigID selects a saved launch
+// config instead of Preset, Cmd, Args and Env.
+type SessionInput struct {
+	Cwd       string
+	Preset    string
+	Cmd       []string
+	Args      []string
+	Name      string
+	Workspace *Reference
+	Env       map[string]string
+	ConfigID  *string
+}
+
+// resolveCommand applies a saved launch config and validates the explicit
+// environment. It runs before any filesystem or Git work.
+func (s *Service) resolveCommand(in SessionInput) (preset string, cmd, args []string, env map[string]string, err error) {
+	preset, cmd, args, env = in.Preset, in.Cmd, in.Args, in.Env
+	if in.ConfigID != nil {
+		if *in.ConfigID == "" {
+			return "", nil, nil, nil, problem(ErrInvalid, "configId must not be empty")
+		}
+		if in.Preset != "" || len(in.Cmd) > 0 || len(in.Args) > 0 || len(in.Env) > 0 {
+			return "", nil, nil, nil, problem(ErrInvalid, "configId cannot be combined with preset, cmd, args or env")
+		}
+		// A nil store answers launch.ErrUnavailable.
+		saved, err := s.launches.Get(*in.ConfigID)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+		preset, cmd, args, env = "custom", saved.Cmd, nil, saved.Env
+	}
+	if err := session.ValidateEnv(env); err != nil {
+		return "", nil, nil, nil, problem(ErrInvalid, "%v", err)
+	}
+	return preset, cmd, args, env, nil
+}
+
+// CreateSession starts a session in the selected directory or worktree.
+// Launch config errors keep their launch error kinds.
+func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.Session, error) {
+	preset, cmd, args, env, err := s.resolveCommand(in)
+	if err != nil {
+		return nil, err
+	}
+	cwd, name, reference := in.Cwd, in.Name, in.Workspace
 	requestCtx := ctx
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
@@ -155,14 +200,14 @@ func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, ar
 			return nil, err
 		}
 		if snapshot.Availability != "available" {
-			return nil, problem(503, "%s", snapshot.Error)
+			return nil, problem(ErrUnavailable, "%s", snapshot.Error)
 		}
 		tree, err := findTree(snapshot, reference.WorktreeID)
 		if err != nil {
 			return nil, err
 		}
 		if !tree.Available || tree.Kind == "bare" {
-			return nil, problem(409, "所选工作树不可作为启动目录: %s", tree.Error)
+			return nil, problem(ErrConflict, "所选工作树不可作为启动目录: %s", tree.Error)
 		}
 		selected = &tree
 		if cwd == "" {
@@ -174,17 +219,17 @@ func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, ar
 	}
 	path, err := canonical(cwd)
 	if err != nil {
-		return nil, problem(400, "directory: %v", err)
+		return nil, problem(ErrInvalid, "directory: %v", err)
 	}
 	stat, err := os.Stat(path)
 	if err != nil {
-		return nil, problem(400, "directory: %v", err)
+		return nil, problem(ErrInvalid, "directory: %v", err)
 	}
 	if !stat.IsDir() {
-		return nil, problem(400, "path is not a directory")
+		return nil, problem(ErrInvalid, "path is not a directory")
 	}
 	if selected != nil && !within(selected.Path, path) {
-		return nil, problem(400, "cwd 与所选工作树不一致")
+		return nil, problem(ErrInvalid, "cwd 与所选工作树不一致")
 	}
 	if err := s.beginStart(path); err != nil {
 		return nil, err
@@ -192,14 +237,14 @@ func (s *Service) CreateSession(ctx context.Context, cwd, preset string, cmd, ar
 	defer s.endStart(path)
 	association := s.association(ctx, path)
 	if selected != nil && (association == nil || association.RepositoryID != reference.RepositoryID || association.WorktreeID != reference.WorktreeID) {
-		return nil, problem(409, "所选工作树身份已变化或 cwd 属于嵌套仓库，请刷新")
+		return nil, problem(ErrConflict, "所选工作树身份已变化或 cwd 属于嵌套仓库，请刷新")
 	}
 	if err := requestCtx.Err(); err != nil {
 		return nil, err
 	}
 	item, err := s.manager.Create(path, preset, cmd, args, name, env)
 	if err != nil {
-		return nil, problem(400, "启动会话失败: %v", err)
+		return nil, problem(ErrInvalid, "启动会话失败: %v", err)
 	}
 	s.commitAssociation(item.Info(), association, false)
 	return item, nil

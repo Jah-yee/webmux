@@ -29,18 +29,18 @@ func TestConfigTunnelStatus(t *testing.T) {
 		name string
 		cfg  config.Config
 		load func() contract.TunnelStatus
-		want TunnelInfo
+		want contract.TunnelInfo
 	}{
 		{
 			name: "not configured",
 			cfg:  quick,
-			want: TunnelInfo{State: contract.TunnelOff},
+			want: contract.TunnelInfo{State: contract.TunnelOff},
 		},
 		{
 			name: "quick starting",
 			cfg:  quick,
 			load: func() contract.TunnelStatus { return contract.TunnelStatus{State: contract.TunnelStarting} },
-			want: TunnelInfo{Enabled: true, State: contract.TunnelStarting},
+			want: contract.TunnelInfo{Enabled: true, State: contract.TunnelStarting},
 		},
 		{
 			name: "quick ready",
@@ -48,7 +48,7 @@ func TestConfigTunnelStatus(t *testing.T) {
 			load: func() contract.TunnelStatus {
 				return contract.TunnelStatus{State: contract.TunnelReady, PublicURL: "https://abc-def.trycloudflare.com"}
 			},
-			want: TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: "https://abc-def.trycloudflare.com"},
+			want: contract.TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: "https://abc-def.trycloudflare.com"},
 		},
 		{
 			name: "quick failed",
@@ -56,7 +56,7 @@ func TestConfigTunnelStatus(t *testing.T) {
 			load: func() contract.TunnelStatus {
 				return contract.TunnelStatus{State: contract.TunnelFailed, Error: "cloudflared exited"}
 			},
-			want: TunnelInfo{State: contract.TunnelFailed},
+			want: contract.TunnelInfo{State: contract.TunnelFailed},
 		},
 		{
 			name: "named ready",
@@ -64,7 +64,7 @@ func TestConfigTunnelStatus(t *testing.T) {
 			load: func() contract.TunnelStatus {
 				return contract.TunnelStatus{State: contract.TunnelReady, Named: true, PublicURL: "https://term.example.com"}
 			},
-			want: TunnelInfo{
+			want: contract.TunnelInfo{
 				Enabled:   true,
 				State:     contract.TunnelReady,
 				Named:     true,
@@ -78,13 +78,13 @@ func TestConfigTunnelStatus(t *testing.T) {
 				Token:  loginToken,
 				Tunnel: config.TunnelConfig{Token: credential},
 			},
-			want: TunnelInfo{State: contract.TunnelOff, Named: true},
+			want: contract.TunnelInfo{State: contract.TunnelOff, Named: true},
 		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			m := session.NewManager(session.Options{DefaultCwd: t.TempDir()})
 			defer m.Shutdown(context.Background())
-			handler := New(row.cfg, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, row.load)
+			handler := New(testDeps(t, Deps{Config: row.cfg, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Tunnel: row.load}))
 			req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
 			req.Header.Set("Authorization", "Bearer "+loginToken)
 			recorder := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestConfigTunnelStatus(t *testing.T) {
 				}
 			}
 			var response struct {
-				Tunnel TunnelInfo `json:"tunnel"`
+				Tunnel contract.TunnelInfo `json:"tunnel"`
 			}
 			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)

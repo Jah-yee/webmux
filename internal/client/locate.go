@@ -8,8 +8,8 @@ import (
 	"os"
 
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/runtime"
-	"github.com/rainchan/webmux/internal/session"
 )
 
 // Target is everything a client command knows before talking to a server.
@@ -43,7 +43,7 @@ func LoadConfig(path string, explicit bool) (config.Config, error) {
 // Locate never modifies files, including a stale record.
 func Locate(path string, explicit bool) Target {
 	t := Target{ConfigPath: path, ConfigExplicit: explicit}
-	if expanded, err := session.ExpandPath(path); err == nil {
+	if expanded, err := pathutil.Expand(path); err == nil {
 		t.ConfigPath = expanded
 	}
 	_, statErr := os.Stat(t.ConfigPath)

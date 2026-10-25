@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
@@ -27,44 +26,58 @@ const (
 )
 
 type Workspace struct {
-	RepositoryID string `json:"repositoryId"`
-	WorktreeID   string `json:"worktreeId"`
-	WorktreePath string `json:"worktreePath"`
+	RepositoryID string
+	WorktreeID   string
+	WorktreePath string
 }
 
 // ReportedCwd is the directory a program reported through OSC 7. It is a
 // navigation hint only; session ownership, file access roots and command
 // execution stay bound to the immutable launch directory and Workspace.
 type ReportedCwd struct {
-	Path   string    `json:"path"`
-	Host   string    `json:"host"`
-	Remote bool      `json:"remote"`
-	Since  time.Time `json:"since"`
+	Path   string
+	Host   string
+	Remote bool
+	Since  time.Time
 }
 
 type Info struct {
-	ID string `json:"id"`
+	ID string
 	// Generation distinguishes this run from any other session that could
 	// carry the same ID. Output offsets and submissions are bound to it.
-	Generation   string       `json:"generation"`
-	Title        string       `json:"title"`
-	Cwd          string       `json:"cwd"`
-	Preset       string       `json:"preset"`
-	Cmd          []string     `json:"cmd"`
-	Status       Status       `json:"status"`
-	ExitCode     *int         `json:"exitCode"`
-	Preview      string       `json:"preview"`
-	CreatedAt    time.Time    `json:"createdAt"`
-	LastActiveAt time.Time    `json:"lastActiveAt"`
-	Cols         uint16       `json:"cols"`
-	Rows         uint16       `json:"rows"`
-	Clients      int          `json:"clients"`
-	Workspace    *Workspace   `json:"workspace"`
-	Attention    *Attention   `json:"attention"`
-	ReportedCwd  *ReportedCwd `json:"reportedCwd"`
+	Generation   string
+	Title        string
+	Cwd          string
+	Preset       string
+	Cmd          []string
+	Status       Status
+	ExitCode     *int
+	Preview      string
+	CreatedAt    time.Time
+	LastActiveAt time.Time
+	Cols         uint16
+	Rows         uint16
+	Clients      int
+	Workspace    *Workspace
+	Attention    *Attention
+	ReportedCwd  *ReportedCwd
 }
+
+// Message is one item queued for a terminal subscriber, in protocol order.
+// Frame is raw output (type byte 0) or a replay snapshot (type byte 1),
+// shared between subscribers and never modified. Otherwise exactly one of
+// the other fields is set; the controller encodes it for the client.
+type Message struct {
+	Frame      []byte
+	Info       *Info
+	Exit       *int
+	Position   *Position
+	Submission *SubmissionStatus
+	Control    *ControlState
+}
+
 type Subscriber struct {
-	Out    chan []byte
+	Out    chan Message
 	Slow   chan struct{}
 	failed bool
 	client string
@@ -211,33 +224,32 @@ func (s *Session) infoLocked() Info {
 }
 func (s *Session) Buffer() []byte        { return s.ring.Snapshot() }
 func (s *Session) Done() <-chan struct{} { return s.done }
-func Frame(kind byte, p []byte) []byte {
+
+// rawFrame prefixes raw bytes with their protocol type byte.
+func rawFrame(kind byte, p []byte) Message {
 	frame := make([]byte, len(p)+1)
 	frame[0] = kind
 	copy(frame[1:], p)
-	return frame
+	return Message{Frame: frame}
 }
-func (s *Session) stateLocked() []byte {
-	return jsonFrame(2, s.infoLocked())
+func (s *Session) stateLocked() Message {
+	info := s.infoLocked()
+	return Message{Info: &info}
 }
-func jsonFrame(kind byte, v any) []byte {
-	data, _ := json.Marshal(v)
-	return Frame(kind, data)
-}
-func (s *Session) sendLocked(sub *Subscriber, p []byte) {
+func (s *Session) sendLocked(sub *Subscriber, m Message) {
 	if sub.failed {
 		return
 	}
 	select {
-	case sub.Out <- p:
+	case sub.Out <- m:
 	default:
 		sub.failed = true
 		close(sub.Slow)
 	}
 }
-func (s *Session) broadcastLocked(p []byte) {
+func (s *Session) broadcastLocked(m Message) {
 	for sub := range s.subs {
-		s.sendLocked(sub, p)
+		s.sendLocked(sub, m)
 	}
 }
 
@@ -256,7 +268,7 @@ func (s *Session) AttachClient(o AttachOptions) *Subscriber {
 		o.Client = randomClientID()
 	}
 	s.nextSeq++
-	sub := &Subscriber{Out: make(chan []byte, 256), Slow: make(chan struct{}), client: o.Client, label: o.Label, seq: s.nextSeq}
+	sub := &Subscriber{Out: make(chan Message, 256), Slow: make(chan struct{}), client: o.Client, label: o.Label, seq: s.nextSeq}
 	if s.control == nil {
 		s.setControlLocked(sub)
 	} else if s.control.ClientID == sub.client {
@@ -264,7 +276,7 @@ func (s *Session) AttachClient(o AttachOptions) *Subscriber {
 		s.controlSub = sub
 		if s.control.Label != sub.label {
 			s.control.Label = sub.label
-			s.broadcastLocked(s.controlFrameLocked())
+			s.broadcastLocked(s.controlLocked())
 		}
 	}
 	s.subs[sub] = struct{}{}
@@ -275,43 +287,45 @@ func (s *Session) AttachClient(o AttachOptions) *Subscriber {
 // Position precedes replayed bytes. "append" continues a terminal at Start
 // with the bytes up to End sent as ordinary output; "reset" is followed by a
 // full snapshot covering Start to End.
+func positionMessage(p Position) Message { return Message{Position: &p} }
+
 type Position struct {
-	Generation string `json:"generation"`
-	Mode       string `json:"mode"`
-	Start      uint64 `json:"start"`
-	End        uint64 `json:"end"`
-	Truncated  bool   `json:"truncated"`
+	Generation string
+	Mode       string
+	Start      uint64
+	End        uint64
+	Truncated  bool
 }
 
 // replayLocked queues the grid, position, stream and state for sub. Frames in
 // held follow the state; the exit frame stays last because the connection
 // closes once it is sent.
-func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held [][]byte) {
+func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held []Message) {
 	// The grid comes first: an observer must size its terminal before it
 	// parses cursor-addressed history, or that history lands on a wrong grid.
-	s.sendLocked(sub, s.controlFrameLocked())
+	s.sendLocked(sub, s.controlLocked())
 	start, end := s.ring.Range()
 	position := Position{Generation: s.info.Generation, Mode: "reset", Start: start, End: end, Truncated: start > 0}
 	if resume != nil && resume.Generation == s.info.Generation {
 		if tail, ok := s.ring.sinceWithPrefix([]byte{0}, resume.Offset); ok {
 			position.Mode, position.Start = "append", resume.Offset
-			s.sendLocked(sub, jsonFrame(4, position))
+			s.sendLocked(sub, positionMessage(position))
 			if len(tail) > 1 {
-				s.sendLocked(sub, tail)
+				s.sendLocked(sub, Message{Frame: tail})
 			}
 		}
 	}
 	if position.Mode == "reset" {
-		s.sendLocked(sub, jsonFrame(4, position))
-		s.sendLocked(sub, s.ring.snapshotWithPrefix([]byte{1}))
+		s.sendLocked(sub, positionMessage(position))
+		s.sendLocked(sub, Message{Frame: s.ring.snapshotWithPrefix([]byte{1})})
 	}
 	s.sendLocked(sub, s.stateLocked())
-	for _, frame := range held {
-		s.sendLocked(sub, frame)
+	for _, m := range held {
+		s.sendLocked(sub, m)
 	}
 	if s.info.ExitCode != nil {
-		data, _ := json.Marshal(map[string]int{"exitCode": *s.info.ExitCode})
-		s.sendLocked(sub, Frame(3, data))
+		code := *s.info.ExitCode
+		s.sendLocked(sub, Message{Exit: &code})
 	}
 }
 
@@ -321,12 +335,12 @@ func (s *Session) replayLocked(sub *Subscriber, resume *ResumePoint, held [][]by
 func (s *Session) Replay(sub *Subscriber) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var statuses [][]byte
+	var statuses []Message
 	for {
 		select {
-		case frame := <-sub.Out:
-			if frame[0] == 5 {
-				statuses = append(statuses, frame)
+		case m := <-sub.Out:
+			if m.Submission != nil {
+				statuses = append(statuses, m)
 			}
 		default:
 			s.replayLocked(sub, nil, statuses)
@@ -357,12 +371,12 @@ func (s *Session) Detach(sub *Subscriber) {
 	s.controlSub = heir
 	if heir == nil {
 		s.control = nil
-		s.broadcastLocked(s.controlFrameLocked())
+		s.broadcastLocked(s.controlLocked())
 		return
 	}
 	// The promoted connection's earlier resizes were refused; the control
 	// frame makes it send its grid again.
-	s.sendLocked(heir, s.controlFrameLocked())
+	s.sendLocked(heir, s.controlLocked())
 }
 func (s *Session) Write(p []byte) error {
 	return s.WriteContext(context.Background(), p)
@@ -401,7 +415,7 @@ func (s *Session) resizeLocked(cols, rows uint16) error {
 		s.info.Rows = rows
 		s.info.Preview = s.preview.Resize(cols, rows)
 		// Observers follow the controller's grid instead of fitting their own.
-		s.broadcastLocked(s.controlFrameLocked())
+		s.broadcastLocked(s.controlLocked())
 	}
 	return err
 }
@@ -425,10 +439,10 @@ func (s *Session) read() {
 				s.info.Status = StatusRunning
 			}
 			if len(s.subs) > 0 {
-				s.broadcastLocked(Frame(0, p))
+				s.broadcastLocked(rawFrame(0, p))
 				// After the output that toggled it, so the mode applies from there.
 				if s.preview.colorSchemeReports != reports {
-					s.broadcastLocked(s.controlFrameLocked())
+					s.broadcastLocked(s.controlLocked())
 				}
 			}
 			s.mu.Unlock()
@@ -466,8 +480,7 @@ func (s *Session) wait() {
 	s.info.ReportedCwd = nil
 	s.info.ExitCode = &code
 	s.broadcastLocked(s.stateLocked())
-	data, _ := json.Marshal(map[string]int{"exitCode": code})
-	s.broadcastLocked(Frame(3, data))
+	s.broadcastLocked(Message{Exit: &code})
 	close(s.done)
 	s.mu.Unlock()
 	slog.Info("session exited", "id", s.info.ID, "exitCode", code)

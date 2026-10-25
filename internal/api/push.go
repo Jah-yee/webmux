@@ -6,7 +6,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/push"
+	"github.com/rainchan/webmux/internal/wire"
 )
 
 // Push availability reasons shared with web/src/schemas.ts.
@@ -67,19 +69,19 @@ func pushUnavailableReason(err error) string {
 }
 
 func pushConflict(w http.ResponseWriter, reason string, err error) {
-	reply(w, http.StatusConflict, map[string]string{"error": err.Error(), "reason": reason})
+	reply(w, http.StatusConflict, contract.PushConflict{Error: err.Error(), Reason: reason})
 }
 
 func (s *Server) pushRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/push", func(w http.ResponseWriter, r *http.Request) {
-		status := map[string]any{"enabled": s.Push != nil, "available": false, "subscriptions": s.Push.Subscriptions()}
+		status := contract.APIPushStatus{Enabled: s.Push != nil, Subscriptions: s.Push.Subscriptions()}
 		if err := s.Push.Unavailable(); err != nil {
-			status["reason"] = pushUnavailableReason(err)
+			status.Reason = pushUnavailableReason(err)
 		} else if _, reason := s.pushOrigin(r); reason != "" {
-			status["reason"] = reason
+			status.Reason = reason
 		} else {
-			status["available"] = true
-			status["publicKey"] = s.Push.PublicKey()
+			status.Available = true
+			status.PublicKey = s.Push.PublicKey()
 		}
 		reply(w, http.StatusOK, status)
 	})
@@ -87,14 +89,7 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 		// The body is PushSubscription.toJSON(). Browsers always include
 		// expirationTime (usually null); it is accepted but not stored, because
 		// a stale subscription is pruned when the push service answers 404/410.
-		var req struct {
-			Endpoint       string   `json:"endpoint"`
-			ExpirationTime *float64 `json:"expirationTime"`
-			Keys           struct {
-				P256dh string `json:"p256dh"`
-				Auth   string `json:"auth"`
-			} `json:"keys"`
-		}
+		var req contract.PushSubscriptionRequest
 		if !decode(w, r, &req) {
 			return
 		}
@@ -102,7 +97,7 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 			pushConflict(w, pushUnavailableReason(err), err)
 			return
 		}
-		if err := push.Validate(req.Endpoint, req.Keys.P256dh, req.Keys.Auth); err != nil {
+		if err := s.Push.CheckSubscription(req.Endpoint, req.Keys.P256dh, req.Keys.Auth); err != nil {
 			failure(w, http.StatusBadRequest, err)
 			return
 		}
@@ -118,7 +113,7 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 		case err != nil:
 			failure(w, http.StatusInternalServerError, errors.New("推送订阅保存失败，请查看服务日志"))
 		default:
-			reply(w, http.StatusOK, map[string]string{"id": id})
+			reply(w, http.StatusOK, contract.PushSubscriptionCreated{ID: id})
 		}
 	})
 	mux.HandleFunc("DELETE /api/push/subscriptions/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +136,6 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 			pushConflict(w, pushUnavailableReason(err), err)
 			return
 		}
-		reply(w, http.StatusOK, report)
+		reply(w, http.StatusOK, wire.PushTestReport(report))
 	})
 }

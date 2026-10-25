@@ -15,7 +15,7 @@ import (
 	"github.com/rainchan/webmux/internal/client"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/pathutil"
 )
 
 const configUsage = "usage: webmux config path|show|validate|check|init [--config PATH] [--json]"
@@ -58,7 +58,7 @@ func configFlags(name string, args []string, stderr io.Writer, define func(*flag
 	}
 	explicit := false
 	flags.Visit(func(f *flag.Flag) { explicit = explicit || f.Name == "config" })
-	expanded, err := session.ExpandPath(*path)
+	expanded, err := pathutil.Expand(*path)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "webmux config:", err)
 		return "", false, false

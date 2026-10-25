@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/localclient"
 	"github.com/rainchan/webmux/internal/runtime"
@@ -47,7 +46,7 @@ func Stop(ctx context.Context, t Target, force bool, timeout time.Duration) (con
 		// The API stopped answering mid-request: fall back to signals.
 	}
 	if t.Record != nil {
-		if hint := api.ManagerHint(t.Record.Launcher); hint != "" && !force {
+		if hint := runtime.ManagerHint(t.Record.Launcher); hint != "" && !force {
 			return stopResult(contract.StopRefused, fmt.Sprintf("WebMux is managed by %s; use `%s` (or --force)", t.Record.Launcher, hint))
 		}
 		if err := t.Record.Alive(); err != nil {

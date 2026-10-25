@@ -5,19 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rainchan/webmux/internal/attentionkind"
 )
 
-type AttentionKind string
 type AttentionSource string
 
 const (
-	AttentionQuestion   AttentionKind = "question"
-	AttentionPermission AttentionKind = "permission"
-	AttentionDone       AttentionKind = "done"
-	AttentionError      AttentionKind = "error"
-	AttentionNotify     AttentionKind = "notify"
-	AttentionBell       AttentionKind = "bell"
-
 	SourceAgent    AttentionSource = "agent"
 	SourceTerminal AttentionSource = "terminal"
 )
@@ -28,20 +22,20 @@ const bellQuietPeriod = time.Second
 // Attention latches a signal that the session needs the user. Output never
 // clears it; only user input, an agent's resume event, or exit does.
 type Attention struct {
-	Kind   AttentionKind   `json:"kind"`
-	Source AttentionSource `json:"source"`
-	Since  time.Time       `json:"since"`
+	Kind   attentionkind.Kind
+	Source AttentionSource
+	Since  time.Time
 }
 
-func attentionRank(kind AttentionKind) int {
+func attentionRank(kind attentionkind.Kind) int {
 	switch kind {
-	case AttentionQuestion, AttentionPermission:
+	case attentionkind.Question, attentionkind.Permission:
 		return 4
-	case AttentionError:
+	case attentionkind.Error:
 		return 3
-	case AttentionDone:
+	case attentionkind.Done:
 		return 2
-	case AttentionNotify:
+	case attentionkind.Notify:
 		return 1
 	}
 	return 0
@@ -49,7 +43,7 @@ func attentionRank(kind AttentionKind) int {
 
 // raiseAttentionLocked keeps a stronger existing signal and refreshes Since
 // only when the kind changes.
-func (s *Session) raiseAttentionLocked(kind AttentionKind, source AttentionSource, now time.Time) {
+func (s *Session) raiseAttentionLocked(kind attentionkind.Kind, source AttentionSource, now time.Time) {
 	current := s.info.Attention
 	if current != nil {
 		if attentionRank(kind) < attentionRank(current.Kind) {
@@ -66,13 +60,13 @@ func (s *Session) raiseAttentionLocked(kind AttentionKind, source AttentionSourc
 func (s *Session) agentEventLocked(event string, now time.Time) {
 	switch event {
 	case "question_asked":
-		s.raiseAttentionLocked(AttentionQuestion, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Question, SourceAgent, now)
 	case "permission_request":
-		s.raiseAttentionLocked(AttentionPermission, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Permission, SourceAgent, now)
 	case "stop", "idle_prompt":
-		s.raiseAttentionLocked(AttentionDone, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Done, SourceAgent, now)
 	case "stop_failure":
-		s.raiseAttentionLocked(AttentionError, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Error, SourceAgent, now)
 	case "prompt_submit", "permission_replied", "session_start":
 		s.info.Attention = nil
 	}
@@ -80,7 +74,7 @@ func (s *Session) agentEventLocked(event string, now time.Time) {
 
 func (s *Session) bellLocked(now time.Time) {
 	if s.bellAttention && now.Sub(s.lastInputAt) >= bellQuietPeriod {
-		s.raiseAttentionLocked(AttentionBell, SourceTerminal, now)
+		s.raiseAttentionLocked(attentionkind.Bell, SourceTerminal, now)
 	}
 }
 
@@ -96,7 +90,7 @@ func (s *Session) signalHandler() *SignalHandler {
 			}
 		},
 		Bell:   func() { s.bellLocked(time.Now()) },
-		Notify: func() { s.raiseAttentionLocked(AttentionNotify, SourceTerminal, time.Now()) },
+		Notify: func() { s.raiseAttentionLocked(attentionkind.Notify, SourceTerminal, time.Now()) },
 		Event:  func(event string) { s.agentEventLocked(event, time.Now()) },
 		Cwd: func(path, host string) {
 			remote := !reportedHostIsLocal(host, hostname)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
 	"net/http/httptest"
 	"strings"
@@ -28,7 +29,7 @@ func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("output process did not exit")
 	}
-	server := httptest.NewServer(New(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil))
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())})))
 	defer server.Close()
 	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/s/"+s.Info().ID, nil)
 	if err != nil {
@@ -46,7 +47,7 @@ func TestReplayRetainsNewestBytesAfterBufferWrap(t *testing.T) {
 
 // readPosition consumes the control and position frames that precede every
 // replay, in that order: observers need the grid before the bytes.
-func readPosition(ctx context.Context, t *testing.T, conn *websocket.Conn, mode string) session.Position {
+func readPosition(ctx context.Context, t *testing.T, conn *websocket.Conn, mode string) contract.StreamPosition {
 	t.Helper()
 	kind, p, err := conn.Read(ctx)
 	if err != nil || kind != websocket.MessageBinary || len(p) == 0 || p[0] != 6 {
@@ -56,7 +57,7 @@ func readPosition(ctx context.Context, t *testing.T, conn *websocket.Conn, mode 
 	if err != nil || kind != websocket.MessageBinary || len(p) == 0 || p[0] != 4 {
 		t.Fatalf("position frame: kind=%v bytes=%q err=%v", kind, p, err)
 	}
-	var position session.Position
+	var position contract.StreamPosition
 	if err = json.Unmarshal(p[1:], &position); err != nil || position.Mode != mode || position.Generation == "" {
 		t.Fatalf("position %q: %+v %v", p, position, err)
 	}

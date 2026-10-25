@@ -1,4 +1,4 @@
-package config
+package assemble
 
 import (
 	"context"
@@ -8,8 +8,40 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/session"
 )
+
+func TestAttentionSignalOptions(t *testing.T) {
+	dir := t.TempDir()
+	for _, row := range []struct {
+		name, body                  string
+		disableProtocol, disableBel bool
+	}{
+		{"defaults", "", false, false},
+		{"legacy file", "idle_after_seconds = 30\n", false, false},
+		{"disabled", "agent_protocol = false\nbell_attention = false\n", true, true},
+		{"protocol only off", "agent_protocol = false\n", true, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			path := filepath.Join(dir, row.name+".toml")
+			if err := os.WriteFile(path, []byte(row.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := config.Load(path, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			o := SessionOptions(c)
+			if o.DisableAgentProtocol != row.disableProtocol || o.DisableBellAttention != row.disableBel {
+				t.Fatalf("options = %+v", o)
+			}
+		})
+	}
+}
 
 func TestAgentPresetsLoadBashrcAndForwardArguments(t *testing.T) {
 	home := t.TempDir()
@@ -19,14 +51,14 @@ func TestAgentPresetsLoadBashrcAndForwardArguments(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte("export WEBMUX_TEST_TOKEN=bashrc\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	c, err := Load(filepath.Join(home, "config.toml"), false)
+	c, err := config.Load(filepath.Join(home, "config.toml"), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	m := session.NewManager(c.SessionOptions())
+	m := session.NewManager(SessionOptions(c))
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()

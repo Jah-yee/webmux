@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "endpoint 必须是不含凭据的 https:// URL"
+  }
+}

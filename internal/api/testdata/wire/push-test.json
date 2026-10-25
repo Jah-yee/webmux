@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "body": {
+    "accepted": 1,
+    "devices": 2,
+    "errors": [],
+    "removed": [
+      "<id#14>"
+    ]
+  }
+}

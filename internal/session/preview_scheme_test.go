@@ -3,7 +3,6 @@ package session
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 )
@@ -65,16 +64,8 @@ func TestColorSchemeReportsOutliveReplayAndFollowOutput(t *testing.T) {
 	}
 	sub := s.AttachClient(AttachOptions{Client: "late-browser"})
 	defer s.Detach(sub)
-	control := func(frame []byte) ControlState {
-		t.Helper()
-		var state ControlState
-		if err := json.Unmarshal(frame[1:], &state); err != nil {
-			t.Fatal(err)
-		}
-		return state
-	}
-	if frame := <-sub.Out; frame[0] != 6 || !control(frame).ColorSchemeReports {
-		t.Fatalf("attach control frame: %q", frame)
+	if m := <-sub.Out; m.Control == nil || !m.Control.ColorSchemeReports {
+		t.Fatalf("attach control message: %+v", m)
 	}
 	queuedKinds(sub)
 	if err = s.Write([]byte("\n")); err != nil {
@@ -84,15 +75,15 @@ func TestColorSchemeReportsOutliveReplayAndFollowOutput(t *testing.T) {
 	timeout := time.After(5 * time.Second)
 	for {
 		select {
-		case frame := <-sub.Out:
-			if frame[0] == 0 && bytes.Contains(frame, []byte("\x1b[?2031l")) {
+		case m := <-sub.Out:
+			if len(m.Frame) > 0 && m.Frame[0] == 0 && bytes.Contains(m.Frame, []byte("\x1b[?2031l")) {
 				disabled = true
 			}
-			if frame[0] != 6 {
+			if m.Control == nil {
 				continue
 			}
-			if !disabled || control(frame).ColorSchemeReports {
-				t.Fatalf("control frame %q before the disabling output", frame)
+			if !disabled || m.Control.ColorSchemeReports {
+				t.Fatalf("control message %+v before the disabling output", m.Control)
 			}
 			return
 		case <-timeout:

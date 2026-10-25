@@ -1,0 +1,20 @@
+{
+  "status": 201,
+  "body": {
+    "available": true,
+    "branch": "linked",
+    "detached": false,
+    "dirty": false,
+    "error": "",
+    "hasIgnored": false,
+    "hasUntracked": false,
+    "head": "<head#1>",
+    "id": "<id#11>",
+    "kind": "linked",
+    "lockReason": "",
+    "locked": false,
+    "path": "<linked>",
+    "prunable": false,
+    "repositoryId": "<id#9>"
+  }
+}

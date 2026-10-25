@@ -19,7 +19,7 @@ func TestLocalEndpointsAreNotOnTCP(t *testing.T) {
 	c := config.Config{Token: "secret"}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := New(c, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil)
+	handler := New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}))
 	for _, method := range []string{http.MethodGet, http.MethodPost} {
 		for _, path := range []string{contract.PathToken, contract.PathStatus, contract.PathShutdown, contract.PathTunnel, "/local/other"} {
 			r := httptest.NewRequest(method, "http://webmux.example"+path, nil)
@@ -57,7 +57,7 @@ func TestLocalShutdownAndTokenPolicy(t *testing.T) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			stopped := false
-			handler := NewLocal(config.Config{Token: row.token}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, Local{
+			handler := NewLocal(testDeps(t, Deps{Config: config.Config{Token: row.token}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{
 				Status:    func() contract.StatusV1 { return contract.StatusV1{V: 1} },
 				Launcher:  row.launcher,
 				Shutdown:  func() { stopped = true },
@@ -107,7 +107,7 @@ func TestLocalTunnelPolicy(t *testing.T) {
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			var calls []bool
-			handler := NewLocal(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, Local{
+			handler := NewLocal(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{
 				Status:    func() contract.StatusV1 { return contract.StatusV1{V: 1} },
 				InSession: func(pid int) bool { return inside[pid] },
 				Tunnel: func(enabled bool) (contract.TunnelStatus, error) {
@@ -152,7 +152,7 @@ func TestLocalTunnelPolicy(t *testing.T) {
 func TestLocalTunnelUnroutedWithoutController(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := NewLocal(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, Local{})
+	handler := NewLocal(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{})
 	r := httptest.NewRequest(http.MethodPost, "http://webmux"+contract.PathTunnel, strings.NewReader(`{"enabled":true}`))
 	r = r.WithContext(context.WithValue(r.Context(), peerKey{}, 10))
 	w := httptest.NewRecorder()
@@ -165,7 +165,7 @@ func TestLocalTunnelUnroutedWithoutController(t *testing.T) {
 func TestLocalConfigReportsRuntimeTunnel(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := NewLocal(config.Config{}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, Local{
+	handler := NewLocal(testDeps(t, Deps{Config: config.Config{}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{
 		Status: func() contract.StatusV1 {
 			return contract.StatusV1{Tunnel: &contract.TunnelStatus{
 				State:     contract.TunnelReady,
@@ -179,12 +179,12 @@ func TestLocalConfigReportsRuntimeTunnel(t *testing.T) {
 		t.Fatalf("status %d: %s", w.Code, w.Body.String())
 	}
 	var response struct {
-		Tunnel TunnelInfo `json:"tunnel"`
+		Tunnel contract.TunnelInfo `json:"tunnel"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	want := TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: "https://abc-def.trycloudflare.com"}
+	want := contract.TunnelInfo{Enabled: true, State: contract.TunnelReady, PublicURL: "https://abc-def.trycloudflare.com"}
 	if response.Tunnel != want {
 		t.Fatalf("tunnel = %+v, want %+v", response.Tunnel, want)
 	}
@@ -194,7 +194,7 @@ func TestLocalSkipsHostOriginAndToken(t *testing.T) {
 	c := config.Config{Listen: "127.0.0.1:7681", Token: "secret"}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	handler := NewLocal(c, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, Local{})
+	handler := NewLocal(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())}), Local{})
 	r := httptest.NewRequest(http.MethodGet, "http://webmux/api/sessions", nil)
 	r.Header.Set("Origin", "https://evil.example")
 	w := httptest.NewRecorder()

@@ -134,8 +134,13 @@ func (s *Service) PublicKey() string {
 	return s.store.PublicKey()
 }
 
-// Validate checks a browser subscription before it is registered.
-func Validate(endpoint, p256dh, auth string) error {
+// CheckSubscription validates a browser subscription before the caller
+// decides where it may be registered from. It works on a disabled service.
+func (s *Service) CheckSubscription(endpoint, p256dh, auth string) error {
+	return validate(endpoint, p256dh, auth)
+}
+
+func validate(endpoint, p256dh, auth string) error {
 	if err := checkEndpoint(endpoint); err != nil {
 		return err
 	}
@@ -148,7 +153,7 @@ func (s *Service) Register(endpoint, p256dh, auth, origin string) (string, error
 	if err := s.Unavailable(); err != nil {
 		return "", err
 	}
-	if err := Validate(endpoint, p256dh, auth); err != nil {
+	if err := validate(endpoint, p256dh, auth); err != nil {
 		return "", err
 	}
 	return s.store.Add(Subscription{Endpoint: endpoint, P256dh: p256dh, Auth: auth, Origin: origin})

@@ -100,16 +100,6 @@ func (f envFlag) Set(value string) error {
 	return nil
 }
 
-// sessionInfo is the subset of the server's SessionInfo the CLI shows.
-type sessionInfo struct {
-	ID       string   `json:"id"`
-	Title    string   `json:"title"`
-	Status   string   `json:"status"`
-	Cmd      []string `json:"cmd"`
-	Cwd      string   `json:"cwd"`
-	ExitCode *int     `json:"exitCode"`
-}
-
 // Run implements `run [--name] [--cwd] [--env K=V]... [--detach] -- argv...`.
 func Run(ctx context.Context, e Env, args []string) int {
 	flags := e.flags("run", "[--name NAME] [--cwd DIR] [--env NAME=VALUE]... [--detach] -- COMMAND [ARG]...")
@@ -135,12 +125,9 @@ func Run(ctx context.Context, e Env, args []string) int {
 		_, _ = fmt.Fprintln(e.Stderr, "webmux run:", err)
 		return contract.ExitUsage
 	}
-	request := map[string]any{"preset": "custom", "cmd": argv, "cwd": dir}
-	if *name != "" {
-		request["name"] = *name
-	}
+	request := contract.CreateSessionRequest{Preset: "custom", Cmd: argv, Cwd: dir, Name: *name}
 	if len(env) > 0 {
-		request["env"] = map[string]string(env)
+		request.Env = map[string]string(env)
 	}
 	// An attached run needs a terminal: check before creating anything.
 	var console Console
@@ -149,7 +136,7 @@ func Run(ctx context.Context, e Env, args []string) int {
 			return code
 		}
 	}
-	var created sessionInfo
+	var created contract.SessionInfo
 	if err := client.Do(ctx, http.MethodPost, "/api/sessions", request, &created); err != nil {
 		if console != nil {
 			_ = console.Restore()
@@ -247,7 +234,7 @@ func List(ctx context.Context, e Env, args []string) int {
 		_, _ = fmt.Fprintf(e.Stdout, "%s\n", raw)
 		return contract.ExitOK
 	}
-	var list []sessionInfo
+	var list []contract.SessionInfo
 	if err := json.Unmarshal(raw, &list); err != nil {
 		return e.Fail(err)
 	}

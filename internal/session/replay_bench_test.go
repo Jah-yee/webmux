@@ -11,7 +11,7 @@ func BenchmarkExpiredResumeReplay(b *testing.B) {
 	s.ring.Write(bytes.Repeat([]byte("x"), 3<<20))
 	for _, expired := range []bool{false, true} {
 		b.Run(fmt.Sprintf("expired=%v", expired), func(b *testing.B) {
-			sub := &Subscriber{Out: make(chan []byte, 16), Slow: make(chan struct{})}
+			sub := &Subscriber{Out: make(chan Message, 16), Slow: make(chan struct{})}
 			var resume *ResumePoint
 			if expired {
 				resume = &ResumePoint{Generation: s.info.Generation, Offset: 0}

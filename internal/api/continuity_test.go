@@ -14,6 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -31,8 +32,8 @@ func recorder(path string) []string {
 
 func newContinuityFixture(t *testing.T, argv []string) *continuityFixture {
 	t.Helper()
-	presets := []session.Preset{{Name: "record", Cmd: argv}}
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: presets})
+	presets := []config.Preset{{Name: "record", Cmd: argv}}
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: testPresets(presets)})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(func() {
 		cancel()
@@ -44,7 +45,7 @@ func newContinuityFixture(t *testing.T, argv []string) *continuityFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(New(config.Config{Presets: presets}, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil))
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: config.Config{Presets: presets}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())})))
 	t.Cleanup(server.Close)
 	until := time.Now().Add(5 * time.Second)
 	for !bytes.Contains(item.Buffer(), []byte("READY")) {
@@ -80,18 +81,18 @@ func (f *continuityFixture) next(conn *websocket.Conn, kind byte) []byte {
 	}
 }
 
-func (f *continuityFixture) control(conn *websocket.Conn) session.ControlState {
+func (f *continuityFixture) control(conn *websocket.Conn) contract.ControlState {
 	f.t.Helper()
-	var state session.ControlState
+	var state contract.ControlState
 	if err := json.Unmarshal(f.next(conn, 6), &state); err != nil {
 		f.t.Fatal(err)
 	}
 	return state
 }
 
-func (f *continuityFixture) status(conn *websocket.Conn) session.SubmissionStatus {
+func (f *continuityFixture) status(conn *websocket.Conn) contract.SubmissionStatus {
 	f.t.Helper()
-	var status session.SubmissionStatus
+	var status contract.SubmissionStatus
 	if err := json.Unmarshal(f.next(conn, 5), &status); err != nil {
 		f.t.Fatal(err)
 	}
@@ -100,7 +101,7 @@ func (f *continuityFixture) status(conn *websocket.Conn) session.SubmissionStatu
 
 func (f *continuityFixture) send(conn *websocket.Conn, kind byte, p []byte) {
 	f.t.Helper()
-	if err := conn.Write(f.ctx, websocket.MessageBinary, session.Frame(kind, p)); err != nil {
+	if err := conn.Write(f.ctx, websocket.MessageBinary, contract.Frame(kind, p)); err != nil {
 		f.t.Fatal(err)
 	}
 }
@@ -179,10 +180,10 @@ func TestSubmissionIsWrittenOnceAndQueryable(t *testing.T) {
 	conn := f.dial("client=device-one")
 	id := "submission-0001"
 	f.send(conn, 3, submitFrame(id, generation, "hello\x1b[201~", "\r"))
-	if status := f.status(conn); status.ID != id || status.State != session.SubmissionReceived {
+	if status := f.status(conn); status.ID != id || status.State != string(session.SubmissionReceived) {
 		t.Fatalf("receipt %+v", status)
 	}
-	if status := f.status(conn); status.State != session.SubmissionWritten {
+	if status := f.status(conn); status.State != string(session.SubmissionWritten) {
 		t.Fatalf("completion %+v", status)
 	}
 	waitFile(t, record, "hello\x1b[201~\r")
@@ -190,22 +191,22 @@ func TestSubmissionIsWrittenOnceAndQueryable(t *testing.T) {
 	// A retry after a lost acknowledgement reports the result without writing again.
 	retry := f.dial("client=device-one")
 	f.send(retry, 3, submitFrame(id, generation, "hello\x1b[201~", "\r"))
-	if status := f.status(retry); status.State != session.SubmissionWritten {
+	if status := f.status(retry); status.State != string(session.SubmissionWritten) {
 		t.Fatalf("duplicate %+v", status)
 	}
 	f.send(retry, 4, []byte(`{"ids":["`+id+`","never-sent-0001","bad id"]}`))
-	if status := f.status(retry); status.ID != id || status.State != session.SubmissionWritten {
+	if status := f.status(retry); status.ID != id || status.State != string(session.SubmissionWritten) {
 		t.Fatalf("query %+v", status)
 	}
-	if status := f.status(retry); status.ID != "never-sent-0001" || status.State != session.SubmissionMissing {
+	if status := f.status(retry); status.ID != "never-sent-0001" || status.State != string(session.SubmissionMissing) {
 		t.Fatalf("missing query %+v", status)
 	}
 	f.send(retry, 3, submitFrame("submission-0002", "0000000000000000", "stale", "\r"))
-	if status := f.status(retry); status.State != session.SubmissionFailed || status.Error != "generation" {
+	if status := f.status(retry); status.State != string(session.SubmissionFailed) || status.Error != "generation" {
 		t.Fatalf("stale generation %+v", status)
 	}
 	f.send(retry, 3, []byte(`{"id":"submission-0003","generation":"`+generation+`","bodyBytes":99}`+"\nshort"))
-	if status := f.status(retry); status.State != session.SubmissionFailed || status.Error != "invalid" {
+	if status := f.status(retry); status.State != string(session.SubmissionFailed) || status.Error != "invalid" {
 		t.Fatalf("invalid frame %+v", status)
 	}
 	time.Sleep(100 * time.Millisecond)
@@ -328,10 +329,21 @@ func TestReplayKeepsQueuedSubmissionStatus(t *testing.T) {
 	f.item.Replay(sub)
 	var kinds []byte
 	for len(sub.Out) > 0 {
-		frame := <-sub.Out
-		kinds = append(kinds, frame[0])
-		if frame[0] == 5 && !bytes.Contains(frame, []byte(`"submission-0009"`)) {
-			t.Fatalf("status frame %q", frame)
+		m := <-sub.Out
+		switch {
+		case m.Frame != nil:
+			kinds = append(kinds, m.Frame[0])
+		case m.Info != nil:
+			kinds = append(kinds, contract.FrameState)
+		case m.Position != nil:
+			kinds = append(kinds, contract.FramePosition)
+		case m.Control != nil:
+			kinds = append(kinds, contract.FrameControl)
+		case m.Submission != nil:
+			kinds = append(kinds, contract.FrameSubmission)
+			if m.Submission.ID != "submission-0009" {
+				t.Fatalf("status %+v", m.Submission)
+			}
 		}
 	}
 	// Control and position lead the replay; the status survives after it.
@@ -349,19 +361,19 @@ func TestQueryingClientLearnsPendingSubmissionOutcome(t *testing.T) {
 	generation := f.item.Info().Generation
 	submitter := f.dial("client=original-tab")
 	f.send(submitter, 3, submitFrame("submission-0100", generation, strings.Repeat("x", 256*1024), "\r"))
-	if status := f.status(submitter); status.State != session.SubmissionReceived {
+	if status := f.status(submitter); status.State != string(session.SubmissionReceived) {
 		t.Fatalf("receipt %+v", status)
 	}
 	// A restored draft in a new tab has another client ID.
 	restored := f.dial("client=restored-tab")
 	f.send(restored, 4, []byte(`{"ids":["submission-0100"]}`))
-	if status := f.status(restored); status.State != session.SubmissionReceived {
+	if status := f.status(restored); status.State != string(session.SubmissionReceived) {
 		t.Fatalf("pending query %+v", status)
 	}
 	if err := os.WriteFile(record+".go", nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if status := f.status(restored); status.ID != "submission-0100" || status.State != session.SubmissionWritten {
+	if status := f.status(restored); status.ID != "submission-0100" || status.State != string(session.SubmissionWritten) {
 		t.Fatalf("outcome for the querying tab %+v", status)
 	}
 }

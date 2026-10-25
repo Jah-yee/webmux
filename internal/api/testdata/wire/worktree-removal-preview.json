@@ -1,0 +1,57 @@
+{
+  "status": 200,
+  "body": {
+    "blockers": [
+      "存在运行中的 WebMux 会话"
+    ],
+    "confirmationId": "<confirmationId#1>",
+    "expiresAt": "<time>",
+    "forceAllowed": true,
+    "sessions": [
+      {
+        "attention": null,
+        "clients": 0,
+        "cmd": [
+          "/bin/sh",
+          "-c",
+          "sleep 60"
+        ],
+        "cols": 80,
+        "createdAt": "<time>",
+        "cwd": "<linked>",
+        "exitCode": null,
+        "generation": "<generation#4>",
+        "id": "<id#12>",
+        "lastActiveAt": "<time>",
+        "preset": "custom",
+        "preview": "",
+        "reportedCwd": null,
+        "rows": 24,
+        "status": "running",
+        "title": "linked",
+        "workspace": {
+          "repositoryId": "<id#9>",
+          "worktreeId": "<id#11>",
+          "worktreePath": "<linked>"
+        }
+      }
+    ],
+    "worktree": {
+      "available": true,
+      "branch": "linked",
+      "detached": false,
+      "dirty": false,
+      "error": "",
+      "hasIgnored": false,
+      "hasUntracked": false,
+      "head": "<head#1>",
+      "id": "<id#11>",
+      "kind": "linked",
+      "lockReason": "",
+      "locked": false,
+      "path": "<linked>",
+      "prunable": false,
+      "repositoryId": "<id#9>"
+    }
+  }
+}

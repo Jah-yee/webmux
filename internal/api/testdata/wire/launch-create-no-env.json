@@ -1,0 +1,15 @@
+{
+  "status": 201,
+  "body": {
+    "cmd": [
+      "/bin/sh",
+      "-c",
+      "sleep 60"
+    ],
+    "createdAt": "<time>",
+    "env": {},
+    "id": "<id#7>",
+    "name": "Shell",
+    "updatedAt": "<time>"
+  }
+}

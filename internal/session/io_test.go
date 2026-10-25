@@ -68,7 +68,7 @@ func TestDetachedQueuedSubmissionRecordsTimeout(t *testing.T) {
 			inputGate: make(chan struct{}, 1),
 			done:      make(chan struct{}),
 		}
-		sub := &Subscriber{client: "client", Out: make(chan []byte, 16), Slow: make(chan struct{})}
+		sub := &Subscriber{client: "client", Out: make(chan Message, 16), Slow: make(chan struct{})}
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		status := s.Submit(context.WithoutCancel(ctx), sub, "submission", "generation", []byte("body"), []byte("\r"))

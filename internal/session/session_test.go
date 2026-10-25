@@ -29,7 +29,7 @@ func TestPersistentPTY(t *testing.T) {
 	for !moved {
 		select {
 		case frame := <-sub.Out:
-			if frame[0] == 3 {
+			if frame.Exit != nil {
 				moved = true
 			}
 		case <-deadline:
@@ -42,14 +42,14 @@ func TestPersistentPTY(t *testing.T) {
 	}
 	again := s.Attach()
 	defer s.Detach(again)
-	if control := <-again.Out; control[0] != 6 {
-		t.Fatalf("control before replay: %q", control)
+	if control := <-again.Out; control.Control == nil {
+		t.Fatalf("control before replay: %+v", control)
 	}
-	if position := <-again.Out; position[0] != 4 {
-		t.Fatalf("position: %q", position)
+	if position := <-again.Out; position.Position == nil {
+		t.Fatalf("position: %+v", position)
 	}
-	snapshot := <-again.Out
-	if snapshot[0] != 1 || !strings.Contains(string(snapshot[1:]), "consumer-marker") {
+	snapshot := (<-again.Out).Frame
+	if len(snapshot) == 0 || snapshot[0] != 1 || !strings.Contains(string(snapshot[1:]), "consumer-marker") {
 		t.Fatalf("replay: %q", snapshot)
 	}
 	if err = m.Remove(s.Info().ID); err != nil {
@@ -158,10 +158,29 @@ func newIdleSession(t *testing.T, cmd ...string) *Session {
 	return s
 }
 
+// kindOf is the protocol type byte the hub writes for m.
+func kindOf(m Message) byte {
+	switch {
+	case m.Frame != nil:
+		return m.Frame[0]
+	case m.Info != nil:
+		return 2
+	case m.Exit != nil:
+		return 3
+	case m.Position != nil:
+		return 4
+	case m.Submission != nil:
+		return 5
+	case m.Control != nil:
+		return 6
+	}
+	panic("empty message")
+}
+
 func queuedKinds(sub *Subscriber) []byte {
 	var kinds []byte
 	for len(sub.Out) > 0 {
-		kinds = append(kinds, (<-sub.Out)[0])
+		kinds = append(kinds, kindOf(<-sub.Out))
 	}
 	return kinds
 }

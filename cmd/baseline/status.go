@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rainchan/webmux/internal/attentionkind"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -41,10 +42,10 @@ func (f *fixture) status() metric {
 		predicted := v.Status == session.StatusWaiting
 		observed[i] = fmt.Sprintf("%s: needs_human=%t, status=%s, predicted=%t", cases[i].name, cases[i].needsHuman, v.Status, predicted)
 		if cases[i].name == "agent_question" {
-			check(v.Attention != nil && v.Attention.Kind == session.AttentionQuestion, "agent question signal missing")
+			check(v.Attention != nil && v.Attention.Kind == attentionkind.Question, "agent question signal missing")
 		}
 		if cases[i].name == "agent_permission" {
-			check(v.Attention != nil && v.Attention.Kind == session.AttentionPermission, "agent permission signal missing")
+			check(v.Attention != nil && v.Attention.Kind == attentionkind.Permission, "agent permission signal missing")
 		}
 		check(predicted == cases[i].needsHuman, "%s", observed[i])
 		return 1

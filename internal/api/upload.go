@@ -8,12 +8,9 @@ import (
 	"mime"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
-	"unicode"
 
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
 )
 
@@ -72,61 +69,17 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		failure(w, http.StatusBadRequest, errors.New("expected exactly one file part named file with a filename"))
 		return
 	}
-	name, err := uploadFilename(params["filename"])
+	upload, err := s.Files.StoreUpload(params["filename"], uploadContextReader{r.Context(), part}, maxUploadBytes)
 	if err != nil {
-		failure(w, http.StatusBadRequest, err)
-		return
-	}
-
-	dir, err := os.MkdirTemp("", "webmux-upload-")
-	if err != nil {
-		failure(w, http.StatusInternalServerError, fmt.Errorf("create upload temporary directory: %w", err))
+		filesFailure(w, err)
 		return
 	}
 	complete := false
 	defer func() {
 		if !complete {
-			_ = os.RemoveAll(dir)
+			upload.Discard()
 		}
 	}()
-	if err := os.Chmod(dir, 0700); err != nil {
-		failure(w, http.StatusInternalServerError, fmt.Errorf("set upload directory permissions: %w", err))
-		return
-	}
-	absoluteDir, err := filepath.Abs(dir)
-	if err != nil {
-		failure(w, http.StatusInternalServerError, fmt.Errorf("resolve upload temporary directory: %w", err))
-		return
-	}
-	path := filepath.Join(absoluteDir, name)
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		failure(w, http.StatusInternalServerError, fmt.Errorf("create uploaded file: %w", err))
-		return
-	}
-	defer file.Close()
-	if err := file.Chmod(0600); err != nil {
-		failure(w, http.StatusInternalServerError, fmt.Errorf("set uploaded file permissions: %w", err))
-		return
-	}
-	written, err := copyUpload(file, part, r.Context(), maxUploadBytes)
-	if err != nil {
-		var pathError *os.PathError
-		if errors.As(err, &pathError) && pathError.Op == "write" {
-			failure(w, http.StatusInternalServerError, fmt.Errorf("write uploaded file: %w", err))
-		} else {
-			uploadReadFailure(w, "read uploaded file", err)
-		}
-		return
-	}
-	if written > maxUploadBytes {
-		failure(w, http.StatusRequestEntityTooLarge, errors.New("uploaded file exceeds 100 MiB"))
-		return
-	}
-	if err := file.Close(); err != nil {
-		failure(w, http.StatusInternalServerError, fmt.Errorf("close uploaded file: %w", err))
-		return
-	}
 	if _, err := reader.NextRawPart(); err != io.EOF {
 		if err == nil {
 			failure(w, http.StatusBadRequest, errors.New("expected exactly one file part named file; extra multipart part received"))
@@ -150,22 +103,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	complete = true
-	reply(w, http.StatusCreated, map[string]string{"path": path})
-}
-
-func uploadFilename(name string) (string, error) {
-	for _, ch := range name {
-		if unicode.IsControl(ch) {
-			return "", errors.New("upload filename contains an unsafe control character")
-		}
-	}
-	// Treat both slash styles as separators, including filenames supplied by
-	// Windows clients. Inspect the original name before discarding directories.
-	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
-	if name == "" || name == "." || name == ".." || name == string(filepath.Separator) {
-		return "", errors.New("upload filename must name a file")
-	}
-	return name, nil
+	reply(w, http.StatusCreated, contract.UploadResult{Path: upload.Path})
 }
 
 type uploadContextReader struct {
@@ -184,20 +122,19 @@ func (r uploadContextReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Read at most one byte beyond the file limit to distinguish a file exactly at
-// the limit from an oversized file without buffering the upload in memory.
-func copyUpload(dst io.Writer, src io.Reader, ctx context.Context, limit int64) (int64, error) {
-	return io.Copy(dst, io.LimitReader(uploadContextReader{ctx, src}, limit+1))
+func uploadReadFailure(w http.ResponseWriter, operation string, err error) {
+	failure(w, uploadReadStatus(err), fmt.Errorf("%s: %w", operation, err))
 }
 
-func uploadReadFailure(w http.ResponseWriter, operation string, err error) {
-	status := http.StatusBadRequest
+// uploadReadStatus classifies a failed request body read: the body limit is
+// 413, a read deadline 408, anything else a malformed request.
+func uploadReadStatus(err error) int {
 	var tooLarge *http.MaxBytesError
 	var networkError net.Error
 	if errors.As(err, &tooLarge) {
-		status = http.StatusRequestEntityTooLarge
+		return http.StatusRequestEntityTooLarge
 	} else if errors.As(err, &networkError) && networkError.Timeout() {
-		status = http.StatusRequestTimeout
+		return http.StatusRequestTimeout
 	}
-	failure(w, status, fmt.Errorf("%s: %w", operation, err))
+	return http.StatusBadRequest
 }

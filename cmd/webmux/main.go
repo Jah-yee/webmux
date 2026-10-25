@@ -15,11 +15,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rainchan/webmux/cmd/internal/assemble"
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tunnel"
@@ -155,11 +158,11 @@ func loadConfig(args []string) (serverRun, error) {
 	flags.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
 	run := serverRun{ConfigExplicit: explicit["config"]}
 	var err error
-	if run.ConfigPath, err = session.ExpandPath(*path); err != nil {
+	if run.ConfigPath, err = pathutil.Expand(*path); err != nil {
 		return run, err
 	}
 	if *logFile != "" {
-		if run.LogFile, err = session.ExpandPath(*logFile); err != nil {
+		if run.LogFile, err = pathutil.Expand(*logFile); err != nil {
 			return run, err
 		}
 	}
@@ -252,9 +255,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	m := session.NewManager(c.SessionOptions())
-	workspaces := workspace.New(c.StateDir, m, c.DefaultCwd)
-	defer workspaces.Close()
+	m := session.NewManager(assemble.SessionOptions(c.Config))
 	// Opening never fails: a locked, corrupt or unreadable store only
 	// disables launch configs, and the endpoints answer 503 with the reason.
 	launches := launch.Open(c.StateDir)
@@ -262,6 +263,8 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if err := launches.Unavailable(); err != nil {
 		slog.Warn("launch configs unavailable", "error", err)
 	}
+	workspaces := workspace.New(c.StateDir, m, launches, c.DefaultCwd)
+	defer workspaces.Close()
 	codes := codeview.New(m)
 	defer codes.Close()
 	pushes := push.New(c.Push, c.StateDir, m, slog.Default(), nil)
@@ -270,9 +273,14 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	public := &api.PublicOrigin{}
 	local := localOrigin(listener.Addr())
 	tunnels := newTunnelController(c.Tunnel, local, c.Token, public, locator.Find, out, slog.Default())
-	rt := startRuntime(ctx, c, listener.Addr(), m, workspaces, codes, pushes, launches, cancel, tunnels)
+	deps := api.Deps{
+		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
+		Files: files.New(c.DefaultCwd), Push: pushes, Launch: launches,
+	}
+	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels)
+	deps.Public, deps.Tunnel = public, tunnels.Status
 	server := &http.Server{
-		Handler:           api.New(c.Config, m, workspaces, public, pushes, launches, tunnels.Status, codes),
+		Handler:           api.New(deps),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		IdleTimeout:       60 * time.Second,

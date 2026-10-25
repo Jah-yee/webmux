@@ -35,7 +35,7 @@ func uploadAPI(t *testing.T) (http.Handler, *session.Manager, *session.Session, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(config.Config{Token: "secret"}, m, testWorkspace(t, m, cwd), nil, nil, nil, nil)
+	handler := New(testDeps(t, Deps{Config: config.Config{Token: "secret"}, Manager: m, Workspace: testWorkspace(t, m, cwd)}))
 	t.Setenv("TMPDIR", root)
 	return handler, m, item, root
 }
@@ -235,16 +235,6 @@ func TestUploadSizeLimitsRemovePartialFiles(t *testing.T) {
 			handler.ServeHTTP(w, r)
 			requireUploadError(t, w, http.StatusRequestEntityTooLarge, root)
 		})
-	}
-}
-
-func TestUploadBoundedCopyAllowsExactLimit(t *testing.T) {
-	for _, size := range []int64{0, 63, 64, 65, 1000} {
-		n, err := copyUpload(io.Discard, io.LimitReader(uploadGeneratedReader{}, size), context.Background(), 64)
-		want := min(size, 65)
-		if err != nil || n != want {
-			t.Fatalf("size %d: copied %d, want %d (%v)", size, n, want, err)
-		}
 	}
 }
 

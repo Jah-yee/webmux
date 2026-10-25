@@ -33,7 +33,7 @@ func TestWorkspaceGitBoundsBothOutputStreams(t *testing.T) {
 			defer cancel()
 			started := time.Now()
 			out, err := s.git(ctx, dir, "status")
-			if Status(err) != 413 || len(out) != 0 {
+			if errorKind(err) != ErrTooLarge || len(out) != 0 {
 				t.Fatalf("unbounded %s: bytes=%d err=%v", stream, len(out), err)
 			}
 			if ctx.Err() != nil || time.Since(started) > 3*time.Second {

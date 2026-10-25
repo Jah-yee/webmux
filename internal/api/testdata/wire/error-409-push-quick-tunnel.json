@@ -1,0 +1,7 @@
+{
+  "status": 409,
+  "body": {
+    "error": "推送需要 Cloudflare Named Tunnel：Quick Tunnel 地址每次启动都会变化，旧订阅点开即失效",
+    "reason": "quick_tunnel"
+  }
+}

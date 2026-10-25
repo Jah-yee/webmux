@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -27,16 +28,16 @@ type launchHarness struct {
 
 func newLaunchHarness(t *testing.T, store *launch.Service) *launchHarness {
 	t.Helper()
-	presets := []session.Preset{{Name: "fixed", Cmd: []string{"/bin/echo", "fixed"}}}
+	presets := []config.Preset{{Name: "fixed", Cmd: []string{"/bin/echo", "fixed"}}}
 	cwd := t.TempDir()
-	m := session.NewManager(session.Options{DefaultCwd: cwd, Presets: presets})
+	m := session.NewManager(session.Options{DefaultCwd: cwd, Presets: testPresets(presets)})
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 		defer cancel()
 		m.Shutdown(ctx)
 	})
 	c := config.Config{Token: "secret", Presets: presets, DefaultCwd: cwd}
-	return &launchHarness{t: t, handler: New(c, m, testWorkspace(t, m, cwd), nil, nil, store, nil), manager: m, store: store, cwd: cwd}
+	return &launchHarness{t: t, handler: New(testDeps(t, Deps{Config: c, Manager: m, Launch: store})), manager: m, store: store, cwd: cwd}
 }
 
 func openLaunchStore(t *testing.T) *launch.Service {
@@ -70,9 +71,9 @@ func (h *launchHarness) expect(method, path, body string, status int) []byte {
 	return w.Body.Bytes()
 }
 
-func (h *launchHarness) create(body string) launch.Config {
+func (h *launchHarness) create(body string) contract.LaunchConfig {
 	h.t.Helper()
-	var c launch.Config
+	var c contract.LaunchConfig
 	if err := json.Unmarshal(h.expect("POST", "/api/launch-configs", body, 201), &c); err != nil {
 		h.t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestLaunchConfigCRUD(t *testing.T) {
 	if !strings.Contains(string(raw), `"env":{}`) {
 		t.Fatalf("empty env must be {}: %s", raw)
 	}
-	var updated launch.Config
+	var updated contract.LaunchConfig
 	if err := json.Unmarshal(h.expect("PUT", "/api/launch-configs/"+a.ID, `{"name":"Claude","cmd":["claude"]}`, 200), &updated); err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +267,7 @@ func TestSessionFromLaunchConfig(t *testing.T) {
 	script := `printf '<%s><%s><%s><%s>' "$FOO" "$#" "$1" "$2"`
 	body, _ := json.Marshal(map[string]any{"name": "env test", "cmd": []string{"/bin/sh", "-c", script, "sh", "", "two words"}, "env": map[string]string{"FOO": "from config"}})
 	cfg := h.create(string(body))
-	var info session.Info
+	var info contract.SessionInfo
 	raw := h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`","cwd":"`+h.cwd+`","env":{},"cmd":[],"args":[],"preset":"","name":"From config"}`, 201)
 	if err := json.Unmarshal(raw, &info); err != nil {
 		t.Fatal(err)
@@ -297,7 +298,7 @@ func TestSessionFromLaunchConfigOutlivesConfig(t *testing.T) {
 	h := newLaunchHarness(t, openLaunchStore(t))
 	body, _ := json.Marshal(map[string]any{"name": "reader", "cmd": []string{"/bin/sh", "-c", `read line; printf 'got=%s:%s' "$line" "$FOO"`}, "env": map[string]string{"FOO": "kept"}})
 	cfg := h.create(string(body))
-	var info session.Info
+	var info contract.SessionInfo
 	if err := json.Unmarshal(h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`"}`, 201), &info); err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +351,7 @@ func TestSessionConfigIDValidation(t *testing.T) {
 	h.expect("POST", "/api/sessions", `{"configId":"`+cfg.ID+`","env":null,"cmd":null}`, 201)
 	// The preset, custom command and env paths are unchanged.
 	h.expect("POST", "/api/sessions", `{"preset":"fixed"}`, 201)
-	var info session.Info
+	var info contract.SessionInfo
 	if err := json.Unmarshal(h.expect("POST", "/api/sessions", `{"preset":"custom","cmd":["/bin/sh","-c","printf '<%s>' \"$BAR\""],"env":{"BAR":"direct"}}`, 201), &info); err != nil {
 		t.Fatal(err)
 	}

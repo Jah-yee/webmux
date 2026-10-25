@@ -37,7 +37,7 @@ func TestHostTrustBoundary(t *testing.T) {
 		{name: "forwarded host cannot authorize", listen: "127.0.0.1:7681", host: "attacker.example:7681", want: 403},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			s := &Server{Config: config.Config{Listen: row.listen, AllowedOrigins: row.origins}}
+			s := &Server{Deps: Deps{Config: config.Config{Listen: row.listen, AllowedOrigins: row.origins}}}
 			handler := s.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
 			// A rebound page sends a same-origin request, so Origin checks alone permit it.
 			for _, path := range []string{"/", "/api/sessions", "/ws/sessions"} {

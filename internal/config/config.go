@@ -9,27 +9,35 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/attentionkind"
+	"github.com/rainchan/webmux/internal/pathutil"
 )
 
 type Config struct {
-	Listen           string           `toml:"listen"`
-	Token            string           `toml:"token"`
-	ScrollbackBytes  int              `toml:"scrollback_bytes"`
-	DefaultCwd       string           `toml:"default_cwd"`
-	StateDir         string           `toml:"state_dir"`
-	Shell            string           `toml:"shell"`
-	IdleAfterSeconds int              `toml:"idle_after_seconds"`
-	PromptPatterns   []string         `toml:"prompt_patterns"`
-	AgentProtocol    bool             `toml:"agent_protocol"`
-	BellAttention    bool             `toml:"bell_attention"`
-	AllowedOrigins   []string         `toml:"allowed_origins"`
-	Presets          []session.Preset `toml:"presets"`
-	Tunnel           TunnelConfig     `toml:"tunnel"`
-	Push             PushConfig       `toml:"push"`
+	Listen           string       `toml:"listen"`
+	Token            string       `toml:"token"`
+	ScrollbackBytes  int          `toml:"scrollback_bytes"`
+	DefaultCwd       string       `toml:"default_cwd"`
+	StateDir         string       `toml:"state_dir"`
+	Shell            string       `toml:"shell"`
+	IdleAfterSeconds int          `toml:"idle_after_seconds"`
+	PromptPatterns   []string     `toml:"prompt_patterns"`
+	AgentProtocol    bool         `toml:"agent_protocol"`
+	BellAttention    bool         `toml:"bell_attention"`
+	AllowedOrigins   []string     `toml:"allowed_origins"`
+	Presets          []Preset     `toml:"presets"`
+	Tunnel           TunnelConfig `toml:"tunnel"`
+	Push             PushConfig   `toml:"push"`
+}
+
+// Preset is a configured launch command.
+type Preset struct {
+	Name      string   `toml:"name"`
+	Label     string   `toml:"label"`
+	Cmd       []string `toml:"cmd"`
+	AllowArgs bool     `toml:"allow_args"`
 }
 
 // TunnelConfig selects a Cloudflare Tunnel. An empty Token means a Quick
@@ -96,10 +104,7 @@ func (p *PushConfig) validate() error {
 	}
 	seen := map[string]bool{}
 	for _, kind := range p.Kinds {
-		switch session.AttentionKind(kind) {
-		case session.AttentionQuestion, session.AttentionPermission, session.AttentionError,
-			session.AttentionDone, session.AttentionNotify, session.AttentionBell:
-		default:
+		if !attentionkind.Kind(kind).Valid() {
 			return fmt.Errorf("push.kinds: %q is not supported; use question, permission, error, done, notify or bell", kind)
 		}
 		if seen[kind] {
@@ -141,7 +146,7 @@ func Load(path string, required bool) (Config, error) {
 			`[$#%>❯›?:]\s*$`,
 			`(?i)\(y/n\)|\[y/n\]|yes.*no|press enter`,
 		},
-		Presets: []session.Preset{
+		Presets: []Preset{
 			{Name: "shell", Label: "Shell", Cmd: []string{}},
 			{Name: "claude", Label: "Claude Code", Cmd: bashrcCommand("claude"), AllowArgs: true},
 			{Name: "codex", Label: "Codex CLI", Cmd: bashrcCommand("codex"), AllowArgs: true},
@@ -169,7 +174,7 @@ func (c *Config) Validate() error {
 	if c.ScrollbackBytes < 1 || c.IdleAfterSeconds < 2 {
 		return errors.New("scrollback_bytes must be positive and idle_after_seconds >= 2")
 	}
-	cwd, err := session.ExpandPath(c.DefaultCwd)
+	cwd, err := pathutil.Expand(c.DefaultCwd)
 	if err != nil {
 		return err
 	}
@@ -178,7 +183,7 @@ func (c *Config) Validate() error {
 		c.StateDir = DefaultStateDir()
 	}
 	// Storage accessibility is a workspace capability, not a startup prerequisite.
-	if expanded, expandErr := session.ExpandPath(c.StateDir); expandErr == nil {
+	if expanded, expandErr := pathutil.Expand(c.StateDir); expandErr == nil {
 		c.StateDir = expanded
 	}
 	if c.Shell == "" {
@@ -235,7 +240,7 @@ func (t *TunnelConfig) validate() error {
 		return errors.New("tunnel.hostname is required when tunnel.token is set")
 	}
 	if t.Cloudflared != "" {
-		path, err := session.ExpandPath(t.Cloudflared)
+		path, err := pathutil.Expand(t.Cloudflared)
 		if err != nil {
 			return fmt.Errorf("tunnel.cloudflared: %w", err)
 		}
@@ -250,16 +255,4 @@ func (t *TunnelConfig) validate() error {
 		t.DownloadMirrors[i] = mirror
 	}
 	return nil
-}
-func (c Config) SessionOptions() session.Options {
-	return session.Options{
-		ScrollbackBytes: c.ScrollbackBytes,
-		DefaultCwd:      c.DefaultCwd,
-		Presets:         c.Presets,
-		IdleAfter:       time.Duration(c.IdleAfterSeconds) * time.Second,
-		PromptPatterns:  c.PromptPatterns,
-
-		DisableAgentProtocol: !c.AgentProtocol,
-		DisableBellAttention: !c.BellAttention,
-	}
 }

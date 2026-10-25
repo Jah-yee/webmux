@@ -1,0 +1,30 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "cmd": [
+        "claude",
+        "--resume"
+      ],
+      "createdAt": "<time>",
+      "envNames": [
+        "API_KEY"
+      ],
+      "id": "<id#6>",
+      "name": "Claude",
+      "updatedAt": "<time>"
+    },
+    {
+      "cmd": [
+        "/bin/sh",
+        "-c",
+        "sleep 60"
+      ],
+      "createdAt": "<time>",
+      "envNames": [],
+      "id": "<id#7>",
+      "name": "Shell",
+      "updatedAt": "<time>"
+    }
+  ]
+}

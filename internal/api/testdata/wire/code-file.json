@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "body": {
+    "checkedAt": "<time>",
+    "document": {
+      "absolutePath": "<repo>/sub/b.txt",
+      "contentVersion": "<contentVersion#3>",
+      "downloadable": true,
+      "kind": "text",
+      "lineCount": 1,
+      "mediaType": "",
+      "nodeId": "c3ViL2IudHh0",
+      "oid": "",
+      "path": "sub/b.txt",
+      "reason": "",
+      "referenceable": true,
+      "size": 4,
+      "source": "worktree",
+      "text": "bee\n"
+    },
+    "snapshotId": "<snapshotId#1>"
+  }
+}

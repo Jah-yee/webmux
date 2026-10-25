@@ -8,17 +8,10 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 
-	"github.com/rainchan/webmux/internal/codeview"
-	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/launch"
-	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/runtime"
-	"github.com/rainchan/webmux/internal/session"
-	"github.com/rainchan/webmux/internal/workspace"
 )
 
 // Local supplies the server-side state behind /local/v1/*.
@@ -54,21 +47,18 @@ func LocalConnContext(ctx context.Context, c net.Conn) context.Context {
 // the authentication, and browsers cannot reach a Unix socket, so token,
 // Host and Origin checks are skipped. Routes match the TCP handler, plus
 // /local/v1/*.
-func NewLocal(c config.Config, m *session.Manager, workspaces *workspace.Service, codes *codeview.Service, pushes *push.Service, launches *launch.Service, local Local) http.Handler {
-	var shared []*codeview.Service
-	if codes != nil {
-		shared = append(shared, codes)
-	}
-	var tunnel func() contract.TunnelStatus
+func NewLocal(d Deps, local Local) http.Handler {
+	c := d.Config
+	d.Public, d.Tunnel = nil, nil
 	if local.Status != nil {
-		tunnel = func() contract.TunnelStatus {
+		d.Tunnel = func() contract.TunnelStatus {
 			if status := local.Status(); status.Tunnel != nil {
 				return *status.Tunnel
 			}
 			return contract.TunnelStatus{State: contract.TunnelOff}
 		}
 	}
-	s := newServer(c, m, workspaces, nil, pushes, launches, tunnel, shared)
+	s := newServer(d)
 	s.local = true
 	routes := s.routes()
 	mux := http.NewServeMux()
@@ -84,11 +74,11 @@ func NewLocal(c config.Config, m *session.Manager, workspaces *workspace.Service
 		if !decodeOptional(w, r, &req) {
 			return
 		}
-		if hint := ManagerHint(local.Launcher); hint != "" && !req.Force {
+		if hint := runtime.ManagerHint(local.Launcher); hint != "" && !req.Force {
 			failure(w, http.StatusConflict, fmt.Errorf("WebMux is managed by %s; use `%s` (or --force)", local.Launcher, hint))
 			return
 		}
-		reply(w, http.StatusAccepted, map[string]bool{"ok": true})
+		reply(w, http.StatusAccepted, contract.Ack{OK: true})
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
@@ -159,15 +149,4 @@ func (l Local) fromSession(r *http.Request) bool {
 		return true
 	}
 	return l.InSession != nil && l.InSession(pid)
-}
-
-// ManagerHint is the stop command of a service manager, or "".
-func ManagerHint(launcher string) string {
-	switch launcher {
-	case contract.LauncherSystemd:
-		return "systemctl --user stop webmux"
-	case contract.LauncherLaunchd:
-		return fmt.Sprintf("launchctl bootout gui/%d/com.webmux", os.Getuid())
-	}
-	return ""
 }

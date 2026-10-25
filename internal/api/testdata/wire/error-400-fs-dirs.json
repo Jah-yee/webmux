@@ -1,0 +1,6 @@
+{
+  "status": 400,
+  "body": {
+    "error": "open <repo>/missing: no such file or directory"
+  }
+}

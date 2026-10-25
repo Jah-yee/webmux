@@ -149,7 +149,7 @@ func (b *binding) statuses(ctx context.Context, p string, nodes []Node) error {
 			return nil
 		}
 		if len(record) < 4 {
-			return problem(500, "无效 Git 状态输出")
+			return problem(ErrInternal, "无效 Git 状态输出")
 		}
 		if n := wanted[strings.TrimSuffix(record[3:], "/")]; n != nil {
 			n.Status = record[:2]
@@ -158,7 +158,7 @@ func (b *binding) statuses(ctx context.Context, p string, nodes []Node) error {
 		return nil
 	}, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", pOrDot(p))
 	if err == nil && skipSource {
-		err = problem(500, "Git 状态输出不完整")
+		err = problem(ErrInternal, "Git 状态输出不完整")
 	}
 	return err
 }
@@ -183,14 +183,14 @@ func (s *Service) Tree(ctx context.Context, id, cid, nid string, include bool, c
 			v, n, ok := strings.Cut(cursor, ":")
 			start, e = strconv.Atoi(n)
 			if !ok || e != nil || start < 0 {
-				return r, problem(400, "无效目录游标")
+				return r, problem(ErrInvalid, "无效目录游标")
 			}
 			if v != r.Version {
-				return r, problem(409, "目录已改变，请重新读取")
+				return r, problem(ErrConflict, "目录已改变，请重新读取")
 			}
 		}
 		if start > len(r.Children) {
-			return r, problem(400, "无效目录页")
+			return r, problem(ErrInvalid, "无效目录页")
 		}
 		end := min(start+200, len(r.Children))
 		if end < len(r.Children) {
@@ -264,17 +264,17 @@ func (s *Service) Locate(ctx context.Context, id, cid, input string) (Location, 
 	return withRoot(ctx, s, id, cid, func(b *binding) (Location, error) {
 		item, e := s.manager.Get(id)
 		if e != nil {
-			return Location{}, problem(404, "会话不存在")
+			return Location{}, problem(ErrNotFound, "会话不存在")
 		}
 		input = strings.TrimSpace(input)
 		if input == "" || len(input) > 4096 || strings.ContainsRune(input, 0) {
-			return Location{}, problem(400, "路径无效")
+			return Location{}, problem(ErrInvalid, "路径无效")
 		}
 		info := item.Info()
 		base := info.Cwd
 		if reported := info.ReportedCwd; reported != nil {
 			if reported.Remote {
-				return Location{}, problem(409, "Shell 报告的是远端目录，不能用于本机定位")
+				return Location{}, problem(ErrConflict, "Shell 报告的是远端目录，不能用于本机定位")
 			}
 			base = reported.Path
 		}
@@ -286,14 +286,14 @@ func (s *Service) Locate(ctx context.Context, id, cid, input string) (Location, 
 		}
 		resolved, e := filepath.EvalSymlinks(target)
 		if errors.Is(e, os.ErrNotExist) || errors.Is(e, unix.ENOTDIR) {
-			return Location{}, problem(404, "路径不存在")
+			return Location{}, problem(ErrNotFound, "路径不存在")
 		}
 		if e != nil {
-			return Location{}, problem(400, "无法解析路径")
+			return Location{}, problem(ErrInvalid, "无法解析路径")
 		}
 		rel, e := filepath.Rel(b.Root, resolved)
 		if e != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-			return Location{}, problem(403, "路径不在代码工作区根内，只允许打开根目录下的文件")
+			return Location{}, problem(ErrForbidden, "路径不在代码工作区根内，只允许打开根目录下的文件")
 		}
 		if rel == "." {
 			rel = ""
@@ -309,7 +309,7 @@ func (s *Service) Locate(ctx context.Context, id, cid, input string) (Location, 
 		if stat.IsDir() {
 			kind = "directory"
 		} else if !stat.Mode().IsRegular() {
-			return Location{}, problem(400, "不支持打开特殊文件")
+			return Location{}, problem(ErrInvalid, "不支持打开特殊文件")
 		}
 		return Location{NodeID: nodeID(rel), Path: rel, Kind: kind}, nil
 	})

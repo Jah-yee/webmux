@@ -1,6 +1,6 @@
 # API 与协议
 
-所有 API 以 `/api` 为前缀，WebSocket 以 `/ws` 为前缀，其余路径返回嵌入的前端（SPA 回退）。前端的完整数据契约定义在 [`web/src/schemas.ts`](../web/src/schemas.ts)，与后端 JSON 字段保持一致。
+所有 API 以 `/api` 为前缀，WebSocket 以 `/ws` 为前缀，其余路径返回嵌入的前端（SPA 回退）。前端的完整数据契约定义在 [`web/src/schemas.ts`](../web/src/schemas.ts)；后端对应的线上类型都在 [`internal/contract`](../internal/contract)（REST 按资源分文件，终端帧与 `/ws/sessions` 事件在 `terminal.go`），由 `internal/wire` 与 Service 类型互相转换。两边的字段保持一致，`internal/api/testdata/wire` 的快照测试固定了每个端点和帧的 JSON 形状。
 
 ## 认证与 Origin
 
@@ -119,7 +119,7 @@ interface SessionInfo {
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/removal-preview` | 删除预览：`{confirmationId, expiresAt, worktree, sessions, blockers, forceAllowed}`        |
 | POST       | `/api/repositories/{id}/worktrees/{worktreeId}/remove`          | `{confirmationId, mode: "safe"}`；强制删除另需 `confirmPath` 与 `closeSessions: true`，204 |
 
-错误码：400 输入错误，404 不存在，409 冲突或确认过期，503 Git / 清单不可用，504 超时，500 存储或非预期错误。JSON 结构见 `internal/workspace/types.go`。
+错误码：400 输入错误，404 不存在，409 冲突或确认过期，503 Git / 清单不可用，504 超时，500 存储或非预期错误。JSON 结构见 `internal/contract/workspace.go`。
 
 ### 只读代码工作区
 
@@ -200,7 +200,7 @@ interface SessionInfo {
 
 ## WebSocket `/ws/s/{id}`
 
-终端流，**二进制帧**，首字节为类型。
+终端流，**二进制帧**，首字节为类型（`internal/contract/terminal.go` 中的 `Frame*` 常量）。JSON 控制帧由 `internal/hub` 编码，会话服务只产出类型化消息。
 
 可选查询参数：
 

@@ -130,10 +130,7 @@ func TestBridgeDialerRequestsSubscriptionAndStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = subscription.CloseNow() }()
-	var event struct {
-		Type     string            `json:"type"`
-		Sessions []json.RawMessage `json:"sessions"`
-	}
+	var event contract.SessionEvent
 	if _, data, err := subscription.Read(ctx); err != nil || json.Unmarshal(data, &event) != nil || event.Type != "snapshot" {
 		t.Fatalf("snapshot %s %v", data, err)
 	}

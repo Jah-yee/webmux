@@ -1,0 +1,22 @@
+{
+  "status": 200,
+  "body": {
+    "bases": [
+      {
+        "head": "<head#1>",
+        "name": "refs/heads/main"
+      }
+    ],
+    "branches": [
+      {
+        "head": "<head#1>",
+        "name": "main",
+        "worktreePaths": [
+          "<repo>"
+        ]
+      }
+    ],
+    "defaultBase": "<head#1>",
+    "defaultParent": "<repo>.worktrees"
+  }
+}

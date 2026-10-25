@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "available": true,
+    "enabled": true,
+    "publicKey": "<publicKey#1>",
+    "subscriptions": 0
+  }
+}

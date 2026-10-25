@@ -1,0 +1,13 @@
+{
+  "status": 200,
+  "body": [
+    {
+      "allowArgs": true,
+      "cmd": [
+        "/bin/sh"
+      ],
+      "label": "Shell",
+      "name": "shell"
+    }
+  ]
+}

@@ -60,9 +60,9 @@ type Summary struct {
 
 // Input holds the client-editable fields of a create or whole update.
 type Input struct {
-	Name string            `json:"name"`
-	Cmd  []string          `json:"cmd"`
-	Env  map[string]string `json:"env"`
+	Name string
+	Cmd  []string
+	Env  map[string]string
 }
 
 var idPattern = regexp.MustCompile(`^[a-z2-7]{8}$`)

@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/statefile"
 )
 
@@ -47,7 +47,7 @@ type Service struct {
 // not created until the first write.
 func Open(stateDir string) *Service {
 	s := &Service{}
-	dir, err := session.ExpandPath(stateDir)
+	dir, err := pathutil.Expand(stateDir)
 	if err == nil {
 		dir, err = filepath.Abs(dir)
 	}

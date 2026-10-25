@@ -1,0 +1,35 @@
+{
+  "status": 200,
+  "body": {
+    "checkedAt": "<time>",
+    "contentVersion": "<contentVersion#4>",
+    "entries": [
+      {
+        "changeId": "<changeId#1>",
+        "group": "unstaged",
+        "newMode": "100644",
+        "newOid": "<newOid#1>",
+        "newPath": "a.txt",
+        "nodeId": "YS50eHQ",
+        "oldMode": "100644",
+        "oldOid": "<oldOid#1>",
+        "oldPath": "a.txt",
+        "status": "M"
+      },
+      {
+        "changeId": "<changeId#2>",
+        "group": "untracked",
+        "newMode": "100644",
+        "newOid": "",
+        "newPath": "new.txt",
+        "nodeId": "bmV3LnR4dA",
+        "oldMode": "000000",
+        "oldOid": "",
+        "oldPath": "new.txt",
+        "status": "A"
+      }
+    ],
+    "nextCursor": "",
+    "total": 2
+  }
+}

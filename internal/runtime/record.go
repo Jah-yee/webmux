@@ -145,6 +145,17 @@ func Launcher(getenv func(string) string) string {
 	return contract.LauncherManual
 }
 
+// ManagerHint is the stop command of a service manager, or "".
+func ManagerHint(launcher string) string {
+	switch launcher {
+	case contract.LauncherSystemd:
+		return "systemctl --user stop webmux"
+	case contract.LauncherLaunchd:
+		return fmt.Sprintf("launchctl bootout gui/%d/com.webmux", os.Getuid())
+	}
+	return ""
+}
+
 // ErrNoProcess means the PID is gone or belongs to a different process.
 var ErrNoProcess = errors.New("process not running")
 

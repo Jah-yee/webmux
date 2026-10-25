@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/workspace"
 )
@@ -64,7 +65,7 @@ func (f *fixture) interaction(n, load int) []metric {
 		start := time.Now()
 		ctx, cancel := timeout()
 		defer cancel()
-		must(c.Write(ctx, websocket.MessageBinary, session.Frame(1, []byte(fmt.Sprintf(`{"cols":%d,"rows":%d}`, cols, rows)))))
+		must(c.Write(ctx, websocket.MessageBinary, contract.Frame(1, []byte(fmt.Sprintf(`{"cols":%d,"rows":%d}`, cols, rows)))))
 		write(c, []byte("SIZE\n"))
 		until(c, []byte(fmt.Sprintf("SIZE:%d %d\r\n", rows, cols)))
 		return milliseconds(start)

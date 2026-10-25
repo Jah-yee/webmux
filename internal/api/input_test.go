@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/session"
 	"net/http/httptest"
 	"strings"
@@ -13,9 +14,9 @@ import (
 )
 
 func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
-	c := config.Config{Presets: []session.Preset{{Name: "blocked", Cmd: []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}}}}
-	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: c.Presets})
-	server := httptest.NewServer(New(c, m, testWorkspace(t, m, t.TempDir()), nil, nil, nil, nil))
+	c := config.Config{Presets: []config.Preset{{Name: "blocked", Cmd: []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}}}}
+	m := session.NewManager(session.Options{DefaultCwd: t.TempDir(), Presets: testPresets(c.Presets)})
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, t.TempDir())})))
 	defer server.Close()
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -42,7 +43,7 @@ func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
 			break
 		}
 	}
-	if err = conn.Write(ctx, websocket.MessageBinary, session.Frame(0, bytes.Repeat([]byte("x"), 512*1024))); err != nil {
+	if err = conn.Write(ctx, websocket.MessageBinary, contract.Frame(0, bytes.Repeat([]byte("x"), 512*1024))); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(50 * time.Millisecond)

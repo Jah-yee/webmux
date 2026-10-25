@@ -154,7 +154,7 @@ func TestValidateSubscription(t *testing.T) {
 		{"short auth", "https://push.example/x", p256dh, b64.EncodeToString(make([]byte, 8)), false},
 		{"garbage", "https://push.example/x", "!!", auth, false},
 	} {
-		if err := Validate(row.endpoint, row.p256dh, row.auth); (err == nil) != row.ok {
+		if err := validate(row.endpoint, row.p256dh, row.auth); (err == nil) != row.ok {
 			t.Errorf("%s: Validate = %v", row.name, err)
 		}
 	}
