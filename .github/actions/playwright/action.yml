@@ -1,0 +1,51 @@
+name: Install Playwright Chromium
+description: >
+  Installs Playwright Chromium and, on Linux, its system packages. The apt
+  packages (~25 MB) are cached because an Ubuntu mirror occasionally serves
+  them at tens of kB/s, which alone can exceed a job's timeout. Like the
+  other caches, it is restored everywhere and saved only from main. Requires
+  web/node_modules to be present. Most suites use the headless shell; the
+  push E2E needs new headless Chromium, whose notification permission and
+  service worker notifications work, so both are installed.
+
+runs:
+  using: composite
+  steps:
+    # ImageOS (e.g. ubuntu24) is a runner variable, not part of the env
+    # context, so the distribution-specific key is built in the shell.
+    - if: runner.os == 'Linux'
+      id: apt-key
+      shell: bash
+      run: echo "prefix=playwright-apt-${ImageOS:-linux}-${{ runner.arch }}-" >> "$GITHUB_OUTPUT"
+    - if: runner.os == 'Linux'
+      id: apt-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/playwright-apt
+        key: ${{ steps.apt-key.outputs.prefix }}${{ hashFiles('web/pnpm-lock.yaml') }}
+        restore-keys: ${{ steps.apt-key.outputs.prefix }}
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Keep the packages apt downloads so they can be cached, and reuse any
+        # restored ones instead of fetching them from the mirror again.
+        echo 'APT::Keep-Downloaded-Packages "true";' | sudo tee /etc/apt/apt.conf.d/99webmux-keep-debs >/dev/null
+        if compgen -G "$RUNNER_TEMP/playwright-apt/*.deb" >/dev/null; then
+          sudo cp "$RUNNER_TEMP"/playwright-apt/*.deb /var/cache/apt/archives/
+        fi
+    - shell: bash
+      run: node web/node_modules/playwright/cli.js install --with-deps chromium
+    - if: runner.os == 'Linux' && github.ref == 'refs/heads/main' && steps.apt-cache.outputs.cache-hit != 'true'
+      id: apt-collect
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/playwright-apt"
+        if compgen -G "/var/cache/apt/archives/*.deb" >/dev/null; then
+          cp /var/cache/apt/archives/*.deb "$RUNNER_TEMP/playwright-apt/"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        fi
+    - if: steps.apt-collect.outputs.found == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/playwright-apt
+        key: ${{ steps.apt-cache.outputs.cache-primary-key }}

@@ -105,8 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-        with:
-          browsers: "true"
+      - uses: ./.github/actions/playwright
       - name: Run Vitest unit suite
         run: pnpm --dir web test:unit
       - name: Run Vitest browser suite
@@ -127,8 +126,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-        with:
-          browsers: "true"
+      - uses: ./.github/actions/playwright
       - name: Build and test Storybook
         run: pnpm --dir web test:storybook
       - name: Preserve Storybook diagnostics
@@ -167,7 +165,7 @@ jobs:
       - name: Extract shared E2E runtime
         run: tar -xzf "$RUNNER_TEMP/webmux-e2e.tar.gz" -C "$GITHUB_WORKSPACE"
       - name: Install test browser
-        run: node web/node_modules/playwright/cli.js install --with-deps chromium
+        uses: ./.github/actions/playwright
       - name: Run Playwright E2E shard
         env:
           WEBMUX_E2E_BINARY: ${{ github.workspace }}/.ci-runtime/linux/webmux
@@ -222,7 +220,7 @@ jobs:
           fi
       - name: Install test browser
         if: matrix.suite == 'e2e'
-        run: node web/node_modules/playwright/cli.js install --with-deps chromium
+        uses: ./.github/actions/playwright
       - name: Run native Go race tests
         if: matrix.suite == 'go'
         run: go test -race -parallel=4 ./...
@@ -258,7 +256,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           go: "true"
-          browsers: "true"
+      - uses: ./.github/actions/playwright
       - name: Verify production layout stability and throttled interactions
         run: pnpm --dir web test:performance
       - name: Preserve performance measurements and screenshots
