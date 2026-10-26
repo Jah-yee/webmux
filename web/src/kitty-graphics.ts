@@ -472,6 +472,7 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
   let chain: Promise<void> = Promise.resolve();
   let chainId = 0;
   let chainBusy = false;
+  let failureControl: Record<string, string> = {};
   let pendingWrites = 0;
   let writeWaiters: (() => void)[] = [];
   let disposed = false;
@@ -1091,6 +1092,7 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
     } catch {
       return;
     }
+    failureControl = params;
     const action = params.a;
     if (upload) {
       if (action === undefined) {
@@ -1217,7 +1219,11 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
         }
       })
       .catch((error: unknown) => {
-        if (current(expected)) respondError({}, error);
+        if (
+          current(expected) &&
+          (failureControl.i !== undefined || failureControl.I !== undefined)
+        )
+          respondError(failureControl, error);
       })
       .finally(() => {
         if (id === chainId) chainBusy = false;
@@ -1229,6 +1235,7 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
     generation++;
     chainId++;
     chainBusy = false;
+    failureControl = {};
     chain = Promise.resolve();
     upload = undefined;
     stream.reset();

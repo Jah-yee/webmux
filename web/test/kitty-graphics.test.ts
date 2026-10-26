@@ -35,6 +35,7 @@ function harness(
   }) => Promise<KittyImage> = async ({ width, height }) =>
     fakeImage(width ?? 2, height ?? 2),
   afterMove?: () => Promise<void>,
+  failWrite = false,
 ) {
   const replies: string[] = [];
   const logs: string[] = [];
@@ -56,6 +57,7 @@ function harness(
       logs.push(`reply:${text}`);
     },
     write: (data, parsed) => {
+      if (failWrite) throw new Error("write failed");
       logs.push(`text:${decoder.decode(data)}`);
       parsed();
     },
@@ -754,4 +756,10 @@ test("reset during asynchronous query validation prevents a late reply", async (
     board.graphics.dispose();
     vi.useRealTimers();
   }
+});
+
+test("an asynchronous write failure replies with the active image id", async () => {
+  const board = harness(undefined, undefined, true);
+  await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=1;${raw(2, 2)}\x1b\\after`);
+  expect(board.replies).toContain("\x1b_Gi=1;EINVAL:write failed\x1b\\");
 });
