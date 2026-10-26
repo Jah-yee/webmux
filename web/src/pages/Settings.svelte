@@ -23,7 +23,8 @@
     type LaunchConfigSummary,
     type QuickCommand,
   } from "../schemas";
-  import { LAUNCH_CONFIGS_LIMIT } from "../launchConfigs";
+  import { LAUNCH_CONFIGS_LIMIT, launchConfigIcon } from "../launchConfigs";
+  import LaunchConfigIcon from "../components/LaunchConfigIcon.svelte";
   import {
     defaultPreviewSettings,
     previewSettings,
@@ -326,22 +327,27 @@
                 <Item.Root variant="outline" size="sm">
                   <ListButton
                     variant="content"
-                    class="flex min-w-0 flex-1 flex-col"
+                    class="flex min-w-0 flex-1"
                     aria-label={`编辑 ${config.name}`}
                     onclick={() => editLaunchConfig(config.id)}
                   >
-                    <span class="flex min-w-0 items-center gap-2">
-                      <span class="truncate text-xs font-medium"
-                        >{config.name}</span
-                      >
-                      {#if config.envNames.length}<Badge variant="secondary"
-                          >{config.envNames.length} 个环境变量</Badge
-                        >{/if}
+                    <span class="flex min-w-0 flex-1 items-center gap-3">
+                      <LaunchConfigIcon icon={launchConfigIcon(config)} />
+                      <span class="grid min-w-0 flex-1 gap-1">
+                        <span class="flex min-w-0 items-center gap-2">
+                          <span class="truncate text-xs font-medium"
+                            >{config.name}</span
+                          >
+                          {#if config.envNames.length}<Badge variant="secondary"
+                              >{config.envNames.length} 个环境变量</Badge
+                            >{/if}
+                        </span>
+                        <span
+                          class="truncate font-mono text-xs text-muted-foreground"
+                          >{joinArgs(config.cmd)}</span
+                        >
+                      </span>
                     </span>
-                    <span
-                      class="truncate font-mono text-xs text-muted-foreground"
-                      >{joinArgs(config.cmd)}</span
-                    >
                   </ListButton>
                   <Item.Actions class="gap-1">
                     {@render deleteButton(config.name, () => {

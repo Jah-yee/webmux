@@ -123,7 +123,7 @@ func parse(data []byte) ([]Config, error) {
 	ids, names := map[string]bool{}, map[string]bool{}
 	configs := make([]Config, 0, len(stored.Configs))
 	for i, c := range stored.Configs {
-		in, err := normalize(Input{Name: c.Name, Cmd: c.Cmd, Env: c.Env})
+		in, err := normalize(Input{Name: c.Name, Icon: c.Icon, Cmd: c.Cmd, Env: c.Env})
 		switch {
 		case err != nil:
 			return nil, fmt.Errorf("第 %d 条配置: %w", i+1, err)
@@ -137,7 +137,7 @@ func parse(data []byte) ([]Config, error) {
 			return nil, fmt.Errorf("第 %d 条配置: 缺少时间", i+1)
 		}
 		ids[c.ID], names[in.Name] = true, true
-		configs = append(configs, Config{ID: c.ID, Name: in.Name, Cmd: in.Cmd, Env: in.Env, CreatedAt: c.CreatedAt.UTC(), UpdatedAt: c.UpdatedAt.UTC()})
+		configs = append(configs, Config{ID: c.ID, Name: in.Name, Icon: in.Icon, Cmd: in.Cmd, Env: in.Env, CreatedAt: c.CreatedAt.UTC(), UpdatedAt: c.UpdatedAt.UTC()})
 	}
 	return configs, nil
 }
@@ -262,7 +262,7 @@ func (s *Service) Create(in Input) (Config, error) {
 		return Config{}, err
 	}
 	now := time.Now().UTC()
-	c := Config{ID: id, Name: in.Name, Cmd: in.Cmd, Env: in.Env, CreatedAt: now, UpdatedAt: now}
+	c := Config{ID: id, Name: in.Name, Icon: in.Icon, Cmd: in.Cmd, Env: in.Env, CreatedAt: now, UpdatedAt: now}
 	next := append(slices.Clip(s.configs), c)
 	if err := s.saveLocked(next); err != nil {
 		return Config{}, err
@@ -299,7 +299,7 @@ func (s *Service) Seed(ins []Input) error {
 		if err != nil {
 			return err
 		}
-		configs = append(configs, Config{ID: id, Name: in.Name, Cmd: in.Cmd, Env: in.Env, CreatedAt: now, UpdatedAt: now})
+		configs = append(configs, Config{ID: id, Name: in.Name, Icon: in.Icon, Cmd: in.Cmd, Env: in.Env, CreatedAt: now, UpdatedAt: now})
 	}
 	if err := s.saveLocked(configs); err != nil {
 		return err
@@ -308,7 +308,7 @@ func (s *Service) Seed(ins []Input) error {
 	return nil
 }
 
-// Update replaces name, cmd and env of id; id and createdAt are kept.
+// Update replaces the editable fields of id; id and createdAt are kept.
 func (s *Service) Update(id string, in Input) (Config, error) {
 	in, err := normalize(in)
 	if err != nil {
@@ -326,7 +326,7 @@ func (s *Service) Update(id string, in Input) (Config, error) {
 		return Config{}, ErrDuplicate
 	}
 	c := s.configs[i]
-	c.Name, c.Cmd, c.Env, c.UpdatedAt = in.Name, in.Cmd, in.Env, time.Now().UTC()
+	c.Name, c.Icon, c.Cmd, c.Env, c.UpdatedAt = in.Name, in.Icon, in.Cmd, in.Env, time.Now().UTC()
 	next := slices.Clone(s.configs)
 	next[i] = c
 	if err := s.saveLocked(next); err != nil {

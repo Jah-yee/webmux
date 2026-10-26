@@ -85,6 +85,12 @@ async function openPicker(initialValue = "/workspace", anchorTop = 0) {
     .toHaveValue(`${initialValue.replace(/\/+$/, "")}/`);
   await expect.element(input()).toHaveFocus();
   await expect.element(confirm()).toBeEnabled();
+  // Measure scrolling only after the whole popover's entrance transform ends.
+  await Promise.all(
+    slot("popover-content")
+      .getAnimations()
+      .map((animation) => animation.finished),
+  );
 }
 
 function within(inner: DOMRect, outer: DOMRect) {

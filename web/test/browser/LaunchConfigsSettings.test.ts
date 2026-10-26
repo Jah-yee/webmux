@@ -73,6 +73,9 @@ test("lists configs without env values and confirms deletion", async () => {
   render(Settings);
   const item = card().getByRole("button", { name: "编辑 Claude 恢复" });
   await expect.element(item).toMatchTextContent(/claude --resume 'a b'/);
+  expect(
+    item.element().querySelector('[data-launch-icon="claudecode"] svg'),
+  ).not.toBeNull();
   await expect.element(card().getByText("1 个环境变量")).toBeVisible();
   await card().getByRole("button", { name: "删除 Claude 恢复" }).click();
   const confirm = page.getByRole("alertdialog");

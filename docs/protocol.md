@@ -133,13 +133,15 @@ interface TunnelSettings {
 
 启动配置保存在服务端 `<state_dir>/launch-configs.json`，在所有已认证设备间共享。只提供用户自定义的启动配置，不再提供内置预设或 `/api/presets` 路由；新安装首次启动时服务端在该文件写入常见 agent 的普通配置，经同一接口列出、修改和删除。
 
-| 方法   | 路径                       | 说明                                                                      |
-| ------ | -------------------------- | ------------------------------------------------------------------------- |
-| GET    | `/api/launch-configs`      | 摘要数组（按创建顺序）：`{id, name, cmd, envNames, createdAt, updatedAt}` |
-| GET    | `/api/launch-configs/{id}` | 完整配置：`{id, name, cmd, env, createdAt, updatedAt}`                    |
-| POST   | `/api/launch-configs`      | `{name, cmd, env?}`，201 返回完整配置                                     |
-| PUT    | `/api/launch-configs/{id}` | `{name, cmd, env?}` 整体替换，省略的 `env` 被清空，200 返回完整配置       |
-| DELETE | `/api/launch-configs/{id}` | 204                                                                       |
+| 方法   | 路径                       | 说明                                                                             |
+| ------ | -------------------------- | -------------------------------------------------------------------------------- |
+| GET    | `/api/launch-configs`      | 摘要数组（按创建顺序）：`{id, name, icon?, cmd, envNames, createdAt, updatedAt}` |
+| GET    | `/api/launch-configs/{id}` | 完整配置：`{id, name, icon?, cmd, env, createdAt, updatedAt}`                    |
+| POST   | `/api/launch-configs`      | `{name, icon?, cmd, env?}`，201 返回完整配置                                     |
+| PUT    | `/api/launch-configs/{id}` | `{name, icon?, cmd, env?}` 整体替换，省略的 `env` 被清空，200 返回完整配置       |
+| DELETE | `/api/launch-configs/{id}` | 204                                                                              |
+
+`icon` 为可选的本地图标 ID：`terminal`、`claudecode`、`codex`、`geminicli`、`opencode` 或 `pi`。省略或空字符串表示自动匹配；更新时同样恢复自动匹配。不接受 URL 或 SVG 内容。旧文件省略此字段仍可读取，浏览器按可识别的直接命令或标准 `.bashrc` 包装匹配图标，未匹配时显示通用终端；`terminal` 可显式覆盖自动匹配。
 
 列表只含环境变量名（字典序），值只由单条读取与创建/更新响应返回。限制：名称去首尾空白后 1–64 个字符且唯一（重名 409）；`cmd` 1–128 项、首项非空、单项不超过 8 KiB；`env` 最多 64 项，名称规则与会话 `env` 相同，值不超过 8 KiB；最多 100 条。校验失败 400，未知 ID 404，落盘失败 500（内存回滚）。文件损坏、目录不可读写或状态目录已被另一实例占用时返回 503，错误信息包含原因与文件路径。
 

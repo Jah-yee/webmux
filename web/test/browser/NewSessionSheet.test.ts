@@ -163,6 +163,9 @@ test("starts a saved config with only configId and displays its command and envi
   await expect.element(option).toMatchTextContent(/Claude 恢复/);
   await expect.element(option).toMatchTextContent(/claude --resume/);
   await expect.element(option).toMatchTextContent(/2 个环境变量/);
+  expect(
+    option.element().querySelector('[data-launch-icon="claudecode"] svg'),
+  ).not.toBeNull();
   await expect
     .element(page.getByRole("option", { name: otherConfig.name, exact: true }))
     .toMatchTextContent(/opencode --continue 'a b'/);
@@ -171,6 +174,11 @@ test("starts a saved config with only configId and displays its command and envi
   await expect.element(configSelect()).toMatchTextContent(/Claude 恢复/);
   await expect.element(configSelect()).toMatchTextContent(/claude --resume/);
   await expect.element(configSelect()).toMatchTextContent(/2 个环境变量/);
+  expect(
+    configSelect()
+      .element()
+      .querySelector('[data-launch-icon="claudecode"] svg'),
+  ).not.toBeNull();
   await submit().click();
   await vi.waitFor(() => expect(created).toHaveLength(1));
   expect(created[0]).toEqual({ cwd: "/work", configId: "abcdefg2", name: "" });

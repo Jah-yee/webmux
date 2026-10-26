@@ -47,6 +47,34 @@ afterEach(async () => {
 
 const save = () => page.getByRole("button", { name: "保存", exact: true });
 
+test.each([
+  ["Gemini CLI", "geminicli"],
+  ["自动匹配", undefined],
+])(
+  "edits the icon to %s while preserving the command and env",
+  async (label, icon) => {
+    const onsaved = vi.fn();
+    const requests = serve({
+      "/api/launch-configs/abcdefg2": (method, body) =>
+        method === "GET"
+          ? Response.json({ ...saved, icon: "codex" })
+          : Response.json({ ...saved, ...(body as object) }),
+    });
+    render(LaunchConfigDialog, { open: true, configId: saved.id, onsaved });
+    const picker = page.getByRole("combobox", { name: "图标", exact: true });
+    await expect.element(picker).toMatchTextContent(/Codex/);
+    await picker.click();
+    await page.getByRole("option", { name: label, exact: true }).click();
+    await save().click();
+    await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
+    expect(requests.at(-1)).toMatchObject({
+      method: "PUT",
+      body: { cmd: saved.cmd, env: saved.env },
+    });
+    expect((requests.at(-1)!.body as { icon?: string }).icon).toBe(icon);
+  },
+);
+
 test("masks env values by default and validates variable names", async () => {
   serve({});
   render(LaunchConfigDialog, {

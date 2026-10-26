@@ -1,7 +1,42 @@
 import { describe, expect, test } from "vitest";
 import { joinArgs, parseArgs, quoteArg } from "../src/api";
-import { launchCommandDraft, validateLaunchDraft } from "../src/launchConfigs";
+import {
+  launchCommandDraft,
+  launchConfigIcon,
+  validateLaunchDraft,
+} from "../src/launchConfigs";
 import { LaunchConfigSchema, LaunchConfigsSchema } from "../src/schemas";
+
+describe("launch icons", () => {
+  test.each([
+    ["claude", "claudecode"],
+    ["codex", "codex"],
+    ["gemini", "geminicli"],
+    ["opencode", "opencode"],
+    ["omp", "pi"],
+    ["/usr/local/bin/pi", "pi"],
+    ["C:\\tools\\codex.exe", "codex"],
+    ["bash", "terminal"],
+  ])("matches legacy %s commands without changing argv", (program, icon) => {
+    const cmd = [program, "--resume"];
+    expect(launchConfigIcon({ cmd })).toBe(icon);
+    expect(
+      launchConfigIcon({
+        cmd: ["bash", "-ic", 'exec -- "$@"', "webmux", ...cmd],
+      }),
+    ).toBe(icon);
+    expect(cmd).toEqual([program, "--resume"]);
+  });
+
+  test("an explicit icon overrides matching and arbitrary shell scripts stay generic", () => {
+    expect(launchConfigIcon({ icon: "terminal", cmd: ["claude"] })).toBe(
+      "terminal",
+    );
+    expect(launchConfigIcon({ cmd: ["bash", "-ic", "exec claude"] })).toBe(
+      "terminal",
+    );
+  });
+});
 
 describe("quoteArg / joinArgs", () => {
   test("leaves plain arguments readable and quotes the rest", () => {

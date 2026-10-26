@@ -83,6 +83,12 @@ func TestSeedFillsOnlyANewFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	wantIcons := []string{"terminal", "claudecode", "codex", "geminicli", "opencode", "pi"}
+	for i, c := range list {
+		if c.Icon != wantIcons[i] {
+			t.Fatalf("preset %s icon %q", c.Name, c.Icon)
+		}
+	}
 	for _, c := range list {
 		if err := s.Delete(c.ID); err != nil {
 			t.Fatal(err)
@@ -144,6 +150,41 @@ func TestReopenPersists(t *testing.T) {
 	}
 	if _, err := s.Get(a.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
+	}
+}
+
+func TestIconsPersistAndLegacyConfigsRemainReadable(t *testing.T) {
+	dir := t.TempDir()
+	s := Open(dir)
+	a := mustCreate(t, s, Input{Name: "Claude", Icon: "claudecode", Cmd: []string{"claude"}})
+	b := mustCreate(t, s, Input{Name: "Legacy", Cmd: []string{"bash"}})
+	s.Close()
+	s = open(t, dir)
+	got, err := s.Get(a.ID)
+	if err != nil || got.Icon != "claudecode" {
+		t.Fatalf("reopened icon %q: %v", got.Icon, err)
+	}
+	legacy, err := s.Get(b.ID)
+	if err != nil || legacy.Icon != "" {
+		t.Fatalf("legacy icon %q: %v", legacy.Icon, err)
+	}
+	updated, err := s.Update(a.ID, Input{Name: a.Name, Icon: "codex", Cmd: a.Cmd})
+	if err != nil || updated.Icon != "codex" {
+		t.Fatalf("updated icon %q: %v", updated.Icon, err)
+	}
+	list, err := s.List()
+	if err != nil || list[0].Icon != "codex" {
+		t.Fatalf("summary icon %+v: %v", list, err)
+	}
+	cleared, err := s.Update(a.ID, Input{Name: a.Name, Cmd: a.Cmd})
+	if err != nil || cleared.Icon != "" {
+		t.Fatalf("cleared icon %q: %v", cleared.Icon, err)
+	}
+	for _, icon := range []string{"unknown", "https://example.com/icon.svg", "../icon", "<svg>"} {
+		_, err := s.Create(Input{Name: "Invalid", Icon: icon, Cmd: []string{"bash"}})
+		if !errors.Is(err, ErrInvalid) {
+			t.Fatalf("accepted invalid icon %q: %v", icon, err)
+		}
 	}
 }
 

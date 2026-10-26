@@ -10,7 +10,8 @@
     store,
     stored,
   } from "../api";
-  import type { LaunchConfigsState } from "../launchConfigs";
+  import { launchConfigIcon, type LaunchConfigsState } from "../launchConfigs";
+  import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import {
     NoContentSchema,
     SessionInfoSchema,
@@ -454,6 +455,7 @@
               >
                 <Select.Trigger aria-label="选择启动配置">
                   {#if chosenConfig}
+                    <LaunchConfigIcon icon={launchConfigIcon(chosenConfig)} />
                     {@render choiceDetails(
                       chosenConfig.name,
                       joinArgs(chosenConfig.cmd),
@@ -470,6 +472,7 @@
                       label={config.name}
                       aria-label={config.name}
                     >
+                      <LaunchConfigIcon icon={launchConfigIcon(config)} />
                       {@render choiceDetails(
                         config.name,
                         joinArgs(config.cmd),

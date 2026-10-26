@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import Icons from "unplugin-icons/vite";
+import { FileSystemIconLoader } from "unplugin-icons/loaders";
 import { fileURLToPath, URL } from "node:url";
 import { embedAssets } from "./scripts/embed-assets.ts";
 export default defineConfig({
@@ -10,7 +11,14 @@ export default defineConfig({
   plugins: [
     svelte(),
     tailwindcss(),
-    Icons({ compiler: "svelte" }),
+    Icons({
+      compiler: "svelte",
+      customCollections: {
+        lobe: FileSystemIconLoader(
+          fileURLToPath(new URL("./src/icons/lobehub", import.meta.url)),
+        ),
+      },
+    }),
     embedAssets(),
   ],
   resolve: {

@@ -10,11 +10,15 @@
   import { Label } from "$lib/components/ui/label";
   import { Textarea } from "$lib/components/ui/textarea";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as Select from "$lib/components/ui/select";
   import InlineNotice from "./InlineNotice.svelte";
+  import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import { api, APIError } from "../api";
   import { LaunchConfigSchema, type LaunchConfig } from "../schemas";
   import {
     LAUNCH_ENV_MAX,
+    LAUNCH_ICON_OPTIONS,
+    launchConfigIcon,
     launchCommandDraft,
     validateLaunchDraft,
     type EnvRow,
@@ -32,6 +36,7 @@
   } = $props();
 
   let name = $state("");
+  let icon = $state("auto");
   let command = $state("");
   let loadBashrc = $state(false);
   let rows = $state<EnvRow[]>([]);
@@ -42,6 +47,13 @@
   let error = $state("");
   let busy = $state(false);
   const draft = $derived(validateLaunchDraft(name, command, rows, loadBashrc));
+  const iconOptions = [
+    { value: "auto", label: "自动匹配" },
+    ...LAUNCH_ICON_OPTIONS,
+  ];
+  const autoIcon = $derived(
+    draft.ok ? launchConfigIcon(draft.value) : "terminal",
+  );
 
   function row(name = "", value = ""): EnvRow {
     return { key: nextKey++, name, value };
@@ -55,6 +67,7 @@
     const controller = new AbortController();
     untrack(() => {
       name = "";
+      icon = "auto";
       command = "";
       loadBashrc = false;
       rows = [];
@@ -73,6 +86,7 @@
         )
           .then((config) => {
             name = config.name;
+            icon = config.icon || "auto";
             const restored = launchCommandDraft(config.cmd);
             command = restored.command;
             loadBashrc = restored.loadBashrc;
@@ -101,7 +115,7 @@
         configId ? `/launch-configs/${configId}` : "/launch-configs",
         LaunchConfigSchema,
         configId ? "PUT" : "POST",
-        draft.value,
+        { ...draft.value, ...(icon === "auto" ? {} : { icon }) },
       );
       onsaved(saved);
       open = false;
@@ -152,6 +166,31 @@
               >
                 {draft.errors.name}
               </p>{/if}
+          </div>
+          <div class="grid gap-2">
+            <Label for="launch-config-icon">图标</Label>
+            <Select.Root type="single" bind:value={icon} items={iconOptions}>
+              <Select.Trigger id="launch-config-icon" aria-label="图标">
+                <span class="flex items-center gap-2">
+                  <LaunchConfigIcon icon={icon === "auto" ? autoIcon : icon} />
+                  {iconOptions.find((option) => option.value === icon)?.label ??
+                    "终端"}
+                </span>
+              </Select.Trigger>
+              <Select.Content>
+                {#each iconOptions as option (option.value)}
+                  <Select.Item value={option.value} label={option.label}>
+                    <LaunchConfigIcon
+                      icon={option.value === "auto" ? autoIcon : option.value}
+                    />
+                    {option.label}
+                  </Select.Item>
+                {/each}
+              </Select.Content>
+            </Select.Root>
+            <p class="text-xs text-muted-foreground">
+              自动匹配启动程序，也可指定图标。品牌图标来自 LobeHub。
+            </p>
           </div>
           <div class="grid gap-2">
             <Label for="launch-config-command">启动命令</Label>

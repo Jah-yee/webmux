@@ -15,6 +15,8 @@ async function createConfig(page: Page, name: string) {
   await dialog
     .getByLabel("启动命令", { exact: true })
     .fill("/bin/bash --noprofile --norc -i");
+  await dialog.getByRole("combobox", { name: "图标", exact: true }).click();
+  await page.getByRole("option", { name: "Codex", exact: true }).click();
   await dialog
     .getByRole("button", { name: "添加环境变量", exact: true })
     .click();
@@ -103,6 +105,11 @@ test("configs persist across a settings reload and remain selectable alongside m
   await expect(
     card(page).getByText("E2E persisted", { exact: true }),
   ).toBeVisible();
+  await expect(
+    card(page)
+      .getByRole("button", { name: "编辑 E2E persisted", exact: true })
+      .locator('[data-launch-icon="codex"] svg'),
+  ).toBeVisible();
   await page.goto("/");
   await page
     .locator("header")
@@ -114,6 +121,7 @@ test("configs persist across a settings reload and remain selectable alongside m
     exact: true,
   });
   await expect(select).toContainText("E2E persisted");
+  await expect(select.locator('[data-launch-icon="codex"] svg')).toBeVisible();
   await expect(select).toContainText("/bin/bash --noprofile --norc -i");
   await select.click();
   await expect(

@@ -15,6 +15,7 @@ const BASHRC_PREFIX = ["bash", "-ic", 'exec -- "$@"', "webmux"] as const;
 export type EnvRow = { key: number; name: string; value: string };
 export type LaunchConfigInput = {
   name: string;
+  icon?: string;
   cmd: string[];
   env: Record<string, string>;
 };
@@ -32,13 +33,57 @@ export type LaunchConfigsState =
 
 /** Restore only our exact wrapper; arbitrary user-written shell commands stay intact. */
 export function launchCommandDraft(cmd: readonly string[]) {
-  const loadBashrc =
-    cmd.length > BASHRC_PREFIX.length &&
-    BASHRC_PREFIX.every((arg, index) => cmd[index] === arg);
+  const loadBashrc = hasBashrcWrapper(cmd);
   return {
     command: joinArgs(loadBashrc ? cmd.slice(BASHRC_PREFIX.length) : cmd),
     loadBashrc,
   };
+}
+
+function hasBashrcWrapper(cmd: readonly string[]) {
+  return (
+    cmd.length > BASHRC_PREFIX.length &&
+    BASHRC_PREFIX.every((arg, index) => cmd[index] === arg)
+  );
+}
+
+export const LAUNCH_ICON_OPTIONS = [
+  { value: "terminal", label: "终端" },
+  { value: "claudecode", label: "Claude Code" },
+  { value: "codex", label: "Codex" },
+  { value: "geminicli", label: "Gemini CLI" },
+  { value: "opencode", label: "OpenCode" },
+  { value: "pi", label: "Pi / omp" },
+] as const;
+
+/** Old configs get a display default without rewriting their saved commands. */
+export function launchConfigIcon(config: {
+  icon?: string;
+  cmd: readonly string[];
+}) {
+  if (config.icon) return config.icon;
+  const executable = config.cmd[
+    hasBashrcWrapper(config.cmd) ? BASHRC_PREFIX.length : 0
+  ]
+    ?.split(/[\\/]/)
+    .pop()
+    ?.toLowerCase()
+    .replace(/\.exe$/, "");
+  switch (executable) {
+    case "claude":
+      return "claudecode";
+    case "codex":
+      return "codex";
+    case "gemini":
+      return "geminicli";
+    case "opencode":
+      return "opencode";
+    case "omp":
+    case "pi":
+      return "pi";
+    default:
+      return "terminal";
+  }
 }
 
 /** Error for one env variable name, or "" when valid. */

@@ -46,6 +46,10 @@ export type SessionInfo = z.infer<typeof SessionInfoSchema>;
 const launchConfigFields = {
   id: z.string().regex(/^[a-z2-7]{8}$/),
   name: z.string().min(1),
+  icon: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,63}$/)
+    .optional(),
   cmd: z.array(z.string()).min(1),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),

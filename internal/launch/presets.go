@@ -8,12 +8,12 @@ func Presets(shell string) []Input {
 		shell = "/bin/sh"
 	}
 	return []Input{
-		{Name: "Shell", Cmd: []string{shell, "-l", "-i"}},
-		{Name: "Claude Code", Cmd: bashrcCommand("claude")},
-		{Name: "Codex CLI", Cmd: bashrcCommand("codex")},
-		{Name: "Gemini CLI", Cmd: bashrcCommand("gemini")},
-		{Name: "Open Code", Cmd: bashrcCommand("opencode")},
-		{Name: "omp", Cmd: bashrcCommand("omp"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}},
+		{Name: "Shell", Icon: "terminal", Cmd: []string{shell, "-l", "-i"}},
+		{Name: "Claude Code", Icon: "claudecode", Cmd: bashrcCommand("claude")},
+		{Name: "Codex CLI", Icon: "codex", Cmd: bashrcCommand("codex")},
+		{Name: "Gemini CLI", Icon: "geminicli", Cmd: bashrcCommand("gemini")},
+		{Name: "Open Code", Icon: "opencode", Cmd: bashrcCommand("opencode")},
+		{Name: "omp", Icon: "pi", Cmd: bashrcCommand("omp"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}},
 	}
 }
 
