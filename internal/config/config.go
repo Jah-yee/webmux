@@ -16,18 +16,81 @@ import (
 )
 
 type Config struct {
-	Listen           string       `toml:"listen"`
-	Token            string       `toml:"token"`
-	ScrollbackBytes  int          `toml:"scrollback_bytes"`
-	DefaultCwd       string       `toml:"default_cwd"`
-	StateDir         string       `toml:"state_dir"`
-	IdleAfterSeconds int          `toml:"idle_after_seconds"`
-	PromptPatterns   []string     `toml:"prompt_patterns"`
-	AgentProtocol    bool         `toml:"agent_protocol"`
-	BellAttention    bool         `toml:"bell_attention"`
-	AllowedOrigins   []string     `toml:"allowed_origins"`
-	Tunnel           TunnelConfig `toml:"tunnel"`
-	Push             PushConfig   `toml:"push"`
+	Listen           string          `toml:"listen"`
+	Token            string          `toml:"token"`
+	ScrollbackBytes  int             `toml:"scrollback_bytes"`
+	DefaultCwd       string          `toml:"default_cwd"`
+	StateDir         string          `toml:"state_dir"`
+	IdleAfterSeconds int             `toml:"idle_after_seconds"`
+	PromptPatterns   []string        `toml:"prompt_patterns"`
+	AgentProtocol    bool            `toml:"agent_protocol"`
+	BellAttention    bool            `toml:"bell_attention"`
+	AllowedOrigins   []string        `toml:"allowed_origins"`
+	Tunnel           TunnelConfig    `toml:"tunnel"`
+	Tailscale        TailscaleConfig `toml:"tailscale"`
+	Push             PushConfig      `toml:"push"`
+}
+
+// TailscaleConfig selects the managed Tailscale Serve or Funnel entry point.
+// The default mode "off" never runs a modifying Tailscale command.
+type TailscaleConfig struct {
+	// Mode is off, serve or funnel.
+	Mode string `toml:"mode"`
+	// Port is 0 for automatic selection; Serve allows any 1-65535 port and
+	// Funnel only 443, 8443 or 10000.
+	Port int `toml:"port"`
+	// Provider is auto, linux or windows. Windows must be chosen explicitly
+	// on WSL; auto never manages the Windows host.
+	Provider string `toml:"provider"`
+	// Command overrides CLI discovery.
+	Command string `toml:"command"`
+}
+
+const (
+	TailscaleOff    = "off"
+	TailscaleServe  = "serve"
+	TailscaleFunnel = "funnel"
+)
+
+// Enabled reports whether the configuration asks for a managed entry point.
+func (t TailscaleConfig) Enabled() bool {
+	return t.Mode == TailscaleServe || t.Mode == TailscaleFunnel
+}
+
+func (t *TailscaleConfig) validate() error {
+	switch t.Mode {
+	case "", TailscaleOff, TailscaleServe, TailscaleFunnel:
+	default:
+		return fmt.Errorf("tailscale.mode %q must be off, serve or funnel", t.Mode)
+	}
+	if t.Mode == "" {
+		t.Mode = TailscaleOff
+	}
+	switch t.Provider {
+	case "", "auto":
+		t.Provider = "auto"
+	case "linux", "windows":
+	default:
+		return fmt.Errorf("tailscale.provider %q must be auto, linux or windows", t.Provider)
+	}
+	if t.Port < 0 || t.Port > 65535 {
+		return fmt.Errorf("tailscale.port %d must be between 0 and 65535", t.Port)
+	}
+	if t.Mode == TailscaleFunnel {
+		switch t.Port {
+		case 0, 443, 8443, 10000:
+		default:
+			return fmt.Errorf("tailscale.port %d is not supported by Funnel; use 0, 443, 8443 or 10000", t.Port)
+		}
+	}
+	if t.Command != "" {
+		path, err := pathutil.Expand(t.Command)
+		if err != nil {
+			return fmt.Errorf("tailscale.command: %w", err)
+		}
+		t.Command = path
+	}
+	return nil
 }
 
 // TunnelConfig selects a Cloudflare Tunnel. An empty Token means a Quick
@@ -172,6 +235,7 @@ func Load(path string, required bool) (Config, error) {
 			Kinds:        DefaultPushKinds(),
 			IncludeTitle: true,
 		},
+		Tailscale: TailscaleConfig{Mode: TailscaleOff, Provider: "auto"},
 	}
 	if _, err := toml.DecodeFile(path, &c); err != nil {
 		if required || !errors.Is(err, os.ErrNotExist) {
@@ -205,6 +269,9 @@ func (c *Config) Validate() error {
 		}
 	}
 	if err := c.Tunnel.validate(); err != nil {
+		return err
+	}
+	if err := c.Tailscale.validate(); err != nil {
 		return err
 	}
 	return c.Push.validate()

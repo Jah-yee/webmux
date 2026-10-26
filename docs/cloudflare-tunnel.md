@@ -8,10 +8,14 @@
 | --------------------- | -------------- | -------------------------------------- | ----------------------------------------------- |
 | 本机回环              | 固定           | 无                                     | 只在这台电脑上使用                              |
 | Tailscale / WireGuard | 通常固定       | 服务器与每台设备安装并加入同一网络     | 可信设备之间的远程访问，推荐优先使用            |
+| Tailscale Serve       | 固定           | Tailscale、HTTPS 证书；`[tailscale]`   | tailnet 内自动 HTTPS，无需公网暴露              |
+| Tailscale Funnel      | 固定           | 显式 `mode = "funnel"`、funnel 属性    | 需要公网 HTTPS 且不想使用 Cloudflare 的场景     |
 | Quick Tunnel          | 每次启动都变化 | 无，不需要 Cloudflare 账号             | 临时演示、一次性排障                            |
 | Named Tunnel          | 固定           | Cloudflare 账号，域名已接入 Cloudflare | 长期手机访问、Web Push 推送、需要稳定地址的场景 |
 
 无论使用哪种公网方式，WebMux 都要求 Token。公网入口等同于把 shell 暴露给能拿到链接和 Token 的人，请先阅读[安全策略](../SECURITY.md)。
+
+Tailscale Serve 只需 tailnet 内可达，适合可信设备；Funnel 会公开到互联网，风险与 Named Tunnel 相当。两者的配置与手工移除命令见 [Tailscale Serve / Funnel 入口](tailscale.md)。Web Push 目前仍只支持 Cloudflare Named Tunnel 与回环地址，Tailscale 入口会显示为 `unsupported_origin`。
 
 ## 2. 工作原理
 

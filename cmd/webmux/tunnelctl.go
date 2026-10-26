@@ -24,7 +24,7 @@ type tunnelController struct {
 	store        *tunnelsettings.Service
 	web          bool
 	local, token string
-	public       *api.PublicOrigin
+	public       *api.PublicOrigins
 	locate       func(context.Context) (string, error)
 	out          io.Writer
 	logger       *slog.Logger
@@ -37,7 +37,7 @@ type tunnelController struct {
 	closed             bool
 }
 
-func newTunnelController(cfg config.TunnelConfig, store *tunnelsettings.Service, local, token string, public *api.PublicOrigin, locate func(context.Context) (string, error), out io.Writer, logger *slog.Logger) *tunnelController {
+func newTunnelController(cfg config.TunnelConfig, store *tunnelsettings.Service, local, token string, public *api.PublicOrigins, locate func(context.Context) (string, error), out io.Writer, logger *slog.Logger) *tunnelController {
 	_, web := store.Effective()
 	return &tunnelController{cfg: cfg, store: store, web: web, local: local, token: token, public: public, locate: locate, out: out, logger: logger, state: contract.TunnelOff}
 }
@@ -169,7 +169,7 @@ func (tc *tunnelController) startLocated(binary string) {
 // The request never waits for process shutdown, location or startup.
 func (tc *tunnelController) applyLocked(binary string, announce func(string)) {
 	tc.gen++
-	tc.public.Clear()
+	tc.public.Clear("cloudflare")
 	if tc.cancel != nil {
 		tc.cancel()
 	}
@@ -242,7 +242,7 @@ func (tc *tunnelController) ready(gen uint64, origin string) bool {
 	if gen != tc.gen || !tc.cfg.Enabled || tc.closed {
 		return false
 	}
-	if err := tc.public.Set(origin); err != nil {
+	if err := tc.public.Set("cloudflare", origin); err != nil {
 		tc.logger.Error("cloudflare tunnel reported an unusable origin")
 		return false
 	}
@@ -258,7 +258,7 @@ func (tc *tunnelController) fail(gen uint64, err error, credential string) {
 	tc.mu.Lock()
 	current := gen == tc.gen && !tc.closed
 	if current {
-		tc.public.Clear()
+		tc.public.Clear("cloudflare")
 		tc.state, tc.url, tc.reason = contract.TunnelFailed, "", reason
 	}
 	tc.mu.Unlock()
@@ -272,7 +272,7 @@ func (tc *tunnelController) Close() {
 	tc.mu.Lock()
 	tc.closed = true
 	tc.gen++
-	tc.public.Clear()
+	tc.public.Clear("cloudflare")
 	tc.state, tc.url, tc.reason = contract.TunnelOff, "", ""
 	if tc.cancel != nil {
 		tc.cancel()

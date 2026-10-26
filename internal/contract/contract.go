@@ -119,6 +119,14 @@ const (
 	TunnelFailed   = "failed"
 )
 
+// Tailscale runtime states.
+const (
+	TailscaleOff      = "off"
+	TailscaleStarting = "starting"
+	TailscaleReady    = "ready"
+	TailscaleFailed   = "failed"
+)
+
 // TunnelStatus describes the Cloudflare Tunnel of a running server.
 // PublicURL (ready only) never carries a token.
 type TunnelStatus struct {

@@ -18,6 +18,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/statefile"
+	"github.com/rainchan/webmux/internal/wsl"
 )
 
 const configUsage = "usage: webmux config path|show|validate|check|init [--config PATH] [--json]"
@@ -154,9 +155,12 @@ func configValidate(args []string, stdout, stderr io.Writer) int {
 	}
 	result := contract.ValidateV1{V: contract.V, OK: true, Errors: []string{}}
 	c, err := client.LoadConfig(path, explicit)
-	if err == nil && c.Tunnel.Enabled && c.Token != "" && len(c.Token) < minTunnelTokenLength {
+	if err == nil && (c.Tunnel.Enabled || c.Tailscale.Enabled()) && c.Token != "" && len(c.Token) < minTunnelTokenLength {
 		// The same check serve applies after loading.
 		err = ensureToken(&c)
+	}
+	if err == nil && c.Tailscale.Provider == "windows" && !wsl.Detected() {
+		err = errors.New("tailscale.provider \"windows\" is only valid inside WSL; use \"linux\" or \"auto\"")
 	}
 	if err != nil {
 		result.OK = false

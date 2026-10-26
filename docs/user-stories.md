@@ -44,6 +44,8 @@
 
 本次局部核对（2026-10-26）：#132 的会话列表终端链接改为在新标签页打开，对应新增 US-C11；主屏幕应用没有浏览器标签页且不共享本机 Token，仍使用应用内导航。定向浏览器用例、桌面新标签页与受影响的续接/草稿/工作树/软键 E2E、两项 4x CPU 性能用例、`svelte-check`、lint、格式检查与前端架构守卫通过；未做真机主屏幕应用验收，未重新核对其余功能组。
 
+本次局部核对（2026-10-26）：#144 的 Tailscale Serve/Funnel 托管对应新增 US-P01–US-P06，并更新 US-K10 的设置分区入口。fake CLI 单元、`internal/tailscale`/`internal/config`/`internal/api`/`internal/wire`/`cmd/webmux` Go race、`internal/archtest`、`go vet`、新增 Tailscale 浏览器用例、`svelte-check`、Oxlint、前端架构守卫、生产构建、格式检查与 OpenSpec 严格校验通过。真实 Tailscale Serve/Funnel、WSL Windows mirrored 主机、真机与亮暗/桌面/手机截图尚未验收；CI 不连接真实 Tailscale。
+
 本次局部核对（2026-10-26）：#134 将终端字体下限从 12px 降到 8px，对应 US-D08、US-H04；同步更新三处钳制点、字体滑块测试与设置同步规划中的范围。定向终端渲染浏览器用例（15 项）、移动端软键 E2E、类型检查、lint 与格式检查通过；未重新核对其余功能组。
 
 追加局部核对（2026-10-26）：仅处理 #138、#133、#132，对应 US-D12、US-B08、US-C02、US-C07、US-C11。Kitty 图片不再被局部文本擦除或 xterm 文本 marker 的销毁误删；共享字节的真实 PTY 程序验证顶部裁剪与文字重绘，浏览器覆盖页边距内滚动、历史显示/截断、尺寸变化与 reset。已启动会话的预览在重新加载配置后应用修改、清空与删除后的回退；新标签页操作时原列表持续接收输出和退出状态，主屏幕模式保留 Token。278 个单元、244 个浏览器、211 个 Storybook 用例及 Linux E2E 170 项通过（20 项按现有平台条件跳过），Go race 全套、类型、lint、架构与生产构建通过。137 个故事 ID 唯一，索引引用和来源路径有效。截图来自隔离实例；未运行 macOS 原生套件或 iOS/Android 真机验收，未重新核对其余功能组。
@@ -78,6 +80,7 @@
 | M    | 原生终端、CLI 与本机控制面       | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道              | US-N01–US-N08 |
 | O    | Windows/WSL 托盘管理             | US-O01–US-O11 |
+| P    | Tailscale Serve / Funnel         | US-P01–US-P06 |
 
 ## A. 连接、认证与访问边界
 
@@ -257,7 +260,7 @@
 | US-K07 启停、诊断与卸载   | 作为部署者，我希望用统一命令管理后台服务并查看日志，以便维护和排查故障。                              | 提供 start、stop、restart、status、logs、logs --follow/-f、uninstall；停止、重启、卸载会结束会话；卸载保留二进制、配置、日志与状态目录；服务启用不等于端口已监听，应结合状态和日志诊断。                                                                                                                                                                                                                                                                                           |
 | US-K08 保存仓库清单       | 作为部署者，我希望指定状态目录并保护其内容，以便重启或升级后仍保留项目登记。                          | `state_dir` 保存仓库清单、受保护的运行时记录/本机 API 信息及可选 cloudflared 缓存，不持久保存会话或终端输出；支持 XDG 默认路径；仓库清单使用私有权限、原子更新与单实例锁；仓库存储失败不阻止直接终端工作。                                                                                                                                                                                                                                                                         |
 | US-K09 可信远程入口与升级 | 作为部署者，我希望通过可信 VPN 或 HTTPS 代理访问，并知道升级的影响，以便维护远程终端。                | `listen`、`token`、`allowed_origins` 配合部署；TLS 由外部代理提供，正确保留 Host 并配置 Origin；`version` 与 `help` 提供版本和命令信息，`version --json` 另含控制契约版本且不读取配置；替换二进制后需重启，重启结束会话但保留仓库登记与磁盘工作树。                                                                                                                                                                                                                                |
-| US-K10 定位设置分区       | 作为使用者，我希望通过分区导航快速找到设置项，以便在桌面和手机上减少长页面翻找。                      | 桌面左侧显示固定分区导航，手机顶部显示可横向滚动的吸顶导航；提供快捷指令、启动配置、草稿与暂存、公网访问、通知推送、输出预览六个入口；点击或键盘激活滚动到对应分区并转移焦点，滚动时高亮当前分区；支持地址片段直达和浏览器前进后退；定位不卸载表单、不丢失尚未保存的输入。                                                                                                                                                                                                         |
+| US-K10 定位设置分区       | 作为使用者，我希望通过分区导航快速找到设置项，以便在桌面和手机上减少长页面翻找。                      | 桌面左侧显示固定分区导航，手机顶部显示可横向滚动的吸顶导航；提供快捷指令、启动配置、草稿与暂存、公网访问、Tailscale、通知推送、输出预览七个入口；点击或键盘激活滚动到对应分区并转移焦点，滚动时高亮当前分区；支持地址片段直达和浏览器前进后退；定位不卸载表单、不丢失尚未保存的输入。                                                                                                                                                                                              |
 
 依据：[CLI 命令](../cmd/webmux/main.go)、[启动](../cmd/webmux/main.go)、[配置](../internal/config/config.go)、[配置命令](../cmd/webmux/configcmd.go)、[用户服务](../internal/service/)、[部署指南](deployment.md)、[设置页](../web/src/pages/Settings.svelte)、[设置导航](../web/src/components/SettingsNavigation.svelte)、[导航浏览器回归](../web/test/browser/SettingsNavigation.test.ts)。
 
@@ -331,6 +334,19 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
 
 依据：[Windows CLI](../cmd/webmux-windows/main_windows.go)、[WSL 桥接与路径](../internal/wslclient/)、[托盘服务与安装](../internal/tray/)、[兼容判定](../internal/tray/compat.go)、[托盘菜单](../internal/tray/winui/menu.go)、[转发](../internal/tray/forward/)、[敏感剪贴板](../internal/tray/winui/clipboard.go)、[Windows 部署](deployment.md#windowswsl)。
 
+## P. Tailscale Serve / Funnel
+
+| 编号 / 功能                  | User story                                                                                               | 验收要点                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| US-P01 检测 Tailscale 环境   | 作为部署者，我希望只读查看 Tailscale 是否可用、节点 DNS 与证书状态，以便判断能否使用自动 HTTPS 入口。    | `GET /api/tailscale` 需要认证，返回 provider（linux/wsl-native/windows/none）、后端状态、节点 DNS、HTTPS 就绪、Funnel 属性、现有入口 host/port/public 与 WSL 网络模式；只执行 `status`/`serve status`/`funnel status`，短超时、无交互 stdin、缓存并合并并发请求；CLI 缺失、未登录、输出损坏或超时不 panic，也不把缺失字段当作已就绪；响应不含 token 或其他入口 target。                                                                        |
+| US-P02 托管 Serve            | 作为部署者，我希望通过配置让 WebMux 在 tailnet 内提供自动证书的 HTTPS，以便手机等可信设备安全访问。      | `[tailscale] mode = "serve"` 在监听开始后以 argv 执行 `tailscale serve --bg --https=<port> http://127.0.0.1:<实际端口>`；执行前要求 `CertDomains` 包含节点 DNS；自动端口按 443、8443、10000 选择，显式冲突失败不覆盖；回读确认唯一 `/` handler 指向当前 target 且 `AllowFunnel` 为假后才登记来源并报告 ready；停止/失败只移除精确端口，绝不调用 reset。                                                                                        |
+| US-P03 显式 Funnel           | 作为明确需要公网访问的部署者，我希望显式启用 Funnel 并看到风险，以便在无 VPN 的设备上连接。              | `mode = "funnel"` 只允许 443/8443/10000，要求强 Token；不因检测到 Tailscale 就自动公开；命令失败把 stderr 映射为 HTTPS 未启用、缺少 funnel 属性、权限不足或端口冲突；回读 `AllowFunnel[host:port] == true` 后才登记公开来源；从 Funnel 切回 Serve 或端口变化先关闭旧精确目标，失败时确认不残留并保持 failed；设置页持续显示公网风险。                                                                                                          |
+| US-P04 WSL NAT 阻塞          | 作为 WSL 使用者，我希望知道为什么不能托管 Windows Tailscale，并看到可行替代方案。                        | `provider = "windows"` 且 `wslinfo --networking-mode` 为 nat/unknown 时失败关闭，不执行任何 Windows 写命令；设置页与错误说明 mirrored（`.wslconfig` + `wsl --shutdown` 会结束会话）、WSL 内安装 Tailscale、Windows 托盘转发三种方案；不自动修改 `.wslconfig`、重启 WSL 或防火墙。                                                                                                                                                              |
+| US-P05 显式 Windows provider | 作为 WSL 使用者，我希望显式选择 Windows 主机上的 Tailscale，以便在 mirrored 网络中使用 Windows 节点。    | `auto` 只检测并优先正在运行的 WSL 原生 Tailscale，永不被用来代管 Windows；只有显式 `provider = "windows"` 才允许写命令，URL/Host/Origin 使用 Windows 节点 `Self.DNSName`；非 WSL 配置 windows 启动失败；权限不足提示在 Windows 管理员终端执行 `tailscale set --operator=<用户>`，不 sudo、不自动提权；WSL 关闭后保留的入口在下一次启动按状态文件对账。                                                                                         |
+| US-P06 所有权与失败关闭      | 作为部署者，我希望 WebMux 只清理自己创建的入口，并在无法确认时拒绝启动，以便不误改其他应用或暴露旧端口。 | `<state_dir>/tailscale.json`（0600、原子替换、独立锁）记录 provider、DNS、模式、端口、target 与 pending/active；写命令前先落盘 pending，命令与回读成功后标记 active；`mode = off`、模式/端口/target 变化或状态损坏时先对账，无法移除旧入口则拒绝启动并给出精确 off 命令；状态文件缺失但 target 精确匹配时仍视为所有权未知并拒绝接管；绑定监听失败时关闭本次入口或报告风险；来源撤销后旧 Host/Origin 立即 403，Cloudflare 与 Tailscale 可并存。 |
+
+依据：[Tailscale 检测与命令](../internal/tailscale/)、[状态集合](../internal/contract/tailscale.go)、[控制器与对账](../cmd/webmux/tailscalectl.go)、[配置](../internal/config/config.go)、[启动与 Token](../cmd/webmux/main.go)、[来源注册表](../internal/api/public.go)、[状态 API](../internal/api/tailscale.go)、[设置页](../web/src/pages/TailscaleSettingsPage.svelte)、[设置卡片](../web/src/components/TailscaleSettings.svelte)、[Tailscale 指南](tailscale.md)。
+
 ## 功能覆盖核对
 
 以下索引把可见页面、服务入口与配套工具映射到故事，补充上面的用户视角分组。底层锁、队列和解析实现归入其支撑的用户行为，不各自包装成独立产品功能。
@@ -397,6 +413,10 @@ Windows 原生终端客户端复用 US-M01–US-M06：提供 run、attach、ls�
 | 托盘登录启动、单实例、发行版、设置、状态与日志                             | US-O04–US-O07                                       |
 | Windows 远程转发、敏感链接复制、退出托盘                                   | US-O08–US-O10                                       |
 | 托盘与 WSL 服务的兼容、版本对应、降级运行与更新入口                        | US-O11                                              |
+| Tailscale 检测、节点 DNS、HTTPS 与现有入口只读状态                         | US-P01                                              |
+| Tailscale Serve/Funnel 配置、回读确认、精确移除与公网风险                  | US-P02–US-P03                                       |
+| WSL NAT 阻塞、Windows provider 选择与 operator 提示                        | US-P04–US-P05                                       |
+| Tailscale 所有权、启动对账、失败关闭与来源并存                             | US-P06                                              |
 
 ## 后续维护
 

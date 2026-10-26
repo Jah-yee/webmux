@@ -33,8 +33,8 @@ type Deps struct {
 	Workspace *workspace.Service
 	Code      *codeview.Service
 	Files     *files.Service
-	// Public is the runtime tunnel origin; nil means no tunnel.
-	Public *PublicOrigin
+	// Public authorizes runtime HTTPS entry points; nil means no tunnel.
+	Public *PublicOrigins
 	// Push is nil when [push] enabled = false.
 	Push *push.Service
 	// Launch is nil when the launch config store was not opened; its
@@ -44,6 +44,10 @@ type Deps struct {
 	// describing only the configured mode.
 	Tunnel         func() contract.TunnelStatus
 	TunnelSettings TunnelSettingsControl
+	// Tailscale reports the read-only Tailscale state; nil answers 503.
+	Tailscale func() contract.TailscaleStatus
+	// TailscaleRefresh bypasses the detection cache for ?refresh=1.
+	TailscaleRefresh func()
 }
 
 type Server struct {
@@ -96,6 +100,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.pushRoutes(mux)
 	s.launchRoutes(mux)
 	s.tunnelRoutes(mux)
+	s.tailscaleRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)
 	mux.HandleFunc("GET /ws/s/{id}", s.terminalWS)
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
@@ -153,7 +158,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 	hostAllowed := hostCheck(s.Config)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer baseHeaders(w)()
-		if !hostAllowed(r.Host) && !s.Public.hostAllowed(authorityHostname(r.Host)) {
+		if !hostAllowed(r.Host) && !s.Public.hostAllowed(r.Host) {
 			failure(w, http.StatusForbidden, errors.New("host not allowed"))
 			return
 		}
@@ -231,7 +236,7 @@ func (s *Server) originAllowed(r *http.Request) bool {
 	}
 	// Tunnel traffic arrives over plain HTTP, so the scheme inferred from
 	// r.TLS cannot vouch for the public hostname; only its https origin can.
-	if s.Public.hostAllowed(authorityHostname(r.Host)) {
+	if s.Public.hostAllowed(r.Host) {
 		if s.Public.originAllowed(origin, r.Host) {
 			return true
 		}

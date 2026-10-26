@@ -7,6 +7,7 @@
     { id: "launch-configs", label: "启动配置" },
     { id: "drafts", label: "草稿与暂存" },
     { id: "access", label: "公网访问" },
+    { id: "tailscale", label: "Tailscale" },
     { id: "push", label: "通知推送" },
     { id: "preview", label: "输出预览" },
   ];

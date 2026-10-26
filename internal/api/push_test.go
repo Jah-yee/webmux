@@ -20,8 +20,8 @@ import (
 
 func TestPushOrigin(t *testing.T) {
 	named := config.Config{Tunnel: config.TunnelConfig{Token: "cred", Hostname: "term.example.com"}}
-	quick := &PublicOrigin{}
-	if err := quick.Set("https://abc.trycloudflare.com"); err != nil {
+	quick := &PublicOrigins{}
+	if err := quick.Set("cloudflare", "https://abc.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range []struct {
@@ -85,8 +85,8 @@ func TestPushAPI(t *testing.T) {
 	cfg := config.Config{Listen: "127.0.0.1:7681", Token: "secret", Push: config.PushConfig{Enabled: true, Subject: config.DefaultPushSubject, Kinds: config.DefaultPushKinds()}}
 	pushes := push.New(cfg.Push, t.TempDir(), m, slog.New(slog.NewTextHandler(io.Discard, nil)), pushService.Client().Transport)
 	defer pushes.Close()
-	public := &PublicOrigin{}
-	if err := public.Set("https://abc.trycloudflare.com"); err != nil {
+	public := &PublicOrigins{}
+	if err := public.Set("cloudflare", "https://abc.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
 	handler := New(testDeps(t, Deps{Config: cfg, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Public: public, Push: pushes}))

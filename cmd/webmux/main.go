@@ -26,9 +26,11 @@ import (
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/tunnel"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/workspace"
+	"github.com/rainchan/webmux/internal/wsl"
 )
 
 var version = "dev"
@@ -213,6 +215,10 @@ func loadConfig(args []string) (serverRun, error) {
 		run.TunnelSettings.Close()
 		return run, err
 	}
+	if c.Tailscale.Provider == "windows" && !wsl.Detected() {
+		run.TunnelSettings.Close()
+		return run, errors.New("tailscale.provider \"windows\" is only valid inside WSL; use \"linux\" or \"auto\"")
+	}
 	hadToken := c.Token != ""
 	if err = ensureStartupToken(&c, run.TunnelWebManaged); err != nil {
 		run.TunnelSettings.Close()
@@ -224,7 +230,7 @@ func loadConfig(args []string) (serverRun, error) {
 }
 
 func ensureStartupToken(c *config.Config, webManaged bool) error {
-	if webManaged && c.Token != "" && len(c.Token) < minTunnelTokenLength {
+	if webManaged && !c.Tailscale.Enabled() && c.Token != "" && len(c.Token) < minTunnelTokenLength {
 		return nil
 	}
 	return ensureToken(c)
@@ -235,13 +241,13 @@ func ensureStartupToken(c *config.Config, webManaged bool) error {
 // without a tunnel, and a tunnel token must not be weaker than that form.
 func ensureToken(c *config.Config) error {
 	if c.Token == "" {
-		if c.Tunnel.Enabled || !loopbackListen(c.Listen) {
+		if c.Tunnel.Enabled || c.Tailscale.Enabled() || !loopbackListen(c.Listen) {
 			c.Token = generateToken()
 		}
 		return nil
 	}
-	if c.Tunnel.Enabled && len(c.Token) < minTunnelTokenLength {
-		return fmt.Errorf("tunnel mode requires the webmux token to be at least %d characters; leave it empty to generate one, or create one with openssl rand -base64 32", minTunnelTokenLength)
+	if (c.Tunnel.Enabled || c.Tailscale.Enabled()) && len(c.Token) < minTunnelTokenLength {
+		return fmt.Errorf("tunnel and Tailscale Serve/Funnel require the webmux token to be at least %d characters; leave it empty to generate one, or create one with openssl rand -base64 32", minTunnelTokenLength)
 	}
 	return nil
 }
@@ -299,6 +305,15 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// The public origin registry always exists: it authorizes no host until
+	// an entry point reports ready, so a server without one behaves as before.
+	public := &api.PublicOrigins{}
+	tsService := tailscale.New(assemble.TailscaleOptions(c.Config))
+	tsCtl := newTailscaleController(c.Tailscale, tsService, c.StateDir, public, c.Token, c.TokenGenerated, out, slog.Default(), wsl.Detected, wsl.NetworkingMode)
+	defer tsCtl.Close()
+	if err := tsCtl.Prepare(ctx, c.Listen); err != nil {
+		return err
+	}
 	listener, err := net.Listen("tcp", c.Listen)
 	if err != nil {
 		return err
@@ -318,9 +333,6 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	codes := codeview.New(m)
 	defer codes.Close()
 	pushes := push.New(c.Push, c.StateDir, m, slog.Default(), nil)
-	// The public origin always exists: it allows no host until a tunnel
-	// reports ready, so a server without a tunnel behaves as before.
-	public := &api.PublicOrigin{}
 	local := localOrigin(listener.Addr())
 	tunnels := newTunnelController(c.Tunnel, c.TunnelSettings, local, c.Token, public, locator.Find, out, slog.Default())
 	deps := api.Deps{
@@ -328,6 +340,8 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		Files: files.New(c.DefaultCwd), Push: pushes, Launch: launches,
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
+	deps.Tailscale = tsCtl.Status
+	deps.TailscaleRefresh = tsCtl.Refresh
 	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels)
 	server := &http.Server{
 		Handler:           api.New(deps),
@@ -352,12 +366,14 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	if c.Tunnel.Enabled {
 		tunnels.startLocated(cloudflared)
 	}
+	tsCtl.Start(ctx, local)
 	select {
 	case <-ctx.Done():
 	case err = <-ended:
 	}
 	cancel() // Cancel HTTP and hijacked WebSocket handlers before joining sessions.
 	tunnels.Close()
+	tsCtl.Close()
 	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
 	pushes.Close() // Stop sending before sessions exit.

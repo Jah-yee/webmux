@@ -37,6 +37,20 @@ bell_attention = true
 # download_mirrors = ["https://ghfast.top", "https://gh-proxy.com"]
 # Guide: docs/cloudflare-tunnel.md
 
+# Tailscale Serve/Funnel: WebMux can create one exact HTTPS entry via the
+# installed Tailscale CLI. Serve is tailnet-only; Funnel is public HTTPS and
+# must be chosen explicitly. WebMux never runs `serve reset`, `funnel reset`,
+# `sudo`, or changes .wslconfig/firewall/tailnet settings. The entry is owned
+# by <state_dir>/tailscale.json and reconciled on the next start.
+# A configured root token must be at least 43 characters in either mode; an
+# empty token is generated for this process and printed in the access link.
+# [tailscale]
+# mode = "off"          # off | serve | funnel
+# port = 0              # 0 = auto (443, 8443, 10000); Funnel only 443/8443/10000
+# provider = "auto"     # auto | linux | windows; windows requires WSL mirrored
+# command = ""          # optional CLI path, e.g. /usr/bin/tailscale
+# Guide: docs/tailscale.md
+
 # Web Push attention alerts (question, approval, turn done, error, notify).
 # Phones subscribe only from the Named Tunnel origin https://<tunnel.hostname>
 # (a Quick Tunnel address changes every start); loopback works on desktops.

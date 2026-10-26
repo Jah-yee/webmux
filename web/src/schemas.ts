@@ -217,6 +217,41 @@ export const TunnelSettingsUpdateSchema = z.object({
   token: z.string().optional(),
 });
 export type TunnelSettingsUpdate = z.infer<typeof TunnelSettingsUpdateSchema>;
+export const TailscaleEntrySchema = z.object({
+  host: z.string(),
+  port: z.number().int().min(0).max(65535),
+  public: z.boolean(),
+});
+export type TailscaleEntry = z.infer<typeof TailscaleEntrySchema>;
+export const TailscaleWSLSchema = z.object({
+  networkingMode: z.enum(["mirrored", "nat", "unknown"]),
+  windowsDetected: z.boolean(),
+  windowsRunning: z.boolean(),
+  windowsDnsName: z.string().optional(),
+});
+export const TailscaleStatusSchema = z.object({
+  provider: z.enum(["linux", "wsl-native", "windows", "none"]),
+  configuredProvider: z.enum(["auto", "linux", "windows"]),
+  backendState: z.enum([
+    "running",
+    "stopped",
+    "needs-login",
+    "unavailable",
+    "unknown",
+  ]),
+  dnsName: z.string().optional(),
+  httpsReady: z.boolean(),
+  funnelAvailable: z.enum(["available", "unavailable", "unknown"]),
+  mode: z.enum(["off", "serve", "funnel"]),
+  port: z.number().int().min(0).max(65535),
+  state: TunnelInfoSchema.shape.state,
+  publicUrl: z.string().optional(),
+  blockedReason: z.string().optional(),
+  error: z.string().optional(),
+  entries: z.array(TailscaleEntrySchema),
+  wsl: TailscaleWSLSchema.optional(),
+});
+export type TailscaleStatus = z.infer<typeof TailscaleStatusSchema>;
 export const ConfigSchema = z.object({
   defaultCwd: z.string(),
   // Older servers do not send this display-only field.

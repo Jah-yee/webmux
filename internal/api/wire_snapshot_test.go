@@ -424,8 +424,8 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 	pushes := push.New(c.Push, t.TempDir(), m, slog.New(slog.NewTextHandler(io.Discard, nil)), pushService.Client().Transport)
 	launches := launch.Open(t.TempDir())
 	codes := codeview.New(m)
-	public := &PublicOrigin{}
-	if err := public.Set("https://abc.trycloudflare.com"); err != nil {
+	public := &PublicOrigins{}
+	if err := public.Set("cloudflare", "https://abc.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes})))

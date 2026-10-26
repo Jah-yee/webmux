@@ -5,11 +5,10 @@ package client
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
-	"time"
+
+	"github.com/rainchan/webmux/internal/wsl"
 )
 
 // wslVirtualInterfaces lists the Hyper-V synthetic NICs when running in
@@ -18,12 +17,11 @@ import (
 // The networking mode cannot change without restarting WSL, so it is
 // detected once per process.
 var wslVirtualInterfaces = sync.OnceValue(func() map[string]bool {
-	if _, err := os.Stat("/proc/sys/fs/binfmt_misc/WSLInterop"); err != nil {
-		if release, err := os.ReadFile("/proc/sys/kernel/osrelease"); err != nil || !strings.Contains(strings.ToLower(string(release)), "microsoft") {
-			return nil
-		}
+	if !wsl.Detected() {
+		return nil
 	}
-	if wslNetworkingMode() != "nat" {
+	mode := wsl.NetworkingMode(context.Background())
+	if mode != "nat" && mode != "unknown" {
 		return nil
 	}
 	virtual := make(map[string]bool)
@@ -36,14 +34,3 @@ var wslVirtualInterfaces = sync.OnceValue(func() map[string]bool {
 	}
 	return virtual
 })
-
-// wslNetworkingMode asks wslinfo (WSL 2.0+); an unknown mode counts as NAT.
-func wslNetworkingMode() string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "wslinfo", "--networking-mode").Output()
-	if err != nil {
-		return "nat"
-	}
-	return strings.ToLower(strings.TrimSpace(string(out)))
-}

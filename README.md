@@ -165,16 +165,17 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 服务引用当前二进制的绝对路径，请先将它放到 `~/.local/bin/webmux` 等稳定位置。`webmux service install --dry-run` 可预览服务文件，`--force` 可更新服务定义并重启。`webmux help` 查看全部命令；前台启动也可写成 `webmux serve`。
 
-| 配置项               | 默认值                                 | 说明                                           |
-| -------------------- | -------------------------------------- | ---------------------------------------------- |
-| `listen`             | `0.0.0.0:7681`                         | HTTP / WebSocket 监听地址                      |
-| `token`              | 空（首次启动自动生成；已有空值见说明） | 共享 token；首次启动自动生成并持久化           |
-| `scrollback_bytes`   | `2097152`                              | 每会话保留的原始终端字节数                     |
-| `default_cwd`        | `~`                                    | 新建会话的默认目录                             |
-| `state_dir`          | `$XDG_STATE_HOME/webmux`               | 仓库清单与启动配置目录；不保存会话或终端内容   |
-| `idle_after_seconds` | `30`                                   | 无等待特征时判定为空闲的阈值                   |
-| `prompt_patterns`    | 常见提示符 / 确认模式                  | 判定“可能在等你”的 Go 正则列表                 |
-| `allowed_origins`    | `[]`                                   | 额外允许的完整 Origin（如 HTTPS 反向代理域名） |
+| 配置项               | 默认值                                 | 说明                                                          |
+| -------------------- | -------------------------------------- | ------------------------------------------------------------- |
+| `listen`             | `0.0.0.0:7681`                         | HTTP / WebSocket 监听地址                                     |
+| `token`              | 空（首次启动自动生成；已有空值见说明） | 共享 token；首次启动自动生成并持久化                          |
+| `scrollback_bytes`   | `2097152`                              | 每会话保留的原始终端字节数                                    |
+| `default_cwd`        | `~`                                    | 新建会话的默认目录                                            |
+| `state_dir`          | `$XDG_STATE_HOME/webmux`               | 仓库清单、启动配置与 Tailscale 状态目录；不保存会话或终端内容 |
+| `idle_after_seconds` | `30`                                   | 无等待特征时判定为空闲的阈值                                  |
+| `prompt_patterns`    | 常见提示符 / 确认模式                  | 判定“可能在等你”的 Go 正则列表                                |
+| `allowed_origins`    | `[]`                                   | 额外允许的完整 Origin（如 HTTPS 反向代理域名）                |
+| `[tailscale]`        | `mode = "off"`                         | 托管 Serve/Funnel；显式 Funnel 才会公网公开                   |
 
 完整说明、systemd / launchd 服务、Tailscale 与 HTTPS 配置见 [部署指南](docs/deployment.md)。
 
@@ -186,6 +187,7 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 | [使用指南](docs/usage.md)                        | 会话、终端、草稿模式、代码工作区、worktree、移动端               |
 | [部署指南](docs/deployment.md)                   | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异 |
 | [Cloudflare 公网隧道](docs/cloudflare-tunnel.md) | Named Tunnel 的创建、token、公共主机名、验证与排错               |
+| [Tailscale Serve / Funnel](docs/tailscale.md)    | 自动 HTTPS 入口、端口、证书、WSL Windows provider 与精确移除     |
 | [架构设计](docs/architecture.md)                 | 会话模型、缓冲与回放、状态探测、并发与资源                       |
 | [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码                               |
 | [参与贡献](CONTRIBUTING.md)                      | 开发环境、测试、代码规范、OpenSpec 工作流                        |

@@ -57,6 +57,8 @@ flowchart LR
 | `internal/workspace`                          | 仓库清单持久化、Git worktree 查询 / 创建 / 删除、启动目录协调                                   |
 | `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
 | `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                      |
+| `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测       |
+| `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                              |
 | `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
 | `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R10                                                             |
@@ -68,7 +70,7 @@ flowchart LR
 | `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
 | `web/`                                        | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
 
-`cmd/webmux` 先加载配置，用 `cmd/internal/assemble` 把配置转换为 `session.Options`，再构造 `session.Manager`、启动配置、workspace、codeview、files、push 与 tunnelsettings 服务，最后以 `api.Deps` 注入 `api.New`。隧道控制器串行应用设置，撤销旧公网来源并等待旧 worker 退出后再启动新 generation；HTTP 控制器不直接访问状态文件。各模块通过构造函数显式依赖，不使用全局状态。
+`cmd/webmux` 先加载配置，用 `cmd/internal/assemble` 把配置转换为 `session.Options` 与 `tailscale.Options`，再构造 `session.Manager`、启动配置、workspace、codeview、files、push、tunnelsettings 与 tailscale 检测服务，最后以 `api.Deps` 注入 `api.New`。Tailscale 控制器在绑定监听前对账并清理旧入口，监听开始后异步应用；它与 Cloudflare 隧道控制器分别持有 `cloudflare` 与 `tailscale` 来源，互不清除。HTTP 控制器不直接访问状态文件。各模块通过构造函数显式依赖，不使用全局状态。
 
 ## 分层与架构测试
 

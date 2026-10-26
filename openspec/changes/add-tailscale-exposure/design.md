@@ -166,4 +166,4 @@ Windows 主机上的 Tailscale 是 WebMux 进程之外的全局状态，serve/fu
 - 首次尝试应用前创建 `<state_dir>/tailscale.json` 的 `pending` 记录，命令与回读成功后标记 `active`；回滚到旧版本会忽略该文件，但旧版本不会对账，可能留下 `--bg` 入口。回滚前应手工执行 `tailscale funnel --https=<port> off` 与 `tailscale serve --https=<port> off`，不要执行 `reset`。
 - WSL Windows provider 首次使用需要显式 `provider = "windows"` 且 mirrored；修改 `.wslconfig` 后 `wsl --shutdown` 会结束所有会话，文档要求先保存工作。
 - 配置校验失败或进程在清理阶段之前退出时不会进入清理阶段；若此前留下 `--bg` 入口，修复配置后下次启动会清理，或按文档手工移除。配置错误本身不应触发 Tailscale 写命令。
-- 文档、协议、配置示例、架构包表与用户故事在实现阶段同一 PR 更新；本变更只交付 OpenSpec 规划，不修改运行时代码。
+- 文档、协议、配置示例、架构包表与用户故事在同一实现 PR 更新；真实 Tailscale Serve/Funnel 与 WSL Windows 主机验收仍为手工步骤，CI 只使用 fake CLI。
