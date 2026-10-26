@@ -13,6 +13,7 @@ export function attachTouchGestures(
     fontSize: () => number;
     setFontSize: (value: number) => void;
     hasSelection: () => boolean;
+    keyboardDismissed: () => boolean;
   },
 ) {
   const terminalElement = term.element!;
@@ -31,6 +32,24 @@ export function attachTouchGestures(
   let longPress: number | undefined;
   let selecting = false;
   let selectionAnchor: { start: number; end: number } | undefined;
+  let lastTouch = -Infinity;
+  const markTouch = () => {
+    lastTouch = performance.now();
+  };
+  // Android hides the IME with the system Back button but keeps the focused
+  // editable, so the next page-consumed touch can summon the keyboard again.
+  // Drop that stale focus only after an observed dismissal; an open keyboard,
+  // a hardware keyboard and a page that never showed an IME keep their focus.
+  const releaseDismissedKeyboard = () => {
+    if (!options.keyboardDismissed()) return;
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLTextAreaElement ||
+      (active instanceof HTMLElement && active.isContentEditable)
+    )
+      active.blur();
+  };
   const cancelLongPress = () => {
     clearTimeout(longPress);
     longPress = undefined;
@@ -121,6 +140,8 @@ export function attachTouchGestures(
   };
   const pointerDown = (event: PointerEvent) => {
     if (disposed || event.pointerType === "mouse") return;
+    markTouch();
+    releaseDismissedKeyboard();
     // Suppress compatibility mousedown events that would refocus xterm after a swipe.
     event.preventDefault();
     event.stopPropagation();
@@ -207,6 +228,7 @@ export function attachTouchGestures(
   };
   const pointerUp = (event: PointerEvent) => {
     if (disposed || !pointers.has(event.pointerId)) return;
+    markTouch();
     event.stopPropagation();
     cancelLongPress();
     event.preventDefault();
@@ -222,10 +244,30 @@ export function attachTouchGestures(
     clearPointers();
   };
   const blockNativeTouch = (event: TouchEvent) => {
+    markTouch();
     event.stopPropagation();
     if (selecting) event.preventDefault();
     if (event.type === "touchmove" || event.type === "touchend")
       event.preventDefault();
+  };
+  // Some Android browsers still deliver the compatibility mousedown after a
+  // canceled touch pointerdown. Chromium marks it via sourceCapabilities;
+  // others fall back to the recent native touch. Never swallow a real mouse
+  // click, which must keep focusing xterm for hardware-keyboard users.
+  const mouseDown = (event: MouseEvent) => {
+    if (disposed || event.button !== 0) return;
+    const source = (
+      event as MouseEvent & {
+        sourceCapabilities?: { firesTouchEvents?: boolean } | null;
+      }
+    ).sourceCapabilities;
+    const touchDerived = source
+      ? source.firesTouchEvents === true
+      : performance.now() - lastTouch < 700;
+    if (!touchDerived) return;
+    releaseDismissedKeyboard();
+    event.preventDefault();
+    event.stopPropagation();
   };
   const contextMenu = (event: MouseEvent) => {
     // Native touch menus target xterm's hidden input, not its rendered buffer.
@@ -253,6 +295,7 @@ export function attachTouchGestures(
     capture: true,
     passive: true,
   });
+  parent.addEventListener("mousedown", mouseDown, true);
   parent.addEventListener("contextmenu", contextMenu);
 
   return () => {
@@ -267,6 +310,7 @@ export function attachTouchGestures(
     parent.removeEventListener("touchmove", blockNativeTouch, true);
     parent.removeEventListener("touchend", blockNativeTouch, true);
     parent.removeEventListener("touchcancel", blockNativeTouch, true);
+    parent.removeEventListener("mousedown", mouseDown, true);
     parent.removeEventListener("contextmenu", contextMenu);
   };
 }

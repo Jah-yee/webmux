@@ -18,6 +18,14 @@ const shownHeight = () =>
     page.getByRole("status", { name: "Viewport height" }).element().textContent,
   );
 
+const shownKeyboard = () =>
+  page.getByRole("status", { name: "Keyboard visibility" }).element()
+    .textContent;
+
+const shownDismissed = () =>
+  page.getByRole("status", { name: "Keyboard dismissed" }).element()
+    .textContent;
+
 // Scroll snapping waits for composition to end, but keyboard height changes
 // apply immediately: Android keyboards compose every word and can hide
 // without ending the composition.
@@ -66,4 +74,51 @@ test("unmount restores the document overflow", async () => {
   await rendered.unmount();
   expect(document.documentElement.style.overflow).toBe("clip");
   document.documentElement.style.overflow = "";
+});
+
+// Android hides the IME with Back without blurring its editable, so touch
+// handlers need to distinguish that state from an open keyboard. Browser chrome
+// and rotation must not masquerade as an IME-sized viewport shrink.
+test("keyboard visibility follows IME-sized height changes, not chrome or rotation", async () => {
+  await page.viewport(400, 700);
+  await render(Harness);
+  await expect.poll(shownKeyboard).toBe("hidden");
+  expect(await shownDismissed()).toBe("false");
+
+  await page.viewport(400, 420);
+  await expect.poll(shownKeyboard).toBe("visible");
+  expect(await shownDismissed()).toBe("false");
+  await page.viewport(400, 700);
+  await expect.poll(shownKeyboard).toBe("hidden");
+  // Android Back hides the IME but leaves focus in the editable.
+  expect(await shownDismissed()).toBe("true");
+
+  await page.viewport(400, 500);
+  await expect.poll(shownKeyboard).toBe("visible");
+  expect(await shownDismissed()).toBe("false");
+  await page.viewport(400, 700);
+  await expect.poll(shownKeyboard).toBe("hidden");
+  expect(await shownDismissed()).toBe("true");
+
+  // A browser toolbar appearing is smaller than an IME.
+  await page.viewport(400, 630);
+  await expect.poll(shownKeyboard).toBe("hidden");
+  await page.viewport(400, 700);
+
+  // Rotation and split-screen resizes change the width, so they stay unknown
+  // until a later resize gives a comparable height.
+  await page.viewport(700, 400);
+  await expect.poll(shownKeyboard).toBe("unknown");
+  await page.viewport(700, 700);
+  await expect.poll(shownKeyboard).toBe("hidden");
+
+  // Rotating while the IME is open invalidates the height baseline. Do not
+  // fabricate a dismissal from the first post-rotation height.
+  await page.viewport(700, 500);
+  await expect.poll(shownKeyboard).toBe("visible");
+  await page.viewport(400, 500);
+  await expect.poll(shownKeyboard).toBe("unknown");
+  await page.viewport(400, 800);
+  await expect.poll(shownKeyboard).toBe("hidden");
+  expect(await shownDismissed()).toBe("false");
 });

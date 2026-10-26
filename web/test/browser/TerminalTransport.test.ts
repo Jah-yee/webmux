@@ -6,6 +6,7 @@ import { render } from "vitest-browser-svelte/pure";
 import type { SubmissionProgress } from "../../src/schemas";
 import Harness from "./TerminalHarness.svelte";
 import {
+  blurAndTrackFocus,
   expectDomText,
   FixtureSocket,
   geometry,
@@ -406,6 +407,32 @@ test("claim and keyboard take control only from another controller", async () =>
   expect(document.activeElement).not.toBe(textarea);
   expect(framesOf(socket, 5)).toEqual(["", ""]);
   expect(inputText(socket)).toBe("");
+});
+
+test("keyboard button reopens the IME after Android Back keeps helper focus", async () => {
+  observeGlyphPixels(true);
+  let dismissed = false;
+  const { api } = await openTerminalApi({
+    keyboardDismissed: () => dismissed,
+  });
+  const { textarea, focused } = blurAndTrackFocus();
+  textarea.focus();
+  dismissed = true;
+  // focus() alone is a no-op on an already focused helper, so the toggle must
+  // restart focus before the next press can hide it again.
+  api.keyboard();
+  expect(document.activeElement).toBe(textarea);
+  expect(focused).toHaveBeenCalledTimes(2);
+  // If the browser still does not open the IME, the next press must remain a
+  // usable focus toggle instead of repeatedly restarting focus forever.
+  api.keyboard();
+  expect(document.activeElement).not.toBe(textarea);
+  api.keyboard();
+  expect(document.activeElement).toBe(textarea);
+  expect(focused).toHaveBeenCalledTimes(3);
+  dismissed = false;
+  api.keyboard();
+  expect(document.activeElement).not.toBe(textarea);
 });
 
 test("an invalid server frame is reported and the terminal reattaches on a fresh socket", async () => {

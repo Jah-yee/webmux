@@ -19,6 +19,7 @@
     release,
     filePaste,
     controlNotice,
+    keyboardDismissed = () => false,
   }: {
     draft: TerminalDraft;
     drafts: TerminalDrafts;
@@ -35,6 +36,9 @@
     release: () => void;
     filePaste: (event: ClipboardEvent) => boolean;
     controlNotice: () => void;
+    // True after the IME was open and then dismissed, e.g. by Android Back,
+    // while an editable may still keep focus.
+    keyboardDismissed?: () => boolean;
   } = $props();
   const submissionText = {
     saved: "已保存在本机，正在发送…",
@@ -47,6 +51,7 @@
   let textarea = $state<HTMLTextAreaElement | null>(null);
   let composing = $state(false);
   let clearOpen = $state(false);
+  let keyboardReopenAttempted = false;
 
   function remember() {
     if (textarea)
@@ -66,8 +71,22 @@
     textarea?.focus({ preventScroll: true });
   }
   export function keyboard() {
-    if (document.activeElement === textarea) textarea?.blur();
-    else focus();
+    const focused = document.activeElement === textarea;
+    if (focused && keyboardDismissed() && !keyboardReopenAttempted) {
+      // Android can hide the IME with Back while the textarea keeps focus;
+      // restart focus once so the keyboard can open again. If the browser
+      // still declines, the next press toggles normally.
+      keyboardReopenAttempted = true;
+      textarea?.blur();
+      focus();
+      return;
+    }
+    keyboardReopenAttempted = false;
+    if (focused) {
+      textarea?.blur();
+      return;
+    }
+    focus();
   }
   export function editKey(input: string) {
     if (composing || locked) return;

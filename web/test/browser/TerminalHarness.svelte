@@ -16,9 +16,13 @@
     onPaste?: () => void;
     // Exposes the hook's public API to tests that drive it directly.
     expose?: (terminal: TerminalController) => void;
+    // Simulates the IME being dismissed while the helper keeps focus.
+    keyboardDismissed?: () => boolean;
   };
   const props: Props = $props();
-  const { userInput, onPaste, expose } = untrack(() => ({ ...props }));
+  const { userInput, onPaste, expose, keyboardDismissed } = untrack(() => ({
+    ...props,
+  }));
 
   let container: HTMLDivElement;
   let copied = $state("");
@@ -56,6 +60,7 @@
     },
     () => true,
     userInput,
+    keyboardDismissed,
   );
   expose?.(terminal);
 </script>

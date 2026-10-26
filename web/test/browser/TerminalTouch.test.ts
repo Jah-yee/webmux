@@ -14,6 +14,7 @@ import {
   installTerminalFixture,
   observeGlyphPixels,
   openTerminal,
+  openTerminalApi,
   pointer,
   populateHistory,
   prompt,
@@ -288,6 +289,45 @@ test("native long press selects wide text and dragging copies multiple lines wit
   await expect
     .element(page.getByRole("status", { name: "Terminal selection" }))
     .toHaveTextContent("");
+});
+
+test("stale Android IME focus is released before touch gestures and compatibility mouse events", async () => {
+  observeGlyphPixels(true);
+  let keyboardDismissed = false;
+  const { socket } = await openTerminalApi({
+    keyboardDismissed: () => keyboardDismissed,
+  });
+  const { textarea, focused } = blurAndTrackFocus();
+  const target = host();
+  const capture = syntheticPointerCapture(target);
+  const start = gestureStart(socket);
+  textarea.focus();
+  expect(document.activeElement).toBe(textarea);
+
+  // An open or never-opened IME has no dismissal, so taps and soft-key
+  // scrolling keep focus (hardware-keyboard tablets included).
+  pointer(target, "pointerdown", 1, start);
+  expect(document.activeElement).toBe(textarea);
+  pointer(target, "pointerup", 1, start);
+
+  // System Back hides the IME but keeps the helper focused. The next touch
+  // must drop that focus before Android can resummon the keyboard.
+  keyboardDismissed = true;
+  pointer(target, "pointerdown", 2, start);
+  expect(document.activeElement).not.toBe(textarea);
+  // A leaked compatibility mousedown from the same touch must not refocus xterm.
+  target.querySelector(".xterm-screen")!.dispatchEvent(
+    new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    }),
+  );
+  expect(document.activeElement).not.toBe(textarea);
+  pointer(target, "pointerup", 2, start);
+  expect(focused).toHaveBeenCalledTimes(1);
+  capture.set.mockRestore();
+  capture.release.mockRestore();
 });
 
 test("viewing history is reported until the terminal returns to the latest output", async () => {

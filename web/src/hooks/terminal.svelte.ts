@@ -94,6 +94,7 @@ export function useTerminal(
   clipboard: TerminalClipboard,
   isVisible: () => boolean = () => true,
   userInput?: TerminalUserInput,
+  isKeyboardDismissed: () => boolean = () => false,
 ): TerminalController {
   let terminal: Terminal | undefined;
   let renderer: TerminalRenderer | undefined;
@@ -168,6 +169,7 @@ export function useTerminal(
   // buffer end and, for an observer panning a larger grid, the host does too.
   let atBottom = $state(true);
   let pasteResult = false;
+  let keyboardReopenAttempted = false;
   function safeFit() {
     const parent = getContainer();
     if (isVisible() && parent?.clientWidth > 0 && parent?.clientHeight > 0) {
@@ -287,6 +289,7 @@ export function useTerminal(
         fontSize: () => fontSize,
         setFontSize,
         hasSelection: () => Boolean(selection),
+        keyboardDismissed: isKeyboardDismissed,
       });
       safeFit();
       if (!hasTouchInput()) term.focus();
@@ -417,11 +420,26 @@ export function useTerminal(
       return pasteResult;
     },
     keyboard() {
-      if (document.activeElement === terminal?.textarea) terminal?.blur();
-      else {
+      const textarea = terminal?.textarea;
+      if (!terminal || !textarea) return;
+      const focused = document.activeElement === textarea;
+      if (focused && isKeyboardDismissed() && !keyboardReopenAttempted) {
+        // Android can hide the IME with Back while the helper keeps focus;
+        // focus() alone is then a no-op, so restart focus once to reopen it.
+        // If the browser still declines, the next press toggles normally.
+        keyboardReopenAttempted = true;
         stream.claim();
-        terminal?.focus();
+        textarea.blur();
+        terminal.focus();
+        return;
       }
+      keyboardReopenAttempted = false;
+      if (focused) {
+        terminal.blur();
+        return;
+      }
+      stream.claim();
+      terminal.focus();
     },
     clear() {
       clearFind();

@@ -205,6 +205,7 @@
     else error = "";
   }
   const viewport = useViewport();
+  const keyboardDismissed = () => hasTouchInput() && viewport.keyboardDismissed;
   const t = useTerminal(
     () => container!,
     untrack(() => id),
@@ -225,6 +226,7 @@
         insertText(text);
       },
     },
+    keyboardDismissed,
   );
   const sendUnavailable = $derived(
     t.connection === "missing"
@@ -470,6 +472,7 @@
         bind:this={composer}
         {draft}
         {drafts}
+        {keyboardDismissed}
         unavailable={sendUnavailable}
         saved={draftSaved}
         target={t.info?.title || id}
