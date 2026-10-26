@@ -17,14 +17,15 @@ var webmux = manifest{
 		"internal/wire": controller,
 
 		// Business rules, state, filesystem and processes.
-		"internal/session":        service,
-		"internal/workspace":      service,
-		"internal/launch":         service,
-		"internal/push":           service,
-		"internal/codeview":       service,
-		"internal/files":          service,
-		"internal/tunnelsettings": service,
-		"internal/tailscale":      service,
+		"internal/session":           service,
+		"internal/workspace":         service,
+		"internal/launch":            service,
+		"internal/push":              service,
+		"internal/codeview":          service,
+		"internal/files":             service,
+		"internal/tunnelsettings":    service,
+		"internal/tailscale":         service,
+		"internal/tailscalesettings": service,
 
 		// Wire contracts and infrastructure every layer may use.
 		"internal/contract":      shared,

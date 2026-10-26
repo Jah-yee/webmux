@@ -2,7 +2,8 @@
 
 WebMux 不内置 TLS。Tailscale 可以为节点自动签发浏览器信任的 HTTPS 证书：
 Serve 只在 tailnet 内可达，Funnel 会把入口公开到互联网。WebMux 可以检测
-Tailscale 状态，并按 `[tailscale]` 配置托管一个精确的 Serve/Funnel 入口。
+Tailscale 状态，并按网页设置或 `[tailscale]` 配置托管一个精确的 Serve/Funnel
+入口。
 
 ## 启用前
 
@@ -15,7 +16,24 @@ Tailscale 状态，并按 `[tailscale]` 配置托管一个精确的 Serve/Funnel
 4. WebMux 的 `listen` 必须覆盖 IPv4 回环，推荐 `127.0.0.1:7681` 或
    `0.0.0.0:7681`。`[::1]` 或只绑定特定网卡地址时，托管会失败并提示修改。
 
-## 配置
+## 网页设置
+
+推荐在“设置 → Tailscale”中选择模式（关闭、Serve、Funnel）、端口与
+provider，点击“保存并应用”。保存立即生效、无需重启，也不结束终端会话：
+WebMux 先撤销旧来源、移除不再符合新设置的本实例入口，再应用新设置；页面在
+应用期间显示“启动中”。
+
+- 网页设置保存在 `<state_dir>/tailscale-settings.json`（0600、原子替换、
+  独立锁），重启后继续生效，并优先于 TOML 的 `mode`、`port`、`provider`。
+  文件损坏、不可读或被另一实例锁住时，网页设置不可写，托管入口保持关闭。
+- 开启 Funnel 前会再次确认公网风险。登录 token 少于 43 个字符、或 `listen`
+  无法托管时，服务端拒绝开启并在页面说明原因。
+- 当前正通过该 Tailscale 地址访问时，替换入口前会提示页面可能断开。
+- “恢复配置文件设置”删除网页设置并关闭当前入口；下次启动按 TOML 决定。
+- CLI 路径 `command` 只能在 TOML 中设置。WebMux 会话内的进程不能通过本机
+  API 修改 Tailscale 设置。
+
+## 配置文件
 
 ```toml
 [tailscale]
@@ -28,7 +46,8 @@ provider = "auto" # auto | linux | windows
 - `mode = "off"` 是默认值，不创建入口，也不创建 `tailscale.json`。
 - `mode != "off"` 视为网络入口：留空 token 时生成本次进程的 256 位 token；
   显式 token 少于 43 个字符时拒绝启动。
-- 修改配置后需要重启 WebMux。设置页只读展示，不提供运行时开关。
+- 手工修改 TOML 后需要重启 WebMux；已有网页设置时，先“恢复配置文件设置”才会
+  重新采用 TOML 值。
 - 自动端口会按 443、8443、10000 选择第一个没有其他入口的端口；显式端口冲突
   直接失败，不会静默换端口。
 
@@ -74,8 +93,8 @@ tailscale serve --https=<port> off
 
 | 现象             | 处理                                                  |
 | ---------------- | ----------------------------------------------------- |
-| HTTPS 未就绪     | 在 Tailscale 管理台启用 HTTPS，重启 WebMux            |
-| 缺少 funnel 属性 | 在管理台为节点启用 Funnel，重启 WebMux                |
+| HTTPS 未就绪     | 在 Tailscale 管理台启用 HTTPS，刷新检测后重新保存     |
+| 缺少 funnel 属性 | 在管理台为节点启用 Funnel，刷新检测后重新保存         |
 | 权限不足         | Linux/macOS 执行一次 `tailscale set --operator=$USER` |
 | 端口冲突         | 换一个端口，或先手工移除冲突入口                      |
 | 入口指向死端口   | 重启 WebMux 触发对账，或按上面的命令手工移除          |

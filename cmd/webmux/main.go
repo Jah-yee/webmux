@@ -27,6 +27,7 @@ import (
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 	"github.com/rainchan/webmux/internal/tailscale"
+	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnel"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -147,6 +148,9 @@ type serverRun struct {
 	TokenGenerated   bool
 	TunnelSettings   *tunnelsettings.Service
 	TunnelWebManaged bool
+	// TailscaleSettings holds the web override of [tailscale].
+	TailscaleSettings   *tailscalesettings.Service
+	TailscaleWebManaged bool
 }
 
 func loadConfig(args []string) (serverRun, error) {
@@ -211,17 +215,23 @@ func loadConfig(args []string) (serverRun, error) {
 		c.Tunnel.Enabled = *tunnelFlag
 	}
 	run.TunnelWebManaged = webManaged && !explicit["tunnel"]
+	closeSettings := func() {
+		run.TunnelSettings.Close()
+		run.TailscaleSettings.Close()
+	}
 	if err = c.Validate(); err != nil {
 		run.TunnelSettings.Close()
 		return run, err
 	}
+	run.TailscaleSettings = tailscalesettings.Open(c.StateDir, c.Tailscale)
+	c.Tailscale, run.TailscaleWebManaged = run.TailscaleSettings.Effective()
 	if c.Tailscale.Provider == "windows" && !wsl.Detected() {
-		run.TunnelSettings.Close()
+		closeSettings()
 		return run, errors.New("tailscale.provider \"windows\" is only valid inside WSL; use \"linux\" or \"auto\"")
 	}
 	hadToken := c.Token != ""
-	if err = ensureStartupToken(&c, run.TunnelWebManaged); err != nil {
-		run.TunnelSettings.Close()
+	if err = ensureStartupToken(&c, run.TunnelWebManaged, run.TailscaleWebManaged); err != nil {
+		closeSettings()
 		return run, err
 	}
 	run.Config = c
@@ -229,8 +239,11 @@ func loadConfig(args []string) (serverRun, error) {
 	return run, nil
 }
 
-func ensureStartupToken(c *config.Config, webManaged bool) error {
-	if webManaged && !c.Tailscale.Enabled() && c.Token != "" && len(c.Token) < minTunnelTokenLength {
+// ensureStartupToken refuses a weak token only for TOML-enabled exposure.
+// Web-managed exposure keeps local access and fails closed in its controller.
+func ensureStartupToken(c *config.Config, tunnelWeb, tailscaleWeb bool) error {
+	tomlExposure := (c.Tunnel.Enabled && !tunnelWeb) || (c.Tailscale.Enabled() && !tailscaleWeb)
+	if !tomlExposure && c.Token != "" && len(c.Token) < minTunnelTokenLength {
 		return nil
 	}
 	return ensureToken(c)
@@ -269,6 +282,7 @@ func run(args []string) error {
 		return err
 	}
 	defer c.TunnelSettings.Close()
+	defer c.TailscaleSettings.Close()
 	if c.LogFile != "" {
 		if err := redirectOutput(c.LogFile); err != nil {
 			return fmt.Errorf("log file: %w", err)
@@ -294,6 +308,14 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		c.Tunnel.Enabled = false
 		slog.Warn("tunnel settings unavailable; public tunnel remains off", "error", err)
 	}
+	if c.TailscaleSettings == nil {
+		c.TailscaleSettings = tailscalesettings.Open(c.StateDir, c.Tailscale)
+		c.Tailscale, c.TailscaleWebManaged = c.TailscaleSettings.Effective()
+	}
+	defer c.TailscaleSettings.Close()
+	if err := c.TailscaleSettings.Unavailable(); err != nil {
+		slog.Warn("tailscale settings unavailable; managed Tailscale entry remains off", "error", err)
+	}
 	locator := tunnel.Locator{Explicit: c.Tunnel.Cloudflared, StateDir: c.StateDir, Mirrors: c.Tunnel.DownloadMirrors}
 	var cloudflared string
 	if c.Tunnel.Enabled && !c.TunnelWebManaged {
@@ -309,7 +331,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// an entry point reports ready, so a server without one behaves as before.
 	public := &api.PublicOrigins{}
 	tsService := tailscale.New(assemble.TailscaleOptions(c.Config))
-	tsCtl := newTailscaleController(c.Tailscale, tsService, c.StateDir, public, c.Token, c.TokenGenerated, out, slog.Default(), wsl.Detected, wsl.NetworkingMode)
+	tsCtl := newTailscaleController(c.Tailscale, c.TailscaleSettings, tsService, c.StateDir, public, c.Token, c.TokenGenerated, out, slog.Default(), wsl.Detected, wsl.NetworkingMode)
 	defer tsCtl.Close()
 	if err := tsCtl.Prepare(ctx, c.Listen); err != nil {
 		return err
@@ -340,8 +362,7 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 		Files: files.New(c.DefaultCwd), Push: pushes, Launch: launches,
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
-	deps.Tailscale = tsCtl.Status
-	deps.TailscaleRefresh = tsCtl.Refresh
+	deps.Tailscale = tsCtl
 	rt := startRuntime(ctx, c, listener.Addr(), deps, cancel, tunnels)
 	server := &http.Server{
 		Handler:           api.New(deps),

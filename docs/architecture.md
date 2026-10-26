@@ -58,6 +58,7 @@ flowchart LR
 | `internal/launch`                             | 启动配置持久化（`launch-configs.json`）、独立文件锁、校验与不可用状态                           |
 | `internal/tunnelsettings`                     | 隧道设置持久化、独立文件锁、校验与故障关闭                                                      |
 | `internal/tailscale`                          | Tailscale CLI 定位、状态/入口解析、Serve/Funnel 精确应用与移除、WSL/Windows provider 检测       |
+| `internal/tailscalesettings`                  | Tailscale 网页设置持久化、独立文件锁、校验与故障关闭                                            |
 | `internal/wsl`                                | 共享的 WSL 判定与 `wslinfo --networking-mode` 探测                                              |
 | `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
@@ -71,19 +72,19 @@ flowchart LR
 | `internal/tray/winui`, `cmd/webmux-tray`      | Windows 托盘界面、通知、剪贴板、登录启动与单实例（`//go:build windows`）                        |
 | `web/`                                        | Svelte 5 前端，构建后通过 `go:embed` 嵌入二进制                                                 |
 
-`cmd/webmux` 先加载配置，用 `cmd/internal/assemble` 把配置转换为 `session.Options` 与 `tailscale.Options`，再构造 `session.Manager`、启动配置、workspace、codeview、files、push、tunnelsettings 与 tailscale 检测服务，最后以 `api.Deps` 注入 `api.New`。Tailscale 控制器在绑定监听前对账并清理旧入口，监听开始后异步应用；它与 Cloudflare 隧道控制器分别持有 `cloudflare` 与 `tailscale` 来源，互不清除。HTTP 控制器不直接访问状态文件。各模块通过构造函数显式依赖，不使用全局状态。
+`cmd/webmux` 先加载配置，用 `cmd/internal/assemble` 把配置转换为 `session.Options` 与 `tailscale.Options`，再构造 `session.Manager`、启动配置、workspace、codeview、files、push、tunnelsettings、tailscalesettings 与 tailscale 检测服务，最后以 `api.Deps` 注入 `api.New`。Tailscale 控制器在绑定监听前对账并清理旧入口，监听开始后异步应用，网页更新时先移除不再符合新设置的本实例入口再应用；它与 Cloudflare 隧道控制器分别持有 `cloudflare` 与 `tailscale` 来源，互不清除。HTTP 控制器不直接访问状态文件。各模块通过构造函数显式依赖，不使用全局状态。
 
 ## 分层与架构测试
 
 后端分为五层，`internal/archtest` 用 `golang.org/x/tools/go/packages` 加载带类型信息的源码检查规则；违规让 `go test ./...` 失败，一次列出全部违规，每条形如 `文件:行 [Rn] 消息 — 修复提示`。规则基于类型解析，导入别名、点导入和函数值都绕不过。
 
-| 层             | 包                                                                                            | 职责                                                                               |
-| -------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 装配根         | `cmd/...`                                                                                     | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
-| Controller     | `internal/api`、`internal/hub`、`internal/wire`                                               | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
-| Service        | `session`、`workspace`、`launch`、`push`、`codeview`、`files`、`tunnelsettings`               | 业务规则、状态、文件系统与进程                                                     |
-| 共享           | `contract`、`config`、`runtime`、`statefile`、`fetch`、`pathutil`、`attentionkind`            | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
-| 服务器外客户端 | `client`、`localclient`、`attach`、`sessioncmd`、`tray/...`、`wslclient`、`tunnel`、`service` | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
+| 层             | 包                                                                                                                | 职责                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 装配根         | `cmd/...`                                                                                                         | 唯一构造 Service、把配置转换为 Service 选项并注入 Controller 的位置                |
+| Controller     | `internal/api`、`internal/hub`、`internal/wire`                                                                   | HTTP/WebSocket 传输：解析请求、调用注入的 Service 方法、映射状态码、编解码线上类型 |
+| Service        | `session`、`workspace`、`launch`、`push`、`codeview`、`files`、`tunnelsettings`、`tailscale`、`tailscalesettings` | 业务规则、状态、文件系统与进程                                                     |
+| 共享           | `contract`、`config`、`runtime`、`statefile`、`fetch`、`pathutil`、`attentionkind`                                | 线上契约与基础设施，不依赖 Service 或 Controller                                   |
+| 服务器外客户端 | `client`、`localclient`、`attach`、`sessioncmd`、`tray/...`、`wslclient`、`tunnel`、`service`                     | 只通过线上协议访问服务器，只依赖共享层和其他客户端                                 |
 
 | 规则 | 检查                                                                                                                                                                                                                                                                                          |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

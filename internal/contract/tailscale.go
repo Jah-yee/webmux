@@ -1,8 +1,8 @@
 package contract
 
-// TailscaleStatus is the credential-free view returned by GET /api/tailscale.
-// It never contains the WebMux token, another entry's proxy target, or raw
-// CLI output.
+// TailscaleStatus is the credential-free view returned by the /api/tailscale
+// routes. It never contains the WebMux token, another entry's proxy target,
+// or raw CLI output.
 type TailscaleStatus struct {
 	// Provider is the detected runtime: linux, wsl-native, windows or none.
 	Provider string `json:"provider"`
@@ -20,6 +20,16 @@ type TailscaleStatus struct {
 	Mode string `json:"mode"`
 	// Port is the configured port, 0 when automatic.
 	Port int `json:"port"`
+	// Source is config when the TOML values apply, web after a saved update.
+	Source string `json:"source"`
+	// StorageAvailable reports whether web updates can be persisted.
+	StorageAvailable bool `json:"storageAvailable"`
+	// StorageError explains an unavailable settings store.
+	StorageError string `json:"storageError,omitempty"`
+	// CanEnable reports whether this process may apply Serve or Funnel.
+	CanEnable bool `json:"canEnable"`
+	// EnableBlockedReason explains why CanEnable is false.
+	EnableBlockedReason string `json:"enableBlockedReason,omitempty"`
 	// State is off, starting, ready or failed.
 	State string `json:"state"`
 	// PublicURL is the ready HTTPS entry point.
@@ -40,6 +50,15 @@ type TailscaleEntry struct {
 	Host   string `json:"host"`
 	Port   int    `json:"port"`
 	Public bool   `json:"public"`
+}
+
+// TailscaleSettingsUpdate is the PUT /api/tailscale/settings body. Switching
+// to funnel requires ConfirmFunnel; the CLI command stays TOML-only.
+type TailscaleSettingsUpdate struct {
+	Mode          string `json:"mode"`
+	Port          int    `json:"port"`
+	Provider      string `json:"provider"`
+	ConfirmFunnel bool   `json:"confirmFunnel,omitempty"`
 }
 
 // TailscaleWSL is the WSL-specific detection result.

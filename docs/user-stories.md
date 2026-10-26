@@ -54,6 +54,8 @@
 
 本次局部核对（2026-10-26）：#144 的 Tailscale Serve/Funnel 托管对应新增 US-P01–US-P06，并更新 US-K10 的设置分区入口。fake CLI 单元、`internal/tailscale`/`internal/config`/`internal/api`/`internal/wire`/`cmd/webmux` Go race、`internal/archtest`、`go vet`、新增 Tailscale 浏览器用例、`svelte-check`、Oxlint、前端架构守卫、生产构建、格式检查与 OpenSpec 严格校验通过。真实 Tailscale Serve/Funnel、WSL Windows mirrored 主机、真机与亮暗/桌面/手机截图尚未验收；CI 不连接真实 Tailscale。
 
+本次局部核对（2026-10-26）：Tailscale 设置改为网页可编辑并立即生效，对应新增 US-P07，并更新 US-P06 的过期记录与状态文件恢复要点。Go race 全套、`go vet`、架构与文档守卫、278 个前端单元与 254 个浏览器用例、`svelte-check`、Oxlint、前端架构守卫、格式检查、Cloudflare 隧道设置 E2E（共享确认框重构）与 OpenSpec 严格校验通过。WSL2 mirrored + 真实 Windows Tailscale 上经网页与 API 验证：切换端口（8444→8445→自动 8443→8446）先移除旧入口再应用、关闭与恢复配置文件设置移除本实例入口、网页设置跨重启生效、未确认 Funnel 400、未知字段 400、异源 403、`auto` 不代管 Windows；用户自建的 443 入口始终未被修改。未在真实环境开启公网 Funnel，未做 Linux/macOS 原生节点与真机验收。145 个故事 ID 唯一，索引引用与来源路径有效。
+
 ## 阅读约定与产品边界
 
 - **使用者**：通过桌面、手机或平板浏览器使用服务器上的 Shell、CLI agent 和其他终端程序的人。
@@ -84,7 +86,7 @@
 | M    | 原生终端、CLI 与本机控制面       | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道              | US-N01–US-N08 |
 | O    | Windows/WSL 托盘管理             | US-O01–US-O11 |
-| P    | Tailscale Serve / Funnel         | US-P01–US-P06 |
+| P    | Tailscale Serve / Funnel         | US-P01–US-P07 |
 
 ## 分组文档
 

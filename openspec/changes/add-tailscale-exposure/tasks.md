@@ -67,7 +67,7 @@
 - [x] 7.1 `web/src/schemas.ts` 增加 `TailscaleStatusSchema` 与相关类型；`web/src/api.ts` 复用 Bearer、`APIError`、401 事件与 `AbortSignal`
 - [x] 7.2 `web/src/App.svelte` 增加 `/settings/tailscale` 懒加载路由；`Settings.svelte` 在“公网访问”分区增加 Tailscale 卡片与入口
 - [x] 7.3 新增 Tailscale 详情页/组件：检测状态、provider、节点 DNS、HTTPS 就绪、模式、端口、URL、错误、阻塞原因与刷新
-- [x] 7.4 明确区分 Serve（仅 tailnet）与 Funnel（公网）并显示 Funnel 风险；显示“由配置文件管理，修改后重启”
+- [x] 7.4 明确区分 Serve（仅 tailnet）与 Funnel（公网）并显示 Funnel 风险；显示配置来源（配置文件或网页设置）
 - [x] 7.5 WSL 指引：NAT 阻塞原因、mirrored 会结束会话的提示、WSL 内安装、托盘转发；Windows operator 提示
 - [x] 7.6 现有入口冲突只显示 host/port/public，不显示其他目标路径；复制 URL 与带 Token 链接复用现有剪贴板约定
 - [x] 7.7 移动端单列、键盘、可访问名称、亮暗主题与窄屏溢出；浏览器测试覆盖加载、失败、NAT、Funnel、冲突、刷新与复制
@@ -90,6 +90,14 @@
 - [x] 9.4 按 AGENTS.md 运行格式检查与 `make test` 的适用子集；确认没有真实 Tailscale/cloudflared 网络依赖
 - [x] 9.5 `openspec validate add-tailscale-exposure --strict --no-interactive` 与 `make docs-check`
 - [x] 9.6 实现 PR 附桌面/手机、亮/暗截图；说明未做真实 Windows 主机与真机验收的部分
+
+## 10. 网页修改设置
+
+- [x] 10.1 新增 `internal/tailscalesettings`：`tailscale-settings.json` 原子保存、独立锁、校验、损坏/锁冲突失败关闭（有效模式 off）、恢复配置文件设置
+- [x] 10.2 控制器支持运行期更新：取消当前应用、撤销来源、移除不再符合新设置的本实例入口后再应用；移除失败保持 `failed` 不应用新设置
+- [x] 10.3 `PUT`/`DELETE /api/tailscale/settings`：Funnel 需 `confirmFunnel`（400）、弱 Token 或监听不可托管 409、存储不可用 503；会话内进程经本机 API 403
+- [x] 10.4 设置页编辑模式/端口/provider，Funnel、恢复与替换当前入口前确认；仅在 `starting` 时轮询
+- [x] 10.5 测试：设置存储、运行期切换 Serve→Funnel→恢复的命令顺序、弱 Token 拒绝、API 状态码与本机 API 拦截、浏览器表单与确认
 
 ## 实施记录（2026-10-26）
 

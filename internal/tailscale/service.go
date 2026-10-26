@@ -28,6 +28,8 @@ type Service struct {
 	opts Options
 
 	mu       sync.Mutex
+	provider string
+	gen      uint64
 	cached   *Status
 	cachedAt time.Time
 	inflight chan struct{}
@@ -57,14 +59,33 @@ func New(opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{opts: opts}
+	return &Service{opts: opts, provider: opts.Provider}
 }
 
-// Refresh invalidates the detection cache.
+// Refresh invalidates the detection cache. A detection already running may
+// predate the caller's write, so its result is discarded as well.
 func (s *Service) Refresh() {
 	s.mu.Lock()
-	s.cached, s.cachedAt = nil, time.Time{}
+	s.gen++
+	s.cached, s.cachedAt, s.inflight = nil, time.Time{}, nil
 	s.mu.Unlock()
+}
+
+// Configure switches the configured provider for later detection, Apply and
+// ServeStatus. A detection that started under the previous provider can no
+// longer publish its cache or CLI. The caller must not run Apply concurrently.
+func (s *Service) Configure(provider string) {
+	if provider == "" {
+		provider = "auto"
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if provider == s.provider {
+		return
+	}
+	s.provider = provider
+	s.gen++
+	s.cached, s.cachedAt, s.cli, s.inflight = nil, time.Time{}, "", nil
 }
 
 // Node is one uncached probe bound to the CLI it resolved. Removing through a
@@ -115,25 +136,36 @@ func (s *Service) Detect(ctx context.Context) Status {
 			return status
 		}
 		s.mu.Unlock()
-		reason := "detection canceled"
-		if err := ctx.Err(); err != nil {
-			reason = err.Error()
+		if ctx.Err() == nil {
+			// The coalesced detection was discarded by Refresh or Configure.
+			return s.Detect(ctx)
 		}
-		return Status{Provider: ProviderNone, ConfiguredProvider: s.opts.Provider, BackendState: BackendUnknown, FunnelAvailable: FunnelUnknown, Error: reason}
+		return Status{Provider: ProviderNone, ConfiguredProvider: s.configured(), BackendState: BackendUnknown, FunnelAvailable: FunnelUnknown, Error: ctx.Err().Error()}
 	}
 	wait := make(chan struct{})
 	s.inflight = wait
+	provider, gen := s.provider, s.gen
 	s.mu.Unlock()
 
-	status, cli, _, _ := s.detect(ctx, s.opts.Provider)
+	status, cli, _, _ := s.detect(ctx, provider)
 
 	s.mu.Lock()
-	s.cli = cli
-	s.cached, s.cachedAt = &status, s.opts.Now()
-	s.inflight = nil
+	if gen == s.gen {
+		s.cli = cli
+		s.cached, s.cachedAt = &status, s.opts.Now()
+	}
+	if s.inflight == wait {
+		s.inflight = nil
+	}
 	close(wait)
 	s.mu.Unlock()
 	return status
+}
+
+func (s *Service) configured() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.provider
 }
 
 type nodeResult struct {

@@ -24,7 +24,7 @@
 **Non-Goals:**
 
 - 不实现自签名 TLS，也不把 `http://` 伪装成安全上下文。
-- 不提供网页写入、运行时开关或 Tailscale 设置的持久化；本变更只读展示，启用与切换通过 `[tailscale]` 配置和重启完成。
+- 不提供运行时之外的第二套配置入口：网页只修改 `mode`、`port`、`provider`，CLI 路径 `command` 仍只由 TOML 管理。
 - 不把 Tailscale HTTPS 加入 Web Push 来源判定；当前推送仍只接受 Cloudflare Named Tunnel 与回环，后续变更单独设计并同步托盘说明。
 - 不安装或登录 Tailscale，不修改 tailnet ACL、HTTPS 开关、节点属性、`.wslconfig`、Windows 防火墙或系统代理。
 - 不替换 Cloudflare Tunnel，不改变 cloudflared 的定位、下载、Token 或现有网页设置。
@@ -51,7 +51,7 @@ Windows CLI 解析顺序：显式 `command`；`PATH` 中的 `tailscale.exe`；�
 
 只读检测调用 `tailscale status --json`、`tailscale serve status --json`；Funnel 状态可从同一份 serve 配置的 `AllowFunnel` 读取，必要时再调用 `tailscale funnel status --json`。解析只依赖文档化字段，缺失字段不崩溃。其他 Serve 入口只展示 host、port 与是否公开，不展示目标路径或 URL 路径。
 
-### 2. 托管由 `[tailscale]` 配置驱动，网页只读
+### 2. 托管由 `[tailscale]` 配置驱动，网页设置可覆盖并立即生效
 
 新增配置：
 
@@ -121,7 +121,7 @@ Windows 主机上的 Tailscale 是 WebMux 进程之外的全局状态，serve/fu
 - WSL NAT 的具体阻塞原因与三种替代方案；Windows provider 的显式选择提示与 operator 权限提示。
 - 现有入口冲突：显示 host、port、是否公开，不显示其他目标路径；说明 WebMux 不会覆盖。
 - 检测刷新按钮；复制不含 Token 的 URL，以及复用现有剪贴板约定复制带 Token 链接（Token 来自当前浏览器，不进入 DOM 之外的持久化）。
-- 页面明确“由配置文件管理，修改后重启生效”，不提供保存、启用、关闭或恢复默认按钮；本变更不实现网页写接口。
+- 页面显示配置来源，提供模式（关闭/Serve/Funnel）、端口与 provider 的编辑、保存并应用与“恢复配置文件设置”；开启 Funnel、恢复配置文件设置与替换当前访问的入口前确认。网页设置写入 `<state_dir>/tailscale-settings.json`（0600、原子替换、独立锁），优先于 TOML；损坏或锁冲突时禁用写入并把有效模式视为 `off`。保存后控制器取消当前应用、移除不再符合新设置的本实例入口，再应用新设置；与 Cloudflare 设置页一致，恢复配置文件设置只关闭当前入口，TOML 在下次启动生效。
 
 移动端单列、键盘可操作、亮暗主题与窄屏溢出按现有前端守卫检查；新增 Zod schema，API 失败只禁用该卡片/详情，不影响终端。实现 PR 需要按 AGENTS.md 提供桌面/手机、亮/暗截图。
 
@@ -146,7 +146,7 @@ Windows 主机上的 Tailscale 是 WebMux 进程之外的全局状态，serve/fu
 
 ## Risks / Trade-offs
 
-- [配置驱动需要重启，重启会结束会话] → 这是本变更的明确边界；网页只读，未来可基于同一控制器增加运行时写入。文档提示修改配置前结束并保存工作。
+- [网页可开启公网 Funnel] → 与 Cloudflare 网页开关同等的风险模型：需要认证与 Origin、强 Token、显式风险确认；会话内进程不能经本机 API 修改。修改 TOML 仍需重启，重启会结束会话。
 - [`--bg` 入口在 WebMux 崩溃后仍指向死端口] → 启动对账是主要修复；文档给出手工检查与精确移除命令，绝不用 `reset`。窗口期内 Tailscale URL 返回 502，但不会泄露 shell。
 - [NAT 下的 WSL 用户不能直接托管 Windows Tailscale] → 这是安全与可靠性取舍；提供 mirrored、WSL 内安装和托盘转发三种替代，比猜测 localhostForwarding 更可控。
 - [Windows 状态是主机全局的] → 显式 `provider = "windows"`、只操作精确端口、状态文件与冲突失败关闭；仍无法阻止同一 Windows 用户手工修改 Tailscale，这属于主机管理边界。

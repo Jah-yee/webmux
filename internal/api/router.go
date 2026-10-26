@@ -44,10 +44,9 @@ type Deps struct {
 	// describing only the configured mode.
 	Tunnel         func() contract.TunnelStatus
 	TunnelSettings TunnelSettingsControl
-	// Tailscale reports the read-only Tailscale state; nil answers 503.
-	Tailscale func() contract.TailscaleStatus
-	// TailscaleRefresh bypasses the detection cache for ?refresh=1.
-	TailscaleRefresh func()
+	// Tailscale reports and updates the managed Tailscale entry; nil
+	// answers 503.
+	Tailscale TailscaleControl
 }
 
 type Server struct {

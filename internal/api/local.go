@@ -132,6 +132,10 @@ func NewLocal(d Deps, local Local) http.Handler {
 			failure(w, http.StatusForbidden, errors.New("processes inside a WebMux session cannot control the tunnel"))
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/api/tailscale/") && local.fromSession(r) {
+			failure(w, http.StatusForbidden, errors.New("processes inside a WebMux session cannot change Tailscale settings"))
+			return
+		}
 		routes.ServeHTTP(w, r)
 	})
 }

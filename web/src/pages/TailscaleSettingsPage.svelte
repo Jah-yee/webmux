@@ -2,20 +2,35 @@
   import { onMount } from "svelte";
   import IconCopy from "~icons/tabler/copy";
   import IconRefresh from "~icons/tabler/refresh";
+  import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import InlineNotice from "../components/InlineNotice.svelte";
   import SettingsPageHeader from "../components/SettingsPageHeader.svelte";
+  import TailscaleConfiguration from "../components/TailscaleConfiguration.svelte";
   import TunnelStateBadge from "../components/TunnelStateBadge.svelte";
-  import { api, stored } from "../api";
+  import { stored } from "../api";
   import { copyText } from "../clipboard";
-  import { TailscaleStatusSchema, type TailscaleStatus } from "../schemas";
+  import { useTailscaleSettings } from "../hooks/tailscale-settings.svelte";
+  import type { TailscaleSettingsUpdate, TailscaleStatus } from "../schemas";
 
-  let status = $state<TailscaleStatus>();
-  let loading = $state(true);
-  let error = $state("");
+  const tailscale = useTailscaleSettings();
+  const ui = tailscale.state;
+  const status = $derived(ui.view);
+  const canReset = $derived(
+    !ui.busy && !!status?.storageAvailable && status.source === "web",
+  );
   let copyNotice = $state("");
   let copyTimer: ReturnType<typeof setTimeout> | undefined;
+  let confirmOpen = $state(false);
+  let action = $state<"funnel" | "save" | "reset">();
+  let pending = $state<TailscaleSettingsUpdate>();
+  $effect(() => {
+    if (!confirmOpen) {
+      pending = undefined;
+      action = undefined;
+    }
+  });
 
   const providers = {
     linux: "Linux / macOS",
@@ -40,23 +55,14 @@
     serve: "Serve（仅 tailnet）",
     funnel: "Funnel（公网）",
   };
+  const titles = {
+    funnel: "开启公网 Funnel？",
+    save: "替换当前访问的 Tailscale 入口？",
+    reset: "恢复配置文件设置？",
+  };
   const entryAuthority = (entry: TailscaleStatus["entries"][number]) =>
     entry.port === 443 ? entry.host : `${entry.host}:${entry.port}`;
 
-  async function load(refresh = false) {
-    loading = true;
-    try {
-      status = await api(
-        refresh ? "/tailscale?refresh=1" : "/tailscale",
-        TailscaleStatusSchema,
-      );
-      error = "";
-    } catch (cause) {
-      error = (cause as Error).message;
-    } finally {
-      loading = false;
-    }
-  }
   function note(message: string) {
     copyNotice = message;
     clearTimeout(copyTimer);
@@ -78,9 +84,29 @@
         : status.publicUrl,
     );
   }
+  function confirm(next: typeof action, draft?: TailscaleSettingsUpdate) {
+    action = next;
+    pending = draft;
+    confirmOpen = true;
+  }
+  // Funnel needs an explicit risk confirmation. Changing the entry that
+  // serves this very page would cut the connection, so confirm that too.
+  function save(draft: TailscaleSettingsUpdate) {
+    if (draft.mode === "funnel" && status?.mode !== "funnel")
+      confirm("funnel", draft);
+    else if (status?.publicUrl === location.origin) confirm("save", draft);
+    else void tailscale.save(draft);
+  }
+  async function apply() {
+    const selected = action;
+    const draft = pending;
+    confirmOpen = false;
+    if (selected === "reset") await tailscale.reset();
+    else if (draft)
+      await tailscale.save({ ...draft, confirmFunnel: selected === "funnel" });
+  }
   onMount(() => {
     document.title = "WebMux · Tailscale";
-    void load();
     return () => clearTimeout(copyTimer);
   });
 </script>
@@ -93,22 +119,29 @@
         Tailscale
       </h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        只读状态。Serve 仅 tailnet 内设备可访问；Funnel 会公开到互联网。由
-        [tailscale] 配置文件管理，修改后需要重启 WebMux。
+        Serve 仅 tailnet 内设备可访问；Funnel
+        会公开到互联网。网页设置保存后立即生效并覆盖配置文件的
+        [tailscale]，无需重启。
       </p>
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <Button variant="outline" disabled={loading} onclick={() => load(true)}
+      <Button
+        variant="outline"
+        disabled={ui.loading || ui.busy}
+        onclick={() => tailscale.load(true)}
         ><IconRefresh aria-hidden="true" />刷新检测</Button
       >
-      {#if loading}<span role="status" class="text-sm text-muted-foreground"
+      {#if ui.loading}<span role="status" class="text-sm text-muted-foreground"
           >正在读取…</span
         >{/if}
+      {#if ui.notice}<span role="status" class="text-sm text-muted-foreground"
+          >{ui.notice}</span
+        >{/if}
     </div>
-    {#if error}
+    {#if ui.error}
       <InlineNotice tone="danger"
-        >{error}。Tailscale 状态读取失败不影响终端与其他设置。</InlineNotice
+        >{ui.error}。Tailscale 操作失败不影响终端与其他设置。</InlineNotice
       >
     {/if}
 
@@ -162,8 +195,8 @@
           </dl>
           {#if !status.httpsReady}
             <p class="text-sm text-muted-foreground">
-              在 Tailscale 管理台为节点启用 HTTPS 后重启
-              WebMux；证书未就绪时不会执行 Serve/Funnel。
+              在 Tailscale 管理台为节点启用 HTTPS
+              后点击“刷新检测”再保存；证书未就绪时不会执行 Serve/Funnel。
             </p>
           {/if}
         </Card.Content>
@@ -174,7 +207,7 @@
           <Card.Title>托管入口</Card.Title>
           <Card.Description
             >WebMux
-            只操作自己记录的精确端口，停止或切换时也只移除这个目标；不会调用
+            只操作自己记录的精确端口，切换或关闭时先移除这个目标再应用新设置；不会调用
             reset。</Card.Description
           >
         </Card.Header>
@@ -213,11 +246,37 @@
             </div>
           {:else}
             <p class="text-sm text-muted-foreground">
-              当前没有已就绪的公开地址。{status.mode === "off"
-                ? '在配置文件中设置 [tailscale] mode = "serve" 或 "funnel" 后重启。'
-                : "修复下方原因后重启 WebMux 会重新应用。"}
+              当前没有已就绪的地址。{status.mode === "off"
+                ? "选择 Serve 或 Funnel 并保存即可创建入口。"
+                : "修复上方原因后重新保存即可再次应用。"}
             </p>
           {/if}
+          <p class="text-sm text-muted-foreground">
+            来源：{status.source === "web"
+              ? "网页设置（覆盖配置文件）"
+              : "配置文件"}。网页保存后持久化，重启后继续生效。
+          </p>
+          {#if !status.storageAvailable}
+            <InlineNotice tone="danger"
+              >网页设置不可用：{status.storageError}</InlineNotice
+            >
+          {:else if !status.canEnable}
+            <InlineNotice tone="warning"
+              >无法开启 Serve/Funnel：{status.enableBlockedReason}</InlineNotice
+            >
+          {/if}
+          {#key ui.editVersion}
+            <TailscaleConfiguration
+              current={status}
+              disabled={ui.busy || !status.storageAvailable}
+              onsave={save}
+            />
+          {/key}
+          <Button
+            variant="outline"
+            disabled={!canReset}
+            onclick={() => confirm("reset")}>恢复配置文件设置</Button
+          >
         </Card.Content>
       </Card.Root>
 
@@ -254,8 +313,8 @@
             {/if}
             {#if status.configuredProvider !== "windows" && status.wsl.windowsDetected}
               <p class="text-muted-foreground">
-                要托管 Windows 节点，请显式设置 provider = "windows"；auto
-                只检测，不会修改 Windows 全局配置。
+                要托管 Windows 节点，请在上方把 Provider 选为“Windows
+                主机”；自动只检测，不会修改 Windows 全局配置。
               </p>
             {/if}
             {#if status.configuredProvider === "windows"}
@@ -303,3 +362,20 @@
     {/if}
   </main>
 </div>
+
+<ConfirmDialog
+  bind:open={confirmOpen}
+  title={action ? titles[action] : "确认操作"}
+  onconfirm={apply}
+>
+  {#if action === "funnel"}
+    Funnel 会把 WebMux 公开到互联网：任何获得地址和 WebMux Token
+    的人都能以服务用户身份执行命令。设置会保存，服务重启后仍保持公开。
+  {:else if action === "reset"}
+    删除网页设置并关闭当前 Tailscale 入口；下次启动按 config.toml 的 [tailscale]
+    决定是否创建入口。
+  {:else}
+    你正在通过这个 Tailscale 地址访问
+    WebMux。应用新设置会先移除该入口，当前页面可能断开，需改用新地址或本地地址访问。
+  {/if}
+</ConfirmDialog>

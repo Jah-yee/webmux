@@ -244,6 +244,11 @@ export const TailscaleStatusSchema = z.object({
   funnelAvailable: z.enum(["available", "unavailable", "unknown"]),
   mode: z.enum(["off", "serve", "funnel"]),
   port: z.number().int().min(0).max(65535),
+  source: z.enum(["config", "web"]),
+  storageAvailable: z.boolean(),
+  storageError: z.string().optional(),
+  canEnable: z.boolean(),
+  enableBlockedReason: z.string().optional(),
   state: TunnelInfoSchema.shape.state,
   publicUrl: z.string().optional(),
   blockedReason: z.string().optional(),
@@ -252,6 +257,25 @@ export const TailscaleStatusSchema = z.object({
   wsl: TailscaleWSLSchema.optional(),
 });
 export type TailscaleStatus = z.infer<typeof TailscaleStatusSchema>;
+export const TailscaleFunnelPorts = [443, 8443, 10000] as const;
+export const TailscaleSettingsUpdateSchema = z
+  .object({
+    mode: TailscaleStatusSchema.shape.mode,
+    port: TailscaleStatusSchema.shape.port,
+    provider: TailscaleStatusSchema.shape.configuredProvider,
+    confirmFunnel: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (draft) =>
+      draft.mode !== "funnel" ||
+      draft.port === 0 ||
+      (TailscaleFunnelPorts as readonly number[]).includes(draft.port),
+    { message: "Funnel 只支持自动、443、8443 或 10000 端口" },
+  );
+export type TailscaleSettingsUpdate = z.infer<
+  typeof TailscaleSettingsUpdateSchema
+>;
 export const ConfigSchema = z.object({
   defaultCwd: z.string(),
   // Older servers do not send this display-only field.

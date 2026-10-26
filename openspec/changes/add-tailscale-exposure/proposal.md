@@ -13,7 +13,8 @@ WSL 中的情况更特殊：按 Tailscale 官方建议，通常只在 Windows �
 - 来源授权：把单值的 `api.PublicOrigin` 扩展为可按来源注册多个 HTTPS origin 的注册表，支持 443 的无端口 authority 与任意非 443 端口的带端口 authority；Host 必须精确匹配 authority，Origin 必须精确匹配对应 HTTPS origin。Tailscale 托管来源与 Cloudflare Named/Quick 可并存，互不清除；托管模式下无需手工写 `allowed_origins`，手工部署仍支持。
 - WSL 特殊处理：检测 WSL 与 `wslinfo --networking-mode`；Windows 上的 Tailscale 必须通过显式 `provider = "windows"` 才允许修改，`auto` 只检测不代管 Windows；托管要求 mirrored 网络模式，NAT 时失败关闭并给出 mirrored、WSL 内安装 Tailscale 或托盘转发三种替代；Windows 节点 DNS 名用于 URL/Host/Origin，权限不足时提示在 Windows 管理员终端设置 operator，不尝试 `sudo` 或自动提权。Windows 的 serve 状态跨 WSL 重启保留，按状态文件对账。
 - 安全与失败关闭：`[tailscale]` 非法值在启动时失败；运行期缺少 CLI、未登录、证书未就绪、端口冲突、权限不足或 Funnel 前置条件不满足时只把 Tailscale 状态标为 `failed`，本地 HTTP、已有会话和其他服务继续运行。唯一的例外是本实例遗留入口无法清理：此时 MUST 拒绝启动，避免旧入口在新进程开始监听后继续暴露。不自动重试，不自动 sudo，不修改 `.wslconfig` 或 Windows 防火墙，不调用任何 `reset`。
-- 不在本次范围：自签名 TLS；网页写入/切换 Tailscale 设置（仍由 TOML 管理，修改需重启）；Tailscale 作为推送来源（当前仍按 Cloudflare Named Tunnel 与回环判定，后续变更单独设计并同步托盘说明）；PTY、回放、会话生命周期、Cloudflare Tunnel 现有行为。
+- 网页设置：`/settings/tailscale` 可修改 `mode`、`port`、`provider` 并立即生效，持久化后优先于 TOML；开启 Funnel 需要风险确认，`command` 仍只由 TOML 管理。
+- 不在本次范围：自签名 TLS；Tailscale 作为推送来源（当前仍按 Cloudflare Named Tunnel 与回环判定，后续变更单独设计并同步托盘说明）；PTY、回放、会话生命周期、Cloudflare Tunnel 现有行为。
 
 ## Capabilities
 

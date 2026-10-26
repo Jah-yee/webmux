@@ -37,7 +37,7 @@
     <Card.Title>Tailscale（Serve / Funnel）</Card.Title>
     <Card.Description
       >使用 Tailscale 自动签发的 HTTPS 证书。Serve 仅 tailnet
-      内设备可访问；Funnel 会公开到互联网。由配置文件管理，修改后需重启。</Card.Description
+      内设备可访问；Funnel 会公开到互联网。可在网页修改，保存后立即生效。</Card.Description
     >
   </Card.Header>
   <Card.Content class="space-y-4">
@@ -59,12 +59,12 @@
         </p>
       {:else}
         <p class="text-sm text-muted-foreground">
-          尚未启用；在配置文件的 [tailscale] 中设置 mode 后重启。
+          尚未启用；进入 Tailscale 设置选择 Serve 或 Funnel。
         </p>
       {/if}
     {:else}
       <p class="text-sm text-muted-foreground">正在读取 Tailscale 状态…</p>
     {/if}
-    <Button href="/settings/tailscale" variant="outline">查看 Tailscale</Button>
+    <Button href="/settings/tailscale" variant="outline">管理 Tailscale</Button>
   </Card.Content>
 </Card.Root>

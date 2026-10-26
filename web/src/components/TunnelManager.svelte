@@ -4,7 +4,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import * as Card from "$lib/components/ui/card";
   import InlineNotice from "./InlineNotice.svelte";
   import TunnelStateBadge from "./TunnelStateBadge.svelte";
@@ -240,32 +240,22 @@
   >
 </div>
 
-<AlertDialog.Root bind:open={confirmOpen}>
-  <AlertDialog.Content>
-    <AlertDialog.Header>
-      <AlertDialog.Title
-        >{action ? titles[action] : "确认操作"}</AlertDialog.Title
-      >
-      <AlertDialog.Description>
-        {#if action === "enable"}
-          任何获得地址和 WebMux Token
-          的人都能以服务用户身份执行命令。开启状态会保存，服务重启后将自动恢复公网访问。
-        {:else if action === "reset"}
-          删除网页设置并停止当前隧道；下次启动按 config.toml
-          的开关决定是否公开。已保存的网页隧道凭据会被删除。
-        {:else if action === "save"}
-          将停止旧 cloudflared 并按新配置启动，公网连接会短暂中断。
-        {:else}
-          撤销公网授权并停止 cloudflared，本机与 VPN
-          访问仍可用，终端会话继续运行。
-        {/if}
-        {#if publicPage && action !== "enable"}应用后当前公网页面会断开，请确保仍可通过本机、VPN
-          或新地址访问。{/if}
-      </AlertDialog.Description>
-    </AlertDialog.Header>
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel>取消</AlertDialog.Cancel>
-      <AlertDialog.Action onclick={apply}>确认</AlertDialog.Action>
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
+<ConfirmDialog
+  bind:open={confirmOpen}
+  title={action ? titles[action] : "确认操作"}
+  onconfirm={apply}
+>
+  {#if action === "enable"}
+    任何获得地址和 WebMux Token
+    的人都能以服务用户身份执行命令。开启状态会保存，服务重启后将自动恢复公网访问。
+  {:else if action === "reset"}
+    删除网页设置并停止当前隧道；下次启动按 config.toml
+    的开关决定是否公开。已保存的网页隧道凭据会被删除。
+  {:else if action === "save"}
+    将停止旧 cloudflared 并按新配置启动，公网连接会短暂中断。
+  {:else}
+    撤销公网授权并停止 cloudflared，本机与 VPN 访问仍可用，终端会话继续运行。
+  {/if}
+  {#if publicPage && action !== "enable"}应用后当前公网页面会断开，请确保仍可通过本机、VPN
+    或新地址访问。{/if}
+</ConfirmDialog>

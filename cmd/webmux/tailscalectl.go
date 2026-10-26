@@ -21,6 +21,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/statefile"
 	"github.com/rainchan/webmux/internal/tailscale"
+	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/wire"
 )
 
@@ -44,8 +45,8 @@ type tailscaleState struct {
 }
 
 type tailscaleController struct {
-	cfg            config.TailscaleConfig
 	svc            *tailscale.Service
+	store          *tailscalesettings.Service
 	public         *api.PublicOrigins
 	dir            string
 	path           string
@@ -57,32 +58,128 @@ type tailscaleController struct {
 	isWSL          func() bool
 	networkingMode func(context.Context) string
 
-	mu         sync.Mutex
-	state      string
-	url        string
-	reason     string
-	blocked    string
-	record     *tailscaleState
-	storageErr error
-	lock       *os.File
-	localPort  int
-	closed     bool
-	cancel     context.CancelFunc
-	done       chan struct{}
+	// opMu serializes settings updates, resets and Close.
+	opMu sync.Mutex
+
+	mu            sync.Mutex
+	cfg           config.TailscaleConfig
+	web           bool
+	state         string
+	url           string
+	reason        string
+	blocked       string
+	listenBlocked string
+	record        *tailscaleState
+	storageErr    error
+	lock          *os.File
+	localPort     int
+	closed        bool
+	baseCtx       context.Context
+	cancel        context.CancelFunc
+	done          chan struct{}
 }
 
-func newTailscaleController(cfg config.TailscaleConfig, svc *tailscale.Service, stateDir string, public *api.PublicOrigins, token string, tokenGenerated bool, out io.Writer, logger *slog.Logger, isWSL func() bool, networkingMode func(context.Context) string) *tailscaleController {
+// newTailscaleController takes the effective settings from store; a nil store
+// keeps cfg and rejects web updates.
+func newTailscaleController(cfg config.TailscaleConfig, store *tailscalesettings.Service, svc *tailscale.Service, stateDir string, public *api.PublicOrigins, token string, tokenGenerated bool, out io.Writer, logger *slog.Logger, isWSL func() bool, networkingMode func(context.Context) string) *tailscaleController {
+	web := false
+	if store != nil {
+		cfg, web = store.Effective()
+	}
 	state := contract.TailscaleOff
 	if cfg.Enabled() {
 		state = contract.TailscaleStarting
 	}
 	return &tailscaleController{
-		cfg: cfg, svc: svc, public: public, dir: stateDir,
+		cfg: cfg, web: web, store: store, svc: svc, public: public, dir: stateDir,
 		path: filepath.Join(stateDir, tailscaleStateFile), lockPath: filepath.Join(stateDir, tailscaleLockFile),
 		token: token, tokenGenerated: tokenGenerated, out: out, logger: logger,
 		isWSL: isWSL, networkingMode: networkingMode,
 		state: state,
 	}
+}
+
+// enableErrorLocked reports why this process may not publish an entry.
+func (tc *tailscaleController) enableErrorLocked() error {
+	if len(tc.token) < minTunnelTokenLength {
+		return fmt.Errorf("%w: Tailscale Serve/Funnel requires a WebMux token of at least %d characters; run `webmux config init` or set a strong token, then restart WebMux", tailscalesettings.ErrEnableBlocked, minTunnelTokenLength)
+	}
+	if tc.listenBlocked != "" {
+		return fmt.Errorf("%w: %s", tailscalesettings.ErrEnableBlocked, tc.listenBlocked)
+	}
+	return nil
+}
+
+// UpdateSettings validates, persists and applies a web update. The response
+// reports the new intent; removal and apply run on the controller worker.
+func (tc *tailscaleController) UpdateSettings(in contract.TailscaleSettingsUpdate) (contract.TailscaleStatus, error) {
+	tc.opMu.Lock()
+	defer tc.opMu.Unlock()
+	if err := tc.updateSettings(in); err != nil {
+		return tc.Status(), err
+	}
+	return tc.Status(), nil
+}
+
+func (tc *tailscaleController) updateSettings(in contract.TailscaleSettingsUpdate) error {
+	if err := tc.store.Unavailable(); err != nil {
+		return err
+	}
+	tc.mu.Lock()
+	current, closed := tc.cfg, tc.closed
+	enableErr := tc.enableErrorLocked()
+	tc.mu.Unlock()
+	if closed {
+		return errors.New("WebMux is shutting down")
+	}
+	next, err := tailscalesettings.Prepare(current, in.Mode, in.Port, in.Provider)
+	if err != nil {
+		return err
+	}
+	if next.Provider == "windows" && !tc.isWSL() {
+		return fmt.Errorf("%w: provider \"windows\" is only valid inside WSL", tailscalesettings.ErrInvalid)
+	}
+	if next.Mode == config.TailscaleFunnel && current.Mode != config.TailscaleFunnel && !in.ConfirmFunnel {
+		return tailscalesettings.ErrFunnelUnconfirmed
+	}
+	if next.Enabled() && enableErr != nil {
+		return enableErr
+	}
+	if err := tc.store.Save(next); err != nil {
+		return err
+	}
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+	unchanged := next == current && tc.state != contract.TailscaleFailed
+	tc.cfg, tc.web = next, true
+	if !unchanged {
+		tc.launchLocked()
+	}
+	return nil
+}
+
+// ResetSettings removes the web override. Like the Cloudflare tunnel, a
+// reset never exposes this process: the entry closes now and the TOML values
+// apply on the next start.
+func (tc *tailscaleController) ResetSettings() (contract.TailscaleStatus, error) {
+	tc.opMu.Lock()
+	defer tc.opMu.Unlock()
+	tc.mu.Lock()
+	closed := tc.closed
+	tc.mu.Unlock()
+	if closed {
+		return tc.Status(), errors.New("WebMux is shutting down")
+	}
+	next, err := tc.store.Reset()
+	if err != nil {
+		return tc.Status(), err
+	}
+	next.Mode = config.TailscaleOff
+	tc.mu.Lock()
+	tc.cfg, tc.web = next, false
+	tc.launchLocked()
+	tc.mu.Unlock()
+	return tc.Status(), nil
 }
 
 // Prepare reconciles the previous entry point before the listener binds. It
@@ -126,32 +223,13 @@ func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error
 		return tc.removeRecord(ctx, record)
 	}
 	removedOwned := false
-	if record != nil {
-		changed := record.Mode != tc.cfg.Mode
-		if tc.cfg.Port == 0 {
-			// Automatic selection cannot keep a previously explicit custom
-			// port; remove that exact entry before choosing a candidate.
-			changed = changed || !autoCandidate(record.Port)
-		} else {
-			changed = changed || record.Port != tc.cfg.Port
+	if record != nil && recordStale(record, tc.cfg, target, ok) {
+		if err := tc.removeRecord(ctx, record); err != nil {
+			return err
 		}
-		if !ok || record.Target != target {
-			changed = true
-		}
-		// An explicit provider change must close the old entry through the
-		// recorded provider before applying on the new one. "auto" never
-		// rewrites ownership because detection may legitimately change.
-		if tc.cfg.Provider != "auto" && providerFamily(record.Provider) != tc.cfg.Provider {
-			changed = true
-		}
-		if changed {
-			if err := tc.removeRecord(ctx, record); err != nil {
-				return err
-			}
-			tc.record = nil
-			record = nil
-			removedOwned = true
-		}
+		tc.record = nil
+		record = nil
+		removedOwned = true
 	}
 	if record == nil && ok && !removedOwned {
 		if tc.cfg.Port != 0 {
@@ -163,6 +241,31 @@ func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error
 		}
 	}
 	return nil
+}
+
+// recordStale reports whether cfg no longer keeps the recorded entry, so the
+// exact recorded target must be closed before cfg applies.
+func recordStale(record *tailscaleState, cfg config.TailscaleConfig, target string, targetOK bool) bool {
+	if !cfg.Enabled() || record.Mode != cfg.Mode || !targetOK || record.Target != target {
+		return true
+	}
+	if cfg.Port == 0 {
+		// Automatic selection cannot keep a previously explicit custom
+		// port; remove that exact entry before choosing a candidate.
+		if !autoCandidate(record.Port) {
+			return true
+		}
+	} else if record.Port != cfg.Port {
+		return true
+	}
+	// An explicit provider change closes the old entry through the recorded
+	// provider first. "auto" keeps a native record because detection may
+	// legitimately change, but never keeps a Windows record: auto does not
+	// manage the Windows node.
+	if cfg.Provider == "auto" {
+		return record.Provider == tailscale.ProviderWindows
+	}
+	return providerFamily(record.Provider) != cfg.Provider
 }
 
 func (tc *tailscaleController) openLock() error {
@@ -313,52 +416,137 @@ func (tc *tailscaleController) entryPointsTo(ctx context.Context, target string)
 	return false
 }
 
-// Start applies the configured entry after the listener is bound.
+// Start records the bound listener and applies the configured entry. Web
+// updates later reuse the same listener facts.
 func (tc *tailscaleController) Start(ctx context.Context, local string) {
 	tc.mu.Lock()
-	if tc.closed || !tc.cfg.Enabled() {
+	if tc.closed {
 		tc.mu.Unlock()
 		return
 	}
-	if tc.storageErr != nil {
-		tc.state, tc.reason = contract.TailscaleFailed, tc.storageErr.Error()
-		tc.mu.Unlock()
-		return
-	}
+	tc.baseCtx = ctx
 	port, ok := localPort(local)
-	if !ok {
-		tc.blocked = "托管 Tailscale 需要监听 127.0.0.1 或 0.0.0.0；请把 listen 改为 127.0.0.1:<port> 或 0.0.0.0:<port>"
-		tc.state = contract.TailscaleFailed
-		tc.reason = tc.blocked
-		tc.mu.Unlock()
-		return
+	if ok {
+		tc.localPort = port
+	} else {
+		tc.listenBlocked = "托管 Tailscale 需要监听 127.0.0.1 或 0.0.0.0；请把 listen 改为 127.0.0.1:<port> 或 0.0.0.0:<port>"
 	}
-	tc.localPort = port
-
 	tc.mu.Unlock()
-	probe, cancelProbe := context.WithTimeout(ctx, time.Second)
-	conn, err := (&net.Dialer{}).DialContext(probe, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
-	cancelProbe()
-	if err != nil {
-		tc.mu.Lock()
-		tc.blocked = "127.0.0.1 无法访问当前监听端口；托管 Tailscale 需要 IPv4 回环可达"
-		tc.state = contract.TailscaleFailed
-		tc.reason = tc.blocked
-		tc.mu.Unlock()
-		return
+	if ok {
+		probe, cancelProbe := context.WithTimeout(ctx, time.Second)
+		conn, err := (&net.Dialer{}).DialContext(probe, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		cancelProbe()
+		if err != nil {
+			tc.mu.Lock()
+			tc.listenBlocked = "127.0.0.1 无法访问当前监听端口；托管 Tailscale 需要 IPv4 回环可达"
+			tc.mu.Unlock()
+		} else {
+			_ = conn.Close()
+		}
 	}
-	_ = conn.Close()
 	tc.mu.Lock()
-	runCtx, cancel := context.WithCancel(ctx)
-	tc.cancel = cancel
-	done := make(chan struct{})
-	tc.done = done
-	tc.mu.Unlock()
+	defer tc.mu.Unlock()
+	if tc.closed || !tc.cfg.Enabled() {
+		return
+	}
+	tc.launchLocked()
+}
 
+// launchLocked supersedes the running worker with one for tc.cfg. The new
+// worker joins its predecessor, revokes any origin it may have published,
+// closes the recorded entry when tc.cfg no longer keeps it, and only then
+// applies tc.cfg. Callers hold tc.mu; the request never waits for the CLI.
+func (tc *tailscaleController) launchLocked() {
+	if tc.cancel != nil {
+		tc.cancel()
+	}
+	previous := tc.done
+	base := tc.baseCtx
+	if base == nil {
+		base = context.Background()
+	}
+	ctx, cancel := context.WithCancel(base)
+	done := make(chan struct{})
+	tc.cancel, tc.done = cancel, done
+	cfg := tc.cfg
+	tc.resetStateLocked(cfg)
 	go func() {
 		defer close(done)
-		tc.apply(runCtx)
+		if previous != nil {
+			<-previous
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		tc.mu.Lock()
+		tc.resetStateLocked(cfg)
+		tc.mu.Unlock()
+		if !tc.reconcile(cfg) {
+			return
+		}
+		tc.svc.Configure(cfg.Provider)
+		if !cfg.Enabled() {
+			tc.mu.Lock()
+			if ctx.Err() == nil {
+				tc.state = contract.TailscaleOff
+			}
+			tc.mu.Unlock()
+			return
+		}
+		if err := tc.openLock(); err != nil {
+			tc.mu.Lock()
+			tc.storageErr = err
+			tc.mu.Unlock()
+		}
+		tc.mu.Lock()
+		storageErr, blocked := tc.storageErr, tc.listenBlocked
+		if storageErr != nil {
+			tc.failLocked(storageErr.Error(), false)
+		} else if blocked != "" {
+			tc.blockLocked(blocked)
+		}
+		tc.mu.Unlock()
+		if storageErr == nil && blocked == "" {
+			tc.apply(ctx)
+		}
 	}()
+}
+
+// resetStateLocked revokes the origin and reports the intent of cfg. Closing
+// a recorded entry is still work in progress, so it reports starting until
+// the worker has removed it.
+func (tc *tailscaleController) resetStateLocked(cfg config.TailscaleConfig) {
+	tc.public.Clear("tailscale")
+	tc.state, tc.url, tc.reason, tc.blocked = contract.TailscaleOff, "", "", ""
+	if cfg.Enabled() || tc.record != nil {
+		tc.state = contract.TailscaleStarting
+	}
+}
+
+// reconcile closes the recorded entry when cfg no longer keeps it. A failed
+// removal keeps the record for a later attempt and leaves cfg unapplied.
+func (tc *tailscaleController) reconcile(cfg config.TailscaleConfig) bool {
+	tc.mu.Lock()
+	record, port := tc.record, tc.localPort
+	tc.mu.Unlock()
+	if record == nil {
+		return true
+	}
+	target := fmt.Sprintf("http://127.0.0.1:%d", port)
+	if !recordStale(record, cfg, target, port != 0) {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := tc.removeVerified(ctx, record); err != nil {
+		tc.fail(fmt.Errorf("未能关闭上一个 Tailscale 入口，新设置尚未应用：%s", err.Error()), true)
+		return false
+	}
+	tc.deleteRecord()
+	tc.clearRecord()
+	// Entries in the cached detection predate the removal.
+	tc.svc.Refresh()
+	return true
 }
 
 func (tc *tailscaleController) apply(ctx context.Context) {
@@ -419,7 +607,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 		if rec != nil && rec.Mode == cfg.Mode && rec.Target == target && autoCandidate(rec.Port) {
 			if info, exists := serve.Lookup(status.DNSName, rec.Port); exists {
 				if tc.canReuse(info, target, rec.Port, status.DNSName, cfg.Mode) {
-					tc.ready(status, rec.Port, target, false)
+					tc.ready(ctx, status, rec.Port, target, false)
 					return
 				}
 				tc.clearRecord()
@@ -438,7 +626,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 	}
 	if info, exists := serve.Lookup(status.DNSName, port); exists {
 		if tc.canReuse(info, target, port, status.DNSName, cfg.Mode) {
-			tc.ready(status, port, target, false)
+			tc.ready(ctx, status, port, target, false)
 			return
 		}
 		tc.clearRecord()
@@ -473,7 +661,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 		tc.cleanupFailed(ctx, record, errors.New("Tailscale 命令已结束，但回读的入口与预期不符"))
 		return
 	}
-	tc.ready(status, port, target, true)
+	tc.ready(ctx, status, port, target, true)
 }
 
 func (tc *tailscaleController) canReuse(info tailscale.HandlerInfo, target string, port int, dns, mode string) bool {
@@ -489,13 +677,23 @@ func (tc *tailscaleController) canReuse(info tailscale.HandlerInfo, target strin
 	return info.Public == (mode == config.TailscaleFunnel)
 }
 
-func (tc *tailscaleController) ready(status tailscale.Status, port int, target string, announce bool) {
+// ready publishes the origin only while ctx is current: launchLocked cancels
+// a superseded worker under tc.mu, so a stale apply cannot authorize its URL.
+func (tc *tailscaleController) ready(ctx context.Context, status tailscale.Status, port int, target string, announce bool) {
+	// Entries in the cached detection predate the apply; refresh before the
+	// ready state ends the page's polling.
+	tc.svc.Refresh()
 	url := tailscale.PublicURL(status.DNSName, port)
+	tc.mu.Lock()
+	if ctx.Err() != nil {
+		tc.mu.Unlock()
+		return
+	}
 	if err := tc.public.Set("tailscale", url); err != nil {
+		tc.mu.Unlock()
 		tc.fail(fmt.Errorf("无法登记 Tailscale 来源: %w", err), true)
 		return
 	}
-	tc.mu.Lock()
 	tc.state, tc.url, tc.reason = contract.TailscaleReady, url, ""
 	var persist *tailscaleState
 	if record := tc.record; record != nil && record.Status != "active" {
@@ -541,8 +739,8 @@ func (tc *tailscaleController) fail(err error, revoke bool) {
 	if revoke {
 		tc.public.Clear("tailscale")
 	}
-	reason := tailscaleReason(err, tc.cfg.Provider)
 	tc.mu.Lock()
+	reason := tailscaleReason(err, tc.cfg.Provider)
 	tc.state, tc.url, tc.reason = contract.TailscaleFailed, "", reason
 	tc.mu.Unlock()
 	tc.logger.Warn("tailscale entry failed; local HTTP continues", "error", reason)
@@ -567,6 +765,8 @@ func (tc *tailscaleController) blockLocked(reason string) {
 }
 
 func (tc *tailscaleController) Close() {
+	tc.opMu.Lock()
+	defer tc.opMu.Unlock()
 	tc.mu.Lock()
 	if tc.closed {
 		tc.mu.Unlock()
@@ -636,11 +836,19 @@ func (tc *tailscaleController) Status() contract.TailscaleStatus {
 	if out.State == "" {
 		out.State = contract.TailscaleOff
 	}
-	if !tc.cfg.Enabled() {
-		out.State = contract.TailscaleOff
-		out.PublicURL = ""
+	out.Source = "config"
+	if tc.web {
+		out.Source = "web"
 	}
-	if tc.storageErr != nil {
+	out.CanEnable, out.StorageAvailable = true, true
+	if err := tc.enableErrorLocked(); err != nil {
+		out.CanEnable, out.EnableBlockedReason = false, err.Error()
+	}
+	if err := tc.store.Unavailable(); err != nil {
+		out.StorageAvailable, out.StorageError = false, err.Error()
+		out.CanEnable, out.EnableBlockedReason = false, err.Error()
+	}
+	if tc.storageErr != nil && tc.cfg.Enabled() {
 		out.Error = tc.storageErr.Error()
 		out.State = contract.TailscaleFailed
 	}

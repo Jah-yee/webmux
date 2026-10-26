@@ -11,6 +11,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/workspace"
 )
@@ -160,4 +161,16 @@ func tunnelFailure(w http.ResponseWriter, err error) {
 		message = "tunnel settings operation failed"
 	}
 	reply(w, status, contract.TunnelSettingsError{Error: message, NotPersisted: errors.Is(err, tunnelsettings.ErrNotPersisted)})
+}
+
+// tailscaleStatus maps settings errors; a shutdown or other refusal is 409.
+func tailscaleStatus(err error) int {
+	switch {
+	case errors.Is(err, tailscalesettings.ErrInvalid), errors.Is(err, tailscalesettings.ErrFunnelUnconfirmed):
+		return http.StatusBadRequest
+	case errors.Is(err, tailscalesettings.ErrUnavailable):
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusConflict
+	}
 }

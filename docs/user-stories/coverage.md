@@ -71,6 +71,7 @@
 | Tailscale Serve/Funnel 配置、回读确认、精确移除与公网风险                  | US-P02–US-P03                                       |
 | WSL NAT 阻塞、Windows provider 选择与 operator 提示                        | US-P04–US-P05                                       |
 | Tailscale 所有权、启动对账、失败关闭与来源并存                             | US-P06                                              |
+| Tailscale 网页设置、立即生效、Funnel 确认与恢复配置文件设置                | US-P07                                              |
 
 ## 后续维护
 

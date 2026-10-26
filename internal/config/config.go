@@ -58,6 +58,20 @@ func (t TailscaleConfig) Enabled() bool {
 	return t.Mode == TailscaleServe || t.Mode == TailscaleFunnel
 }
 
+// ValidateTailscaleSettings checks the web-editable [tailscale] fields and
+// returns them normalized; Command always stays the TOML value.
+func ValidateTailscaleSettings(current TailscaleConfig, mode string, port int, provider string) (TailscaleConfig, error) {
+	if mode == "" {
+		return TailscaleConfig{}, errors.New("tailscale.mode is required")
+	}
+	next := TailscaleConfig{Mode: mode, Port: port, Provider: provider}
+	if err := next.validate(); err != nil {
+		return TailscaleConfig{}, err
+	}
+	next.Command = current.Command
+	return next, nil
+}
+
 func (t *TailscaleConfig) validate() error {
 	switch t.Mode {
 	case "", TailscaleOff, TailscaleServe, TailscaleFunnel:

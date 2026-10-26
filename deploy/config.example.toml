@@ -44,7 +44,9 @@ program_status = true
 # installed Tailscale CLI. Serve is tailnet-only; Funnel is public HTTPS and
 # must be chosen explicitly. WebMux never runs `serve reset`, `funnel reset`,
 # `sudo`, or changes .wslconfig/firewall/tailnet settings. The entry is owned
-# by <state_dir>/tailscale.json and reconciled on the next start.
+# by <state_dir>/tailscale.json and reconciled on the next start. Settings saved
+# on the web page (Settings -> Tailscale) apply immediately, persist in
+# <state_dir>/tailscale-settings.json and override mode/port/provider here.
 # A configured root token must be at least 43 characters in either mode; an
 # empty token is generated for this process and printed in the access link.
 # [tailscale]

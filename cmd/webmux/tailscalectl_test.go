@@ -15,8 +15,10 @@ import (
 
 	"github.com/rainchan/webmux/internal/api"
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/statefile"
 	"github.com/rainchan/webmux/internal/tailscale"
+	"github.com/rainchan/webmux/internal/tailscalesettings"
 )
 
 func fakeTailscale(t *testing.T, status, serve string) (string, string) {
@@ -52,7 +54,7 @@ esac
 func testTailscaleController(t *testing.T, cli, stateDir string, cfg config.TailscaleConfig) *tailscaleController {
 	t.Helper()
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: cfg.Provider, IsWSL: func() bool { return false }})
-	return newTailscaleController(cfg, service, stateDir, &api.PublicOrigins{}, "token", false,
+	return newTailscaleController(cfg, nil, service, stateDir, &api.PublicOrigins{}, "token", false,
 		io.Discard, slog.New(slog.DiscardHandler), func() bool { return false }, func(context.Context) string { return "unknown" })
 }
 
@@ -127,6 +129,117 @@ func TestStartAppliesServeAndCloseRemovesIt(t *testing.T) {
 	}
 }
 
+// statefulTailscale is a fake CLI whose serve status follows its own
+// serve/funnel/off commands, one entry at a time.
+func statefulTailscale(t *testing.T) (string, string) {
+	t.Helper()
+	cli, logPath := fakeTailscale(t, tailscaleRunning, `{"Web":{},"AllowFunnel":{}}`)
+	script := `#!/bin/sh
+host=node.tailnet.ts.net
+case "$*" in
+"status --json --peers=false") cat "$FAKE_STATUS";;
+"serve status --json") cat "$FAKE_SERVE";;
+*--bg*) echo "$@" >> "$FAKE_LOG"; port=${3#--https=}; public=""
+  if [ "$1" = funnel ]; then public="\"$host:$port\":true"; fi
+  printf '{"Web":{"%s:%s":{"Handlers":{"/":{"Proxy":"%s"}}}},"AllowFunnel":{%s}}' "$host" "$port" "$4" "$public" > "$FAKE_SERVE";;
+*off) echo "$@" >> "$FAKE_LOG"; echo '{"Web":{},"AllowFunnel":{}}' > "$FAKE_SERVE";;
+esac
+`
+	if err := os.WriteFile(cli, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	return cli, logPath
+}
+
+func TestUpdateSettingsReplacesEntryAtRuntime(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	target := fmt.Sprintf("http://127.0.0.1:%d", ln.Addr().(*net.TCPAddr).Port)
+	cli, logPath := statefulTailscale(t)
+	dir := t.TempDir()
+	toml := config.TailscaleConfig{Mode: "serve", Port: 8443, Provider: "auto"}
+	store := tailscalesettings.Open(dir, toml)
+	defer store.Close()
+	service := tailscale.New(tailscale.Options{Command: cli, Provider: "auto", IsWSL: func() bool { return false }})
+	ctl := newTailscaleController(toml, store, service, dir, &api.PublicOrigins{}, strings.Repeat("t", minTunnelTokenLength), false,
+		io.Discard, slog.New(slog.DiscardHandler), func() bool { return false }, func(context.Context) string { return "unknown" })
+	if err := ctl.Prepare(context.Background(), ln.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
+	ctl.Start(context.Background(), target)
+	wait := func() contract.TailscaleStatus {
+		ctl.mu.Lock()
+		done := ctl.done
+		ctl.mu.Unlock()
+		<-done
+		return ctl.Status()
+	}
+	if status := wait(); status.State != "ready" || status.Source != "config" {
+		t.Fatalf("startup = %+v", status)
+	}
+
+	if _, err := ctl.UpdateSettings(contract.TailscaleSettingsUpdate{Mode: "funnel", Port: 10000, Provider: "auto"}); !errors.Is(err, tailscalesettings.ErrFunnelUnconfirmed) {
+		t.Fatalf("unconfirmed Funnel = %v", err)
+	}
+	if got, web := store.Effective(); got != toml || web {
+		t.Fatalf("rejected update was persisted: %+v %v", got, web)
+	}
+	view, err := ctl.UpdateSettings(contract.TailscaleSettingsUpdate{Mode: "funnel", Port: 10000, Provider: "auto", ConfirmFunnel: true})
+	if err != nil || view.State != "starting" || view.Mode != "funnel" || view.Source != "web" {
+		t.Fatalf("confirmed Funnel = %+v %v", view, err)
+	}
+	if status := wait(); status.State != "ready" || status.PublicURL != "https://node.tailnet.ts.net:10000" {
+		t.Fatalf("after switch = %+v", status)
+	}
+
+	view, err = ctl.ResetSettings()
+	if err != nil || view.Mode != "off" || view.Source != "config" {
+		t.Fatalf("reset = %+v %v", view, err)
+	}
+	if status := wait(); status.State != "off" || status.PublicURL != "" {
+		t.Fatalf("after reset = %+v", status)
+	}
+	ctl.Close()
+	calls, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "serve --bg --https=8443 " + target + "\n" +
+		"serve --https=8443 off\n" +
+		"funnel --bg --https=10000 " + target + "\n" +
+		"serve --https=10000 off\n"
+	if string(calls) != want {
+		t.Fatalf("calls = %q, want %q", calls, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+		t.Fatalf("ownership record survived reset: %v", err)
+	}
+}
+
+func TestUpdateSettingsRequiresStrongToken(t *testing.T) {
+	cli, logPath := statefulTailscale(t)
+	dir := t.TempDir()
+	store := tailscalesettings.Open(dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
+	defer store.Close()
+	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
+	ctl.store = store
+	if _, err := ctl.UpdateSettings(contract.TailscaleSettingsUpdate{Mode: "serve", Provider: "auto"}); !errors.Is(err, tailscalesettings.ErrEnableBlocked) {
+		t.Fatalf("weak token update = %v", err)
+	}
+	if status := ctl.Status(); status.CanEnable || !strings.Contains(status.EnableBlockedReason, "token") {
+		t.Fatalf("status = %+v", status)
+	}
+	if _, web := store.Effective(); web {
+		t.Fatal("blocked update was persisted")
+	}
+	if data, _ := os.ReadFile(logPath); len(data) != 0 {
+		t.Fatalf("blocked update ran commands: %q", data)
+	}
+}
+
 func TestPrepareDropsStaleRecordKeepingForeignTarget(t *testing.T) {
 	cli, logPath := fakeTailscale(t,
 		tailscaleRunning,
@@ -177,7 +290,7 @@ func TestPrepareRemovesEntryBeforeProviderChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "linux", IsWSL: func() bool { return true }})
-	ctl := newTailscaleController(config.TailscaleConfig{Mode: "serve", Provider: "linux"}, service, dir,
+	ctl := newTailscaleController(config.TailscaleConfig{Mode: "serve", Provider: "linux"}, nil, service, dir,
 		&api.PublicOrigins{}, "token", false, io.Discard, slog.New(slog.DiscardHandler),
 		func() bool { return true }, func(context.Context) string { return "mirrored" })
 	if err := ctl.Prepare(context.Background(), "127.0.0.1:7681"); err != nil {
@@ -227,7 +340,7 @@ func TestWindowsProviderNATFailsClosed(t *testing.T) {
 	cli, logPath := fakeTailscale(t, tailscaleRunning, `{"Web":{},"AllowFunnel":{}}`)
 	dir := t.TempDir()
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "windows", IsWSL: func() bool { return true }})
-	ctl := newTailscaleController(config.TailscaleConfig{Mode: "serve", Provider: "windows"}, service, dir,
+	ctl := newTailscaleController(config.TailscaleConfig{Mode: "serve", Provider: "windows"}, nil, service, dir,
 		&api.PublicOrigins{}, "token", false, io.Discard, slog.New(slog.DiscardHandler),
 		func() bool { return true }, func(context.Context) string { return "nat" })
 	ctl.localPort = 7681
