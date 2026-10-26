@@ -5,6 +5,7 @@ import SessionRow from "../../src/components/SessionRow.svelte";
 import type { SessionInfo } from "../../src/schemas";
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await cleanup();
   await userEvent.cleanup();
 });
@@ -27,6 +28,35 @@ const base: SessionInfo = {
   attention: null,
   reportedCwd: null,
 };
+
+test("opens the terminal link in a new tab", async () => {
+  render(SessionRow, {
+    session: base,
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  const link = page.getByRole("link", { name: base.title, exact: true });
+  await expect.element(link).toHaveAttribute("href", `/s/${base.id}`);
+  await expect.element(link).toHaveAttribute("target", "_blank");
+  await expect.element(link).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+test("keeps Home Screen app navigation in the same window", async () => {
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query) =>
+      ({
+        matches: query === "(display-mode: standalone)",
+      }) as MediaQueryList,
+  );
+  render(SessionRow, {
+    session: base,
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  const link = page.getByRole("link", { name: base.title, exact: true });
+  await expect.element(link).toHaveAttribute("href", `/s/${base.id}`);
+  await expect.element(link).not.toHaveAttribute("target");
+});
 
 test("an agent permission request is labelled precisely", async () => {
   render(SessionRow, {

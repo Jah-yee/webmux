@@ -231,7 +231,7 @@ test("failed agent start retains new worktree and retry does not create again; u
   await expect(
     page.getByRole("region", { name: "直接会话", exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Retained shell", exact: true }).click();
+  await page.goto(sessionURL);
   await expect(page).toHaveURL(sessionURL);
   await runCommand(page, "printf '\\n%s%s\\n' 'still-' 'running'");
   await expectTerminalLine(page, "still-running");

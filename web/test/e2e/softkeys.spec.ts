@@ -143,8 +143,7 @@ test("touch tablets with a fine primary pointer only raise the keyboard from the
 
   await expect(keyboard).toBeVisible();
   await expect(input).not.toBeFocused();
-  await page.goto("/");
-  await page.locator(`a[href="/s/${id}"]`).first().tap();
+  await page.goto(`/s/${id}`);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expect(input).not.toBeFocused();
 

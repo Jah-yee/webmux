@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { navigate } from "../api";
+  import { isStandalone } from "../capabilities";
   import SessionStatus from "./SessionStatus.svelte";
   import type { SessionInfo } from "../schemas";
   import { previewSettings } from "../previewSettings.svelte";
@@ -39,6 +40,9 @@
   );
   const preview = $derived(selectPreview(session.preview, previewSettings));
   const hints = $derived(locationHints(session, groupPath));
+  // A Home Screen app has no browser tabs; opening one would also lose the
+  // app's local Token storage, so keep its navigation inside the app.
+  const newTab = !isStandalone();
   const copyTarget = $derived(
     session.reportedCwd
       ? { label: "复制 Shell 报告目录", value: session.reportedCwd.path }
@@ -81,7 +85,11 @@
     class="group block w-full min-w-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     aria-label={session.title}
     href={`/s/${session.id}`}
+    target={newTab ? "_blank" : undefined}
+    rel={newTab ? "noopener noreferrer" : undefined}
+    title={newTab ? "在新标签页打开" : undefined}
     onclick={(event) => {
+      if (newTab) return;
       if (
         event.button === 0 &&
         !event.ctrlKey &&

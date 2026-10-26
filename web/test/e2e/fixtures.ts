@@ -165,6 +165,16 @@ export async function createShell(
   return new URL(page.url()).pathname.split("/").at(-1)!;
 }
 
+// Session cards open in a new tab; return that page for the caller's checks.
+export async function openSessionLink(page: Page, name: string): Promise<Page> {
+  const [session] = await Promise.all([
+    page.waitForEvent("popup"),
+    page.getByRole("link", { name, exact: true }).click(),
+  ]);
+  await expect(session).toHaveURL(/\/s\/[a-z2-7]{8}$/);
+  return session;
+}
+
 // A healthy connection shows no text; the status dot names it instead.
 export async function expectConnected(page: Page) {
   const header = page.locator(".terminal-header");

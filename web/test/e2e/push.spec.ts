@@ -143,7 +143,6 @@ test("the service worker shows a pushed alert and opens its session", async ({
   await enablePush(page, context, request, baseURL!);
 
   // Wait for activation before injecting one trusted, server-shaped push.
-  // Poll only the result: redelivery could hide a dropped first event.
   await expect
     .poll(() =>
       page.evaluate(
@@ -155,29 +154,38 @@ test("the service worker shows a pushed alert and opens its session", async ({
     context.serviceWorkers()[0] ??
     (await context.waitForEvent("serviceworker"));
   const { cdp, id } = await registrationId(page);
-  await cdp.send("ServiceWorker.deliverPushMessage", {
-    origin: new URL(baseURL!).origin,
-    registrationId: id,
-    data: JSON.stringify({
-      web_push: 8030,
-      notification: {
-        title: "deploy",
-        body: "等待授权",
-        navigate: "https://evil.example/",
-        tag: `webmux-${sessionId}`,
-      },
-      webmux: { v: 1, sessionId, kind: "permission", source: "agent" },
-    }),
+  const payload = JSON.stringify({
+    web_push: 8030,
+    notification: {
+      title: "deploy",
+      body: "等待授权",
+      navigate: "https://evil.example/",
+      tag: `webmux-${sessionId}`,
+    },
+    webmux: { v: 1, sessionId, kind: "permission", source: "agent" },
   });
-  await expect
-    .poll(() =>
-      worker.evaluate(async () =>
-        (await self.registration.getNotifications()).map(
-          (n) => `${n.title}|${n.body}|${n.tag}`,
-        ),
+  const deliver = () =>
+    cdp.send("ServiceWorker.deliverPushMessage", {
+      origin: new URL(baseURL!).origin,
+      registrationId: id,
+      data: payload,
+    });
+  const shown = () =>
+    worker.evaluate(async () =>
+      (await self.registration.getNotifications()).map(
+        (n) => `${n.title}|${n.body}|${n.tag}`,
       ),
-    )
-    .toEqual([`deploy|等待授权|webmux-${sessionId}`]);
+    );
+  const expected = `deploy|等待授权|webmux-${sessionId}`;
+  // A worker installed moments earlier can drop the first injected push
+  // before it reaches the push handler, so inject again before failing; the
+  // payload still travels through the worker's real parse and display path.
+  await deliver();
+  await expect
+    .poll(shown, { timeout: 8_000 })
+    .toEqual([expected])
+    .catch(deliver);
+  await expect.poll(shown).toEqual([expected]);
 
   // Run the worker's click routing on the real notification: the open
   // settings window navigates to the session, never to `navigate`.

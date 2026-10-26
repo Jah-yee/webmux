@@ -52,10 +52,9 @@ for (const initialization of ["connected", "font-pending"] as const) {
     });
     expect(created.status()).toBe(201);
     const { id } = await created.json();
-    await page.goto("/");
+    await page.goto(`/s/${id}`);
     const timeOrigin = await page.evaluate(() => performance.timeOrigin);
     const session = page.getByRole("link", { name, exact: true });
-    await session.click();
     const back = page.getByRole("button", {
       name: "返回会话列表",
       exact: true,
@@ -123,7 +122,7 @@ for (const initialization of ["connected", "font-pending"] as const) {
     }
 
     // Re-enter the same PTY, execute a real command, then exercise teardown again.
-    await session.click();
+    await page.goBack();
     await expectConnected(page);
     await expect(page.locator(".restore-overlay")).toBeHidden();
     await runCommand(page, "printf '\\n%s%s\\n' 'back-navigation-' 'alive'");

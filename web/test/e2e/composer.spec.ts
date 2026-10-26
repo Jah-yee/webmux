@@ -239,16 +239,17 @@ test("drafts survive navigation and reload, remain session-local and stop persis
     },
   });
   expect(response.status()).toBe(201);
+  const { id: b } = await response.json();
   const back = () =>
     page.getByRole("button", { name: "返回会话列表", exact: true }).click();
   await back();
-  await page.getByRole("link", { name: "Draft B", exact: true }).click();
+  await page.goto(`/s/${b}`);
   await expect(mode(page)).toHaveAttribute("aria-pressed", "false");
   await mode(page).click();
   await expect(draft(page)).toHaveValue("");
   await draft(page).fill("B private draft");
   await back();
-  await page.getByRole("link", { name: "Draft A", exact: true }).click();
+  await page.goto(`/s/${a}`);
   await expect(page).toHaveURL(new RegExp(`/s/${a}$`));
   await expect(draft(page)).toHaveValue("A private draft");
   // A reload restores the saved draft visibly, with its target, and sends nothing.

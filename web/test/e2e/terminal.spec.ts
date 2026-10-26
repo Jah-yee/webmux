@@ -278,7 +278,7 @@ test("closed OSC 52 copy dialog does not reopen when the terminal is entered aga
     });
   });
   const name = "OSC 52 re-entry";
-  await createShell(page, name, workDir);
+  const id = await createShell(page, name, workDir);
   await runCommand(page, `${osc52Command("osc52_first")}; echo first-done`);
   const dialog = page.getByRole("dialog", { name: "复制终端文字" });
   const text = page.getByRole("textbox", { name: "复制内容" });
@@ -288,7 +288,7 @@ test("closed OSC 52 copy dialog does not reopen when the terminal is entered aga
 
   await page.getByRole("button", { name: "返回会话列表", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
-  await page.getByRole("link", { name, exact: true }).click();
+  await page.goto(`/s/${id}`);
   await expectConnected(page);
   await expect(page.locator(".restore-overlay")).toBeHidden();
   await expectTerminalLine(page, "first-done");

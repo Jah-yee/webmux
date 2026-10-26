@@ -7,6 +7,7 @@ import {
   expect,
   createShell,
   runCommand,
+  openSessionLink,
   expectTerminalLine,
   expectConnected,
 } from "../e2e/fixtures";
@@ -153,6 +154,13 @@ test("4x CPU: create, type, replay, switch, filter and open dialogs remain usabl
   });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
+  page
+    .context()
+    .on("page", (popup) =>
+      popup.on("pageerror", (error) =>
+        errors.push(error.stack ?? error.message),
+      ),
+    );
   await createShell(page, "CPU 4x shell", workDir);
   await runCommand(page, "printf '\\n%s%s\\n' 'cpu-four-' 'ready'");
   await expectTerminalLine(page, "cpu-four-ready");
@@ -210,9 +218,13 @@ test("4x CPU: create, type, replay, switch, filter and open dialogs remain usabl
   await search.press("Escape");
   const session = page.getByRole("link", { name: "CPU 4x shell", exact: true });
   await expect(session).toBeVisible();
-  await session.click();
-  await expectTerminalLine(page, "responsive-input");
-  await performanceReport(page, testInfo, "switch-and-filter");
+  const terminal = await openSessionLink(page, "CPU 4x shell");
+  // The popup is a fresh target without the list page's 4x throttle or metrics
+  // observer, so arm it and reload before measuring the terminal mount/replay.
+  await observePerformance(terminal);
+  await terminal.reload();
+  await expectTerminalLine(terminal, "responsive-input");
+  await performanceReport(terminal, testInfo, "switch-and-filter");
   expect(errors).toEqual([]);
 });
 
@@ -282,6 +294,7 @@ test("4x CPU: a stalled repository request cannot block existing terminals", asy
     },
   });
   expect(created.status()).toBe(201);
+  const { id } = await created.json();
   const held = Promise.withResolvers<void>();
   let pendingRequests = 0;
   await page.route("**/api/repositories", async (route) => {
@@ -308,7 +321,7 @@ test("4x CPU: a stalled repository request cannot block existing terminals", asy
     await performanceReport(page, testInfo, "repository-timeout");
     // The repository response remains held while the real PTY is opened and
     // typed into. A late response must not be needed for terminal access.
-    await session.click();
+    await page.goto(`/s/${id}`);
     await expect(page.locator(".restore-overlay")).toBeHidden();
     await runCommand(page, "printf '\\n%s%s\\n' 'still-' 'reachable'");
     await expectTerminalLine(page, "still-reachable");
