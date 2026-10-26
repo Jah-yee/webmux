@@ -1,4 +1,5 @@
 import { expect, test, vi } from "vitest";
+import { kittyScrollFrame, kittyTextRedraw } from "../fixtures/kitty-scroll";
 import {
   domText,
   expectDomText,
@@ -8,6 +9,7 @@ import {
   observeGlyphPixels,
   openTerminal,
   resolutionQueries,
+  openTerminalApi,
   setDpr,
   type FixtureSocket,
 } from "./terminal-fixture";
@@ -134,8 +136,8 @@ test("ordered native clear erases overlays and text but preserves the image for 
   expect(replies(socket)).toContain("\x1b_Gi=21,p=2;OK\x1b\\");
 });
 
-test.each([0, 1])(
-  "native erase-display mode %i removes only the erased region",
+test.each([0, 1, 3])(
+  "native erase-display mode %i preserves graphics",
   async (mode) => {
     observeGlyphPixels(true);
     const { socket } = await openTerminal();
@@ -148,11 +150,119 @@ test.each([0, 1])(
     const [upper, lower] = canvases();
     socket.receive(0, `\x1b[2;1H\x1b[${mode}Jtext after partial clear`);
     await expectDomText("text after partial clear");
-    await expect.poll(() => canvases().length).toBe(1);
-    expect(canvases()[0]).toBe(mode === 0 ? upper : lower);
-    expect((mode === 0 ? lower : upper).width).toBe(0);
+    expect(canvases()).toEqual([upper, lower]);
+    expect(upper.width).toBeGreaterThan(0);
+    expect(lower.width).toBeGreaterThan(0);
   },
 );
+
+test("omp redraw and top-cropped placements survive partial text erasure", async () => {
+  observeGlyphPixels(true);
+  const { socket } = await openTerminal();
+  for (const step of [0, 1, 2, 1, 0]) {
+    socket.receive(0, kittyScrollFrame(step));
+    await expectDomText(`Kitty scroll step ${step}:`);
+    await expect.poll(() => canvases().length).toBe(1);
+    const canvas = canvases()[0];
+    const colors = [
+      [255, 0, 0, 255],
+      [0, 255, 0, 255],
+      [0, 0, 255, 255],
+    ];
+    await expect
+      .poll(() =>
+        Array.from(
+          canvas
+            .getContext("2d")!
+            .getImageData(
+              Math.floor(canvas.width / 2),
+              Math.floor(canvas.height / (8 - step * 2)),
+              1,
+              1,
+            ).data,
+        ),
+      )
+      .toEqual(colors[step]);
+    expect(canvas.style.display).not.toBe("none");
+    socket.receive(0, kittyTextRedraw(step));
+    await expectDomText(`Kitty redraw step ${step}:`);
+    expect(canvases()).toEqual([canvas]);
+  }
+});
+
+test("images follow output into scrollback, return with history, and release on trim", async () => {
+  observeGlyphPixels(true);
+  const { socket, api } = await openTerminalApi();
+  socket.receive(
+    0,
+    `\x1b[Himage-anchor\x1b_Ga=T,f=32,s=2,v=2,i=82,C=1;${pixels}\x1b\\`,
+  );
+  await expect.poll(() => canvases().length).toBe(1);
+  const canvas = canvases()[0];
+  socket.receive(0, "\r\nhistory output".repeat(100));
+  await expect.poll(() => canvas.style.display).toBe("none");
+  api.findNext("image-anchor", {
+    caseSensitive: true,
+    wholeWord: false,
+    regex: false,
+  });
+  await expectDomText("image-anchor");
+  await expect.poll(() => canvas.style.display).not.toBe("none");
+  api.scrollToBottom();
+  await expect.poll(() => canvas.style.display).toBe("none");
+  socket.receive(0, "\x1b[3J");
+  await expect.poll(() => canvases().length).toBe(0);
+  expect(canvas.width).toBe(0);
+});
+
+test("margin scrolling moves images with text and leaves outside rows fixed", async () => {
+  observeGlyphPixels(true);
+  const { socket } = await openTerminal();
+  socket.receive(
+    0,
+    `\x1b[H\x1b_Ga=T,f=32,s=2,v=2,i=83,C=1;${pixels}\x1b\\` +
+      `\x1b[5;1H\x1b_Ga=T,f=32,s=2,v=2,i=84,C=1;${pixels}\x1b\\`,
+  );
+  await expect.poll(() => canvases().length).toBe(2);
+  const [outside, inside] = canvases();
+  const top = () => inside.getBoundingClientRect().top;
+  await expect.poll(() => inside.style.transform).not.toBe("");
+  const initial = top();
+  const fixed = outside.getBoundingClientRect().top;
+  const height = geometry(socket).row;
+  socket.receive(0, "\x1b[2;10r\x1b[10;1H\n");
+  await expect.poll(() => top()).toBeCloseTo(initial - height, 0);
+  expect(outside.getBoundingClientRect().top).toBe(fixed);
+  socket.receive(0, "\x1b[2;1H\x1bM");
+  await expect.poll(() => top()).toBeCloseTo(initial, 0);
+  socket.receive(0, "\x1b[3;1H\x1b[L");
+  await expect.poll(() => top()).toBeCloseTo(initial + height, 0);
+  socket.receive(0, "\x1b[M\x1b[J");
+  await expect.poll(() => top()).toBeCloseTo(initial, 0);
+  expect(canvases()).toEqual([outside, inside]);
+});
+
+test("line erasure and resizing preserve graphics, while native reset removes old placements", async () => {
+  observeGlyphPixels(true);
+  const { socket, api } = await openTerminalApi();
+  socket.receive(0, `\x1b[H\x1b_Ga=T,f=32,s=2,v=2,i=85,C=1;${pixels}\x1b\\`);
+  await expect.poll(() => canvases().length).toBe(1);
+  const canvas = canvases()[0];
+  socket.receive(0, "\x1b[2K\x1b[Xerased line");
+  await expectDomText("erased line");
+  expect(canvases()).toEqual([canvas]);
+  api.setFontSize(18);
+  await expect.poll(() => geometry(socket).row).toBeGreaterThan(20);
+  expect(canvases()).toEqual([canvas]);
+  socket.receive(
+    0,
+    `\x1bc\x1b_Ga=T,f=32,s=2,v=2,i=86,C=1;${pixels}\x1b\\after reset`,
+  );
+  await expectDomText("after reset");
+  await expect.poll(() => canvases().length).toBe(1);
+  expect(canvases()[0]).not.toBe(canvas);
+  expect(canvas.width).toBe(0);
+});
 
 test.each([
   { name: "per-axis", edge: 100_000 },

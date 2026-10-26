@@ -1058,25 +1058,15 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
   }
 
   function eraseDisplay(mode: number) {
-    if (disposed || mode < 0 || mode > 3) return;
+    // Kitty specifies that partial text erasure must not affect graphics.
+    if (disposed || mode !== 2) return;
     const viewport = options.viewport();
-    const cursor = options.cursor();
     for (const item of Array.from(placements)) {
       if (item.handle.active?.() === false) continue;
       const bounds = item.handle.bounds();
       const firstLine = Math.max(bounds.line, viewport.top);
       const lastLine = Math.min(bounds.line + bounds.rows, viewport.bottom) - 1;
       if (firstLine > lastLine) continue;
-      const match =
-        mode >= 2 ||
-        (mode === 0 &&
-          (lastLine > cursor.line ||
-            (lastLine === cursor.line &&
-              bounds.column + bounds.columns > cursor.column))) ||
-        (mode === 1 &&
-          (firstLine < cursor.line ||
-            (firstLine === cursor.line && bounds.column <= cursor.column)));
-      if (!match) continue;
       item.handle.dispose();
       forgetPlacement(item);
     }

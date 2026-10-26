@@ -1,4 +1,4 @@
-import type { IBuffer, IMarker, Terminal } from "@xterm/xterm";
+import type { IBuffer, Terminal } from "@xterm/xterm";
 import {
   createKittyGraphics,
   type KittyImage,
@@ -6,6 +6,7 @@ import {
   type KittyPlacementSpec,
 } from "../kitty-graphics";
 import { observeDevicePixelRatio } from "./terminal-dpr";
+import { graphicsAnchor } from "./terminal-graphics-anchor";
 
 export interface TerminalGraphics {
   write(data: Uint8Array, parsed: () => void): void;
@@ -25,7 +26,7 @@ interface RenderedPlacement {
   spec: KittyPlacementSpec;
   buffer: IBuffer;
   pixels: number;
-  marker?: IMarker;
+  anchor?: ReturnType<typeof graphicsAnchor>;
   dismissed: () => void;
   closed: boolean;
 }
@@ -157,9 +158,7 @@ export function attachTerminalGraphics(
         remove(placement);
         continue;
       }
-      const marker = placement.marker;
-      const line =
-        marker && !marker.isDisposed ? marker.line : placement.spec.line;
+      const line = placement.anchor?.line ?? placement.spec.line;
       const left = placement.spec.column * cell.width + placement.spec.offsetX;
       const top = (line - viewportY) * cell.height + placement.spec.offsetY;
       const visible =
@@ -183,7 +182,7 @@ export function attachTerminalGraphics(
     if (placement.closed) return;
     placement.closed = true;
     rendered.delete(placement);
-    placement.marker?.dispose();
+    placement.anchor?.dispose();
     totalCanvasPixels -= placement.pixels;
     placement.pixels = 0;
     placement.canvas.width = 0;
@@ -233,11 +232,9 @@ export function attachTerminalGraphics(
         };
         try {
           draw(placement);
-          const marker = term.registerMarker(0);
-          if (marker) {
-            placement.marker = marker;
-            marker.onDispose(() => remove(placement));
-          }
+          placement.anchor = graphicsAnchor(placement.buffer, spec.line, () =>
+            remove(placement),
+          );
           layer.appendChild(canvas);
           rendered.add(placement);
           schedule();
@@ -251,10 +248,7 @@ export function attachTerminalGraphics(
             !placement.closed && placement.buffer === term.buffer.active,
           bounds: () => ({
             column: placement.spec.column,
-            line:
-              placement.marker && !placement.marker.isDisposed
-                ? placement.marker.line
-                : placement.spec.line,
+            line: placement.anchor?.line ?? placement.spec.line,
             columns: placement.spec.columns,
             rows: placement.spec.rows,
           }),
@@ -264,7 +258,12 @@ export function attachTerminalGraphics(
     },
   });
 
-  const scroll = term.onScroll(schedule);
+  const scroll = term.onScroll(() => {
+    for (const placement of rendered) {
+      if (placement.buffer === term.buffer.active) placement.anchor?.sync();
+    }
+    schedule();
+  });
   const bufferChange = term.buffer.onBufferChange((buffer) => {
     if (disposed) return;
     for (const placement of rendered) {
@@ -283,8 +282,14 @@ export function attachTerminalGraphics(
       return false;
     },
   );
-  const resize = term.onResize(schedule);
-  const parsed = term.onWriteParsed(schedule);
+  const resize = term.onResize(() => {
+    for (const placement of rendered) placement.anchor?.resized();
+    schedule();
+  });
+  const parsed = term.onWriteParsed(() => {
+    for (const placement of rendered) placement.anchor?.sync();
+    schedule();
+  });
   const observer = new ResizeObserver(schedule);
   observer.observe(screen);
   const stopDpr = observeDevicePixelRatio(schedule);

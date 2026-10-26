@@ -97,7 +97,7 @@ test("a saved launch config starts a session with its environment and survives r
   ).not.toBe("exited");
 });
 
-test("a saved launch config drives the session preview rows", async ({
+test("saved preview changes and global fallbacks apply to an existing session", async ({
   page,
   request,
   workDir,
@@ -131,6 +131,44 @@ test("a saved launch config drives the session preview rows", async ({
   await expect(preview).toContainText("line-29");
   await expect(preview).not.toContainText("statusbar");
   await expect(preview).toHaveAttribute("style", /--preview-lines:\s*5/);
+
+  const update = async (
+    previewSettings?: { lines: number; skip: number } | null,
+  ) => {
+    const response = await request.put(`/api/launch-configs/${config.id}`, {
+      data: { name: config.name, cmd: command, preview: previewSettings },
+    });
+    expect(response.status()).toBe(200);
+    await page.reload();
+  };
+  // Existing sessions use the current config, not a copy of its old settings.
+  await update({ lines: 3, skip: 0 });
+  await expect(preview).toHaveText("line-30\nstatusbar\nprompt");
+  await expect(preview).toHaveAttribute("style", /--preview-lines:\s*3/);
+
+  // Both omitted and explicit null settings restore the browser defaults.
+  for (const inherited of [undefined, null]) {
+    await update(inherited);
+    await expect(preview).toContainText("statusbar");
+    await expect(preview).not.toContainText("prompt");
+    await expect(preview).toHaveAttribute("style", /--preview-lines:\s*10/);
+    await update({ lines: 5, skip: 2 });
+    await expect(preview).not.toContainText("statusbar");
+    await expect(preview).toHaveAttribute("style", /--preview-lines:\s*5/);
+  }
+
+  const deleted = await request.delete(`/api/launch-configs/${config.id}`);
+  expect(deleted.status()).toBe(204);
+  await page.reload();
+  await expect(preview).toContainText("statusbar");
+  await expect(preview).not.toContainText("prompt");
+  await expect(preview).toHaveAttribute("style", /--preview-lines:\s*10/);
+  const current = await (
+    await request.get(`/api/sessions/${session.id}`)
+  ).json();
+  expect(current.configId).toBe(config.id);
+  expect(current.cmd).toEqual(command);
+  expect(current.status).not.toBe("exited");
 });
 
 test("configs persist across a settings reload and remain selectable alongside manual commands", async ({

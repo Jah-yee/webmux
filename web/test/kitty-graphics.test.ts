@@ -541,7 +541,7 @@ test("1024 placements of one reusable image are bounded and replacement remains 
 });
 
 test.each([0, 1, 2, 3])(
-  "eraseDisplay(%s) intersects the visible erased cells and preserves stored images",
+  "eraseDisplay(%s) clears only mode 2 visible placements and preserves stored images",
   async (mode) => {
     const dispose = vi.fn();
     const board = harness(async () => ({ ...fakeImage(), dispose }));
@@ -564,11 +564,9 @@ test.each([0, 1, 2, 3])(
     board.setCursor(4, 5);
     board.graphics.eraseDisplay(mode);
     const expected =
-      mode === 0
-        ? [false, true, true, true, true, false, false, false]
-        : mode === 1
-          ? [true, true, true, false, false, false, false, false]
-          : [true, true, true, true, true, false, false, false];
+      mode === 2
+        ? [true, true, true, true, true, false, false, false]
+        : [false, false, false, false, false, false, false, false];
     expect(board.placements.map((item) => item.disposed)).toEqual(expected);
     expect(dispose).not.toHaveBeenCalled();
     await board.send("\x1b_Ga=p,i=1,C=1\x1b\\");
