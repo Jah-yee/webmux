@@ -60,6 +60,8 @@ type Info struct {
 	Workspace    *Workspace
 	Attention    *Attention
 	ReportedCwd  *ReportedCwd
+	// ConfigID is the saved launch config used at creation, if any.
+	ConfigID string
 }
 
 // Message is one item queued for a terminal subscriber, in protocol order.
@@ -129,6 +131,8 @@ type startOptions struct {
 	bellAttention bool
 	// env is the caller's explicit launch environment.
 	env map[string]string
+	// configID is the saved launch config used at creation, if any.
+	configID string
 }
 
 func start(id, cwd, name string, argv []string, capacity int, options startOptions) (*Session, error) {
@@ -171,6 +175,7 @@ func start(id, cwd, name string, argv []string, capacity int, options startOptio
 			LastActiveAt: now,
 			Cols:         80,
 			Rows:         24,
+			ConfigID:     options.configID,
 		},
 		userTitle:     name,
 		terminal:      f,

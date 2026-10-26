@@ -276,7 +276,7 @@ func TestRealSessionAttentionSurvivesSpinner(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", script}, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", script}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

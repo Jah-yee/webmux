@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
 import SessionRow from "../../src/components/SessionRow.svelte";
+import { setLaunchPreviews } from "../../src/launchPreviews.svelte";
 import type { SessionInfo } from "../../src/schemas";
 
 afterEach(async () => {
@@ -186,6 +187,24 @@ test("status, connection and time read as one aligned, grouped line on a wide ro
   expect(Math.round(text[1].height)).toBe(Math.round(text[0].height));
   expect(text[1].left).toBeGreaterThan(text[0].right);
   expect(text[1].left - text[0].left).toBeLessThanOrEqual(160);
+});
+
+test("uses the launch config preview rows and height", async () => {
+  setLaunchPreviews([{ id: "abcdefg2", preview: { lines: 3, skip: 2 } }]);
+  const rows = Array.from({ length: 12 }, (_, index) => `row ${index + 1}`);
+  render(SessionRow, {
+    session: {
+      ...base,
+      configId: "abcdefg2",
+      preview: [...rows, "status bar", "prompt"].join("\n"),
+    },
+    now: Date.parse("2026-10-16T00:00:03Z"),
+    onclose: () => {},
+  });
+  const preview = document.querySelector('[data-slot="terminal-preview"]');
+  expect(preview?.textContent?.trim()).toBe("row 10\nrow 11\nrow 12");
+  expect(preview?.getAttribute("style")).toContain("--preview-lines: 3");
+  setLaunchPreviews([]);
 });
 
 test("a deferred menu keeps mouse, keyboard, Escape focus and close actions", async () => {

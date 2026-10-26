@@ -100,7 +100,7 @@ func TestServicePushesNewQuestionOnce(t *testing.T) {
 	if _, err := s.Register(server.URL+"/device", p256dh, auth, "https://term.example.com"); err != nil {
 		t.Fatal(err)
 	}
-	created, err := m.Create("", []string{"/bin/bash", "-c", question}, "deploy", nil)
+	created, err := m.Create("", []string{"/bin/bash", "-c", question}, "deploy", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -153,6 +153,75 @@ func TestReopenPersists(t *testing.T) {
 	}
 }
 
+func TestPreviewSettingsPersist(t *testing.T) {
+	dir := t.TempDir()
+	s := Open(dir)
+	a := mustCreate(t, s, Input{Name: "agent", Cmd: []string{"agent"}, Preview: &PreviewSettings{Lines: 20, Skip: 4}})
+	if a.Preview == nil || a.Preview.Lines != 20 || a.Preview.Skip != 4 {
+		t.Fatalf("created preview %+v", a.Preview)
+	}
+	list, err := s.List()
+	if err != nil || len(list) != 1 || list[0].Preview == nil || *list[0].Preview != *a.Preview {
+		t.Fatalf("summary preview %+v %v", list, err)
+	}
+	// Mutating a returned copy must not change stored state.
+	a.Preview.Lines = 1
+	got, _ := s.Get(a.ID)
+	if got.Preview == nil || got.Preview.Lines != 20 {
+		t.Fatalf("stored preview changed: %+v", got.Preview)
+	}
+	s.Close()
+	s = open(t, dir)
+	got, err = s.Get(a.ID)
+	if err != nil || got.Preview == nil || *got.Preview != (PreviewSettings{Lines: 20, Skip: 4}) {
+		t.Fatalf("reloaded preview %+v %v", got.Preview, err)
+	}
+	updated, err := s.Update(a.ID, Input{Name: "agent", Cmd: []string{"agent"}})
+	if err != nil || updated.Preview != nil {
+		t.Fatalf("cleared preview %+v %v", updated.Preview, err)
+	}
+	if _, err := s.Update(a.ID, Input{Name: "agent", Cmd: []string{"agent"}, Preview: &PreviewSettings{Lines: 50, Skip: 50}}); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s = open(t, dir)
+	got, _ = s.Get(a.ID)
+	if got.Preview == nil || got.Preview.Lines != 50 || got.Preview.Skip != 50 {
+		t.Fatalf("boundary preview %+v", got.Preview)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, fileName))
+	if !strings.Contains(string(data), `"v": 2`) {
+		t.Fatalf("file version: %s", data)
+	}
+}
+
+func TestVersion1FileLoadsWithoutPreview(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, fileName)
+	content := `{"v":1,"configs":[{"id":"abcdefgh","name":"a","icon":"codex","cmd":["a"],"env":{},"createdAt":"2026-10-23T12:00:00Z","updatedAt":"2026-10-23T12:00:00Z"}]}`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s := open(t, dir)
+	got, err := s.Get("abcdefgh")
+	if err != nil || got.Preview != nil || got.Name != "a" || got.Icon != "codex" {
+		t.Fatalf("version 1 load %+v %v", got, err)
+	}
+	if _, err := s.Update("abcdefgh", Input{Name: "a", Icon: "codex", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 5, Skip: 0}}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"v": 2`) || !strings.Contains(string(data), `"preview": {`) || !strings.Contains(string(data), `"icon": "codex"`) {
+		t.Fatalf("upgrade did not write version 2: %s", data)
+	}
+	s.Close()
+	s = open(t, dir)
+	got, err = s.Get("abcdefgh")
+	if err != nil || got.Icon != "codex" || got.Preview == nil || *got.Preview != (PreviewSettings{Lines: 5, Skip: 0}) {
+		t.Fatalf("version 2 reload %+v %v", got, err)
+	}
+}
+
 func TestIconsPersistAndLegacyConfigsRemainReadable(t *testing.T) {
 	dir := t.TempDir()
 	s := Open(dir)
@@ -227,7 +296,7 @@ func TestSecondInstanceUnavailable(t *testing.T) {
 func TestCorruptFileKept(t *testing.T) {
 	for name, content := range map[string]string{
 		"syntax":       `{"v":1,"configs":[{"id":"abcdefgh","env":{"K":"secret-value"`,
-		"version":      `{"v":2,"configs":[]}`,
+		"version":      `{"v":3,"configs":[]}`,
 		"null configs": `{"v":1}`,
 		"unknown":      `{"v":1,"configs":[],"extra":true}`,
 		"trailing":     `{"v":1,"configs":[]} {}`,
@@ -351,6 +420,14 @@ func TestLimits(t *testing.T) {
 		"bad env name":     {Input{Name: "a", Cmd: []string{"a"}, Env: map[string]string{"1K": "v"}}, false},
 		"reserved env":     {Input{Name: "a", Cmd: []string{"a"}, Env: map[string]string{"WEBMUX_SESSION_ID": "v"}}, false},
 		"nul in env value": {Input{Name: "a", Cmd: []string{"a"}, Env: map[string]string{"K": "a\x00b"}}, false},
+		"preview min":      {Input{Name: "a", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 1, Skip: 0}}, true},
+		"preview max":      {Input{Name: "a", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 50, Skip: 50}}, true},
+		"preview no lines": {Input{Name: "a", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 0}}, false},
+		"preview lines":    {Input{Name: "a", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 51}}, false},
+		"preview skip":     {Input{Name: "a", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 10, Skip: -1}}, false},
+		"preview long skip": {
+			Input{Name: "a", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 10, Skip: 51}}, false,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := open(t, t.TempDir())

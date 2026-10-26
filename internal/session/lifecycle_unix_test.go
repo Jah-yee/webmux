@@ -19,7 +19,7 @@ func TestLeaderExitWithInheritedPTY(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", "trap '' HUP; sleep 30 & printf 'CHILD_STARTED\\n'; exit 4"}, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", "trap '' HUP; sleep 30 & printf 'CHILD_STARTED\\n'; exit 4"}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestCloseReapsSeparateJobGroups(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
 	defer m.Shutdown(ctx)
-	s, err := m.Create("", []string{"/bin/bash", "-c", `set -m; (trap '' HUP; printf 'CHILD_READY\n'; exec sleep 30) & wait`}, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", `set -m; (trap '' HUP; printf 'CHILD_READY\n'; exec sleep 30) & wait`}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCancelledPTYWriteDoesNotHoldInputGate(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", `stty raw -echo; printf READY; sleep 30`}, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", `stty raw -echo; printf READY; sleep 30`}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,11 +126,11 @@ func TestUnattendedSleepIsNotUserWait(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	sleeper, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf 'background timer\\n'; sleep 60"}, "", nil)
+	sleeper, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf 'background timer\\n'; sleep 60"}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf READY; read -r value"}, "", nil)
+	reader, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", "printf READY; read -r value"}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,11 +182,11 @@ func TestRealProcessTreeWaiting(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	reader, err := m.Create("", []string{"/bin/bash", "-c", `printf READY; read -r value`}, "", nil)
+	reader, err := m.Create("", []string{"/bin/bash", "-c", `printf READY; read -r value`}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	busy, err := m.Create("", []string{"/bin/bash", "-c", `printf READY; while :; do :; done`}, "", nil)
+	busy, err := m.Create("", []string{"/bin/bash", "-c", `printf READY; while :; do :; done`}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

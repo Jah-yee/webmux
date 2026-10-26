@@ -1,5 +1,5 @@
 import { joinArgs, parseArgs } from "./api";
-import type { LaunchConfigSummary } from "./schemas";
+import type { LaunchConfigSummary, PreviewSettings } from "./schemas";
 
 // Client-side mirror of the server limits; the server stays authoritative.
 export const LAUNCH_CONFIGS_LIMIT = 100;
@@ -7,6 +7,10 @@ const LAUNCH_NAME_MAX = 64;
 const LAUNCH_ARGS_MAX = 128;
 export const LAUNCH_ENV_MAX = 64;
 const LAUNCH_VALUE_BYTES = 8192;
+export const LAUNCH_PREVIEW_LINES_MIN = 1;
+export const LAUNCH_PREVIEW_LINES_MAX = 50;
+export const LAUNCH_PREVIEW_SKIP_MIN = 0;
+export const LAUNCH_PREVIEW_SKIP_MAX = 50;
 const envName = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const encoder = new TextEncoder();
 const bytes = (value: string) => encoder.encode(value).length;
@@ -18,11 +22,13 @@ export type LaunchConfigInput = {
   icon?: string;
   cmd: string[];
   env: Record<string, string>;
+  preview: PreviewSettings | null;
 };
 export type LaunchDraftErrors = {
   name?: string;
   command?: string;
   env?: string;
+  preview?: string;
   rows: Record<number, { name?: string; value?: string }>;
 };
 /** Summaries as seen by the new-session sheet; values are never loaded. */
@@ -104,10 +110,25 @@ export function validateLaunchDraft(
   command: string,
   rows: readonly EnvRow[],
   loadBashrc = false,
+  preview: PreviewSettings | null = null,
 ):
   | { ok: true; value: LaunchConfigInput; errors: LaunchDraftErrors }
   | { ok: false; errors: LaunchDraftErrors } {
   const errors: LaunchDraftErrors = { rows: {} };
+  if (
+    preview &&
+    (!Number.isInteger(preview.lines) ||
+      preview.lines < LAUNCH_PREVIEW_LINES_MIN ||
+      preview.lines > LAUNCH_PREVIEW_LINES_MAX)
+  )
+    errors.preview = `显示行数须为 ${LAUNCH_PREVIEW_LINES_MIN}–${LAUNCH_PREVIEW_LINES_MAX} 的整数`;
+  else if (
+    preview &&
+    (!Number.isInteger(preview.skip) ||
+      preview.skip < LAUNCH_PREVIEW_SKIP_MIN ||
+      preview.skip > LAUNCH_PREVIEW_SKIP_MAX)
+  )
+    errors.preview = `跳过末尾行数须为 ${LAUNCH_PREVIEW_SKIP_MIN}–${LAUNCH_PREVIEW_SKIP_MAX} 的整数`;
   const trimmed = name.trim();
   if (!trimmed) errors.name = "请输入名称";
   else if ([...trimmed].length > LAUNCH_NAME_MAX)
@@ -150,8 +171,9 @@ export function validateLaunchDraft(
     errors.name ||
     errors.command ||
     errors.env ||
+    errors.preview ||
     Object.keys(errors.rows).length
   )
     return { ok: false, errors };
-  return { ok: true, value: { name: trimmed, cmd, env }, errors };
+  return { ok: true, value: { name: trimmed, cmd, env, preview }, errors };
 }

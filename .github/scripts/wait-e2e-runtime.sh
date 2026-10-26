@@ -4,14 +4,30 @@ set -euo pipefail
 # Start runner setup while the producer is building. Only this workflow run's
 # artifact can satisfy the dependency; never reuse another commit's executable.
 deadline=$((SECONDS + 300))
+
+# GitHub's API occasionally returns transient 5xx responses under load; retry
+# them instead of failing the shard on a single bad response.
+gh_api() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if gh api "$@"; then
+      return 0
+    fi
+    if (( attempt < 5 )); then
+      sleep 2
+    fi
+  done
+  return 1
+}
+
 while (( SECONDS < deadline )); do
-  artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
-    --jq '.artifacts[] | select(.name == "e2e-runtime" and .expired == false) | .id')
+  artifact=$(gh_api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+    --jq '.artifacts[] | select(.name == "e2e-runtime" and .expired == false) | .id') || artifact=""
   if [[ -n "$artifact" ]]; then
     exit 0
   fi
-  result=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
-    --jq '.jobs[] | select(.name == "Format, check and build") | .conclusion // ""')
+  result=$(gh_api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+    --jq '.jobs[] | select(.name == "Format, check and build") | .conclusion // ""') || result=""
   if [[ -n "$result" && "$result" != success ]]; then
     echo "E2E runtime producer finished with $result" >&2
     exit 1

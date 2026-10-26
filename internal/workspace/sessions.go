@@ -151,33 +151,34 @@ type SessionInput struct {
 }
 
 // resolveCommand applies a saved launch config and validates the explicit
-// environment. It runs before any filesystem or Git work.
-func (s *Service) resolveCommand(in SessionInput) (cmd []string, env map[string]string, err error) {
+// environment. It runs before any filesystem or Git work. configID is empty
+// for an explicit command.
+func (s *Service) resolveCommand(in SessionInput) (cmd []string, env map[string]string, configID string, err error) {
 	cmd, env = in.Cmd, in.Env
 	if in.ConfigID != nil {
 		if *in.ConfigID == "" {
-			return nil, nil, problem(ErrInvalid, "configId must not be empty")
+			return nil, nil, "", problem(ErrInvalid, "configId must not be empty")
 		}
 		if len(in.Cmd) > 0 || len(in.Env) > 0 {
-			return nil, nil, problem(ErrInvalid, "configId cannot be combined with cmd or env")
+			return nil, nil, "", problem(ErrInvalid, "configId cannot be combined with cmd or env")
 		}
 		// A nil store answers launch.ErrUnavailable.
 		saved, err := s.launches.Get(*in.ConfigID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
-		cmd, env = saved.Cmd, saved.Env
+		cmd, env, configID = saved.Cmd, saved.Env, saved.ID
 	}
 	if err := session.ValidateEnv(env); err != nil {
-		return nil, nil, problem(ErrInvalid, "%v", err)
+		return nil, nil, "", problem(ErrInvalid, "%v", err)
 	}
-	return cmd, env, nil
+	return cmd, env, configID, nil
 }
 
 // CreateSession starts a session in the selected directory or worktree.
 // Launch config errors keep their launch error kinds.
 func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.Session, error) {
-	cmd, env, err := s.resolveCommand(in)
+	cmd, env, configID, err := s.resolveCommand(in)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +241,7 @@ func (s *Service) CreateSession(ctx context.Context, in SessionInput) (*session.
 	if err := requestCtx.Err(); err != nil {
 		return nil, err
 	}
-	item, err := s.manager.Create(path, cmd, name, env)
+	item, err := s.manager.Create(path, cmd, name, env, configID)
 	if err != nil {
 		return nil, problem(ErrInvalid, "启动会话失败: %v", err)
 	}

@@ -23,7 +23,7 @@ func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}, "", nil)
+	s, err := m.Create("", []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

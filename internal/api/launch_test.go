@@ -85,9 +85,12 @@ func TestLaunchConfigCRUD(t *testing.T) {
 	if got := string(h.expect("GET", "/api/launch-configs", "", 200)); strings.TrimSpace(got) != "[]" {
 		t.Fatalf("empty list %q", got)
 	}
-	a := h.create(`{"name":" Claude 恢复 ","icon":"claudecode","cmd":["claude","--resume",""],"env":{"API_KEY":"secret-value","B":"other-secret"}}`)
+	a := h.create(`{"name":" Claude 恢复 ","icon":"claudecode","cmd":["claude","--resume",""],"env":{"API_KEY":"secret-value","B":"other-secret"},"preview":{"lines":24,"skip":3}}`)
 	if len(a.ID) != 8 || a.Name != "Claude 恢复" || !reflect.DeepEqual(a.Cmd, []string{"claude", "--resume", ""}) || a.Env["API_KEY"] != "secret-value" {
 		t.Fatalf("created %+v", a)
+	}
+	if a.Preview == nil || a.Preview.Lines != 24 || a.Preview.Skip != 3 {
+		t.Fatalf("created preview %+v", a.Preview)
 	}
 	b := h.create(`{"name":"shell","cmd":["bash"]}`)
 	if a.Icon != "claudecode" || b.Icon != "" {
@@ -110,6 +113,9 @@ func TestLaunchConfigCRUD(t *testing.T) {
 	if !reflect.DeepEqual(list[0]["envNames"], []any{"API_KEY", "B"}) || !reflect.DeepEqual(list[1]["envNames"], []any{}) {
 		t.Fatalf("envNames %s", raw)
 	}
+	if !reflect.DeepEqual(list[0]["preview"], map[string]any{"lines": float64(24), "skip": float64(3)}) || list[1]["preview"] != nil {
+		t.Fatalf("preview %s", raw)
+	}
 	for _, field := range []string{"createdAt", "updatedAt"} {
 		value, _ := list[0][field].(string)
 		if parsed, err := time.Parse(time.RFC3339Nano, value); err != nil || !strings.HasSuffix(value, "Z") || parsed.IsZero() {
@@ -128,11 +134,17 @@ func TestLaunchConfigCRUD(t *testing.T) {
 	if err := json.Unmarshal(h.expect("PUT", "/api/launch-configs/"+a.ID, `{"name":"Claude","cmd":["claude"]}`, 200), &updated); err != nil {
 		t.Fatal(err)
 	}
-	if updated.ID != a.ID || !updated.CreatedAt.Equal(a.CreatedAt) || updated.UpdatedAt.Before(a.UpdatedAt) || len(updated.Env) != 0 || updated.Name != "Claude" {
+	if updated.ID != a.ID || !updated.CreatedAt.Equal(a.CreatedAt) || updated.UpdatedAt.Before(a.UpdatedAt) || len(updated.Env) != 0 || updated.Name != "Claude" || updated.Preview != nil {
 		t.Fatalf("whole update %+v", updated)
 	}
 	if updated.Icon != "" {
 		t.Fatalf("whole update did not clear icon: %q", updated.Icon)
+	}
+	if err := json.Unmarshal(h.expect("PUT", "/api/launch-configs/"+a.ID, `{"name":"Claude","icon":"codex","cmd":["claude"],"preview":{"lines":12,"skip":0}}`, 200), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Icon != "codex" || updated.Preview == nil || updated.Preview.Lines != 12 || updated.Preview.Skip != 0 {
+		t.Fatalf("updated icon/preview %q %+v", updated.Icon, updated.Preview)
 	}
 	h.expect("POST", "/api/launch-configs", `{"name":"Claude ","cmd":["x"]}`, 409)
 	h.expect("PUT", "/api/launch-configs/"+b.ID, `{"name":"Claude","cmd":["x"]}`, 409)
@@ -143,6 +155,8 @@ func TestLaunchConfigCRUD(t *testing.T) {
 		`{"name":"x","cmd":[""]}`,
 		`{"name":"x","cmd":["x"],"env":{"WEBMUX_SESSION_ID":"forged"}}`,
 		`{"name":"x","cmd":["x"],"env":{"1BAD":"v"}}`,
+		`{"name":"x","cmd":["x"],"preview":{"lines":0,"skip":0}}`,
+		`{"name":"x","cmd":["x"],"preview":{"lines":10,"skip":51}}`,
 		`{"name":"x","cmd":["x"],"id":"abcdefgh"}`,
 		`{"name":"x","cmd":["x"],"icon":"https://example.com/icon.svg"}`,
 		`{"name":"x","cmd":["x"]}{}`,
@@ -290,8 +304,8 @@ func TestSessionFromLaunchConfig(t *testing.T) {
 	if _, ok := fields["env"]; ok {
 		t.Fatalf("session info carries env: %s", raw)
 	}
-	if _, ok := fields["configId"]; ok {
-		t.Fatalf("session info carries configId: %s", raw)
+	if got, ok := fields["configId"]; !ok || got != cfg.ID {
+		t.Fatalf("session info configId %v: %s", got, raw)
 	}
 	item, err := h.manager.Get(info.ID)
 	if err != nil {

@@ -12,6 +12,7 @@
       ],
       "id": "<id#1>",
       "name": "Claude",
+      "preview": null,
       "updatedAt": "<time>"
     },
     {
@@ -24,6 +25,7 @@
       "envNames": [],
       "id": "<id#2>",
       "name": "Shell",
+      "preview": null,
       "updatedAt": "<time>"
     }
   ]

@@ -41,7 +41,7 @@ func newContinuityFixture(t *testing.T, argv []string) *continuityFixture {
 		defer done()
 		m.Shutdown(shutdown)
 	})
-	item, err := m.Create("", argv, "", nil)
+	item, err := m.Create("", argv, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

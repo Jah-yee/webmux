@@ -175,6 +175,26 @@ describe("validateLaunchDraft", () => {
     ).toBeTruthy();
   });
 
+  test("validates optional preview settings and inherits when null", () => {
+    const valid = validateLaunchDraft("Agent", "agent", [], false, {
+      lines: 20,
+      skip: 3,
+    });
+    expect(valid.ok && valid.value.preview).toEqual({ lines: 20, skip: 3 });
+    expect(
+      validateLaunchDraft("Agent", "agent", [], false, { lines: 0, skip: 0 })
+        .errors.preview,
+    ).toBe("显示行数须为 1–50 的整数");
+    expect(
+      validateLaunchDraft("Agent", "agent", [], false, {
+        lines: 10,
+        skip: 51,
+      }).errors.preview,
+    ).toBe("跳过末尾行数须为 0–50 的整数");
+    const inherited = validateLaunchDraft("Agent", "agent", [], false, null);
+    expect(inherited.ok && inherited.value.preview).toBeNull();
+  });
+
   test("Bash loading keeps quoted, empty and shell-looking arguments literal", () => {
     const argv = [
       "opencode",

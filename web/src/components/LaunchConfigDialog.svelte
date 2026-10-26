@@ -16,8 +16,16 @@
   import { api, APIError } from "../api";
   import { LaunchConfigSchema, type LaunchConfig } from "../schemas";
   import {
+    defaultPreviewSettings,
+    previewSettings,
+  } from "../previewSettings.svelte";
+  import {
     LAUNCH_ENV_MAX,
     LAUNCH_ICON_OPTIONS,
+    LAUNCH_PREVIEW_LINES_MAX,
+    LAUNCH_PREVIEW_LINES_MIN,
+    LAUNCH_PREVIEW_SKIP_MAX,
+    LAUNCH_PREVIEW_SKIP_MIN,
     launchConfigIcon,
     launchCommandDraft,
     validateLaunchDraft,
@@ -41,12 +49,39 @@
   let loadBashrc = $state(false);
   let rows = $state<EnvRow[]>([]);
   let revealed = $state<Record<number, boolean>>({});
+  let defaultPreview = $state(true);
+  let previewLines = $state<number | undefined>(defaultPreviewSettings.lines);
+  let previewSkip = $state<number | undefined>(defaultPreviewSettings.skip);
   let nextKey = 0;
   let loading = $state(false);
   let loadError = $state("");
   let error = $state("");
   let busy = $state(false);
-  const draft = $derived(validateLaunchDraft(name, command, rows, loadBashrc));
+  const preview = $derived(
+    defaultPreview
+      ? null
+      : {
+          lines: typeof previewLines === "number" ? previewLines : Number.NaN,
+          skip: typeof previewSkip === "number" ? previewSkip : Number.NaN,
+        },
+  );
+  const draft = $derived(
+    validateLaunchDraft(name, command, rows, loadBashrc, preview),
+  );
+  const previewLinesInvalid = $derived(
+    !defaultPreview &&
+      (typeof previewLines !== "number" ||
+        !Number.isInteger(previewLines) ||
+        previewLines < LAUNCH_PREVIEW_LINES_MIN ||
+        previewLines > LAUNCH_PREVIEW_LINES_MAX),
+  );
+  const previewSkipInvalid = $derived(
+    !defaultPreview &&
+      (typeof previewSkip !== "number" ||
+        !Number.isInteger(previewSkip) ||
+        previewSkip < LAUNCH_PREVIEW_SKIP_MIN ||
+        previewSkip > LAUNCH_PREVIEW_SKIP_MAX),
+  );
   const iconOptions = [
     { value: "auto", label: "自动匹配" },
     ...LAUNCH_ICON_OPTIONS,
@@ -72,6 +107,9 @@
       loadBashrc = false;
       rows = [];
       revealed = {};
+      defaultPreview = true;
+      previewLines = previewSettings.lines;
+      previewSkip = previewSettings.skip;
       error = "";
       loadError = "";
       busy = false;
@@ -90,6 +128,9 @@
             const restored = launchCommandDraft(config.cmd);
             command = restored.command;
             loadBashrc = restored.loadBashrc;
+            defaultPreview = !config.preview;
+            previewLines = config.preview?.lines ?? previewSettings.lines;
+            previewSkip = config.preview?.skip ?? previewSettings.skip;
             rows = Object.entries(config.env).map(([key, value]) =>
               row(key, value),
             );
@@ -321,6 +362,76 @@
             <p class="text-xs text-muted-foreground">
               变量值保存在服务端状态文件中，默认遮挡；列表与新建会话页只显示变量个数，不显示值。
             </p>
+          </fieldset>
+          <fieldset class="grid min-w-0 gap-2">
+            <legend class="mb-2 text-sm font-medium">
+              输出预览 <span class="font-normal text-muted-foreground"
+                >可选</span
+              >
+            </legend>
+            <div class="flex items-center gap-2">
+              <Checkbox
+                id="launch-config-preview-default"
+                bind:checked={defaultPreview}
+                aria-describedby="launch-config-preview-help"
+              />
+              <Label for="launch-config-preview-default">跟随全局默认</Label>
+            </div>
+            {#if defaultPreview}
+              <p
+                id="launch-config-preview-help"
+                class="text-xs text-muted-foreground"
+              >
+                使用设置页「会话输出预览」中的行数与跳过末尾行数。
+              </p>
+            {:else}
+              <div class="grid min-w-0 gap-4 sm:grid-cols-2">
+                <div class="grid gap-2">
+                  <Label for="launch-config-preview-lines">显示行数</Label>
+                  <Input
+                    id="launch-config-preview-lines"
+                    type="number"
+                    min={LAUNCH_PREVIEW_LINES_MIN}
+                    max={LAUNCH_PREVIEW_LINES_MAX}
+                    step={1}
+                    bind:value={previewLines}
+                    aria-invalid={previewLinesInvalid}
+                    aria-describedby={draft.errors.preview
+                      ? "launch-config-preview-help launch-config-preview-error"
+                      : "launch-config-preview-help"}
+                  />
+                </div>
+                <div class="grid gap-2">
+                  <Label for="launch-config-preview-skip">跳过末尾行数</Label>
+                  <Input
+                    id="launch-config-preview-skip"
+                    type="number"
+                    min={LAUNCH_PREVIEW_SKIP_MIN}
+                    max={LAUNCH_PREVIEW_SKIP_MAX}
+                    step={1}
+                    bind:value={previewSkip}
+                    aria-invalid={previewSkipInvalid}
+                    aria-describedby={draft.errors.preview
+                      ? "launch-config-preview-help launch-config-preview-error"
+                      : "launch-config-preview-help"}
+                  />
+                </div>
+              </div>
+              {#if draft.errors.preview}<p
+                  id="launch-config-preview-error"
+                  role="alert"
+                  class="text-xs text-destructive"
+                >
+                  {draft.errors.preview}
+                </p>{/if}
+              <p
+                id="launch-config-preview-help"
+                class="text-xs text-muted-foreground"
+              >
+                不同 agent
+                的底部状态栏高度不同；按此配置启动的会话在首页使用这些值。修改配置后回到首页生效。
+              </p>
+            {/if}
           </fieldset>
           {#if error}<InlineNotice tone="danger">{error}</InlineNotice>{/if}
         </fieldset>

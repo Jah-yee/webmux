@@ -25,6 +25,9 @@ type SessionInfo struct {
 	Workspace    *SessionWorkspace   `json:"workspace"`
 	Attention    *SessionAttention   `json:"attention"`
 	ReportedCwd  *SessionReportedCwd `json:"reportedCwd"`
+	// ConfigID is the saved launch config used at creation, if any. It is
+	// omitted for sessions started from an explicit command.
+	ConfigID string `json:"configId,omitempty"`
 }
 
 // SessionWorkspace is the registered worktree a session was started in.

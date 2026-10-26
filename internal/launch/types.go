@@ -19,11 +19,15 @@ import (
 
 // Limits shared with the browser editor.
 const (
-	MaxConfigs    = 100
-	MaxNameChars  = 64
-	MaxCmdItems   = 128
-	MaxItemBytes  = 8192
-	MaxEnvEntries = 64
+	MaxConfigs      = 100
+	MaxNameChars    = 64
+	MaxCmdItems     = 128
+	MaxItemBytes    = 8192
+	MaxEnvEntries   = 64
+	MaxPreviewLines = 50
+	MaxPreviewSkip  = 50
+	MinPreviewLines = 1
+	MinPreviewSkip  = 0
 )
 
 var (
@@ -37,6 +41,13 @@ var (
 	ErrUnavailable = errors.New("启动配置不可用")
 )
 
+// PreviewSettings selects the session output preview rows for sessions started
+// from this config. Nil inherits the browser's global preview setting.
+type PreviewSettings struct {
+	Lines int `json:"lines"`
+	Skip  int `json:"skip"`
+}
+
 // Config is a full launch config, including environment values.
 type Config struct {
 	ID        string            `json:"id"`
@@ -44,27 +55,30 @@ type Config struct {
 	Icon      string            `json:"icon,omitempty"`
 	Cmd       []string          `json:"cmd"`
 	Env       map[string]string `json:"env"`
+	Preview   *PreviewSettings  `json:"preview"`
 	CreatedAt time.Time         `json:"createdAt"`
 	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
 // Summary is the list form: environment names only, never values.
 type Summary struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Icon      string    `json:"icon,omitempty"`
-	Cmd       []string  `json:"cmd"`
-	EnvNames  []string  `json:"envNames"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Icon      string           `json:"icon,omitempty"`
+	Cmd       []string         `json:"cmd"`
+	EnvNames  []string         `json:"envNames"`
+	Preview   *PreviewSettings `json:"preview"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
 // Input holds the client-editable fields of a create or whole update.
 type Input struct {
-	Name string
-	Icon string
-	Cmd  []string
-	Env  map[string]string
+	Name    string
+	Icon    string
+	Cmd     []string
+	Env     map[string]string
+	Preview *PreviewSettings
 }
 
 var idPattern = regexp.MustCompile(`^[a-z2-7]{8}$`)
@@ -110,7 +124,25 @@ func normalize(in Input) (Input, error) {
 			return Input{}, invalid("环境变量 %s 的值超过 %d 字节", name, MaxItemBytes)
 		}
 	}
-	return Input{Name: name, Icon: in.Icon, Cmd: slices.Clone(in.Cmd), Env: cloneEnv(in.Env)}, nil
+	preview := clonePreview(in.Preview)
+	if preview != nil {
+		if preview.Lines < MinPreviewLines || preview.Lines > MaxPreviewLines {
+			return Input{}, invalid("预览行数须为 %d–%d", MinPreviewLines, MaxPreviewLines)
+		}
+		if preview.Skip < MinPreviewSkip || preview.Skip > MaxPreviewSkip {
+			return Input{}, invalid("跳过末尾行数须为 %d–%d", MinPreviewSkip, MaxPreviewSkip)
+		}
+	}
+	return Input{Name: name, Icon: in.Icon, Cmd: slices.Clone(in.Cmd), Env: cloneEnv(in.Env), Preview: preview}, nil
+}
+
+// clonePreview copies p so callers never share a pointer with stored state.
+func clonePreview(p *PreviewSettings) *PreviewSettings {
+	if p == nil {
+		return nil
+	}
+	preview := *p
+	return &preview
 }
 
 // cloneEnv copies env; nil becomes an empty map so it serializes as {}.
@@ -123,6 +155,7 @@ func cloneEnv(env map[string]string) map[string]string {
 func (c Config) clone() Config {
 	c.Cmd = slices.Clone(c.Cmd)
 	c.Env = cloneEnv(c.Env)
+	c.Preview = clonePreview(c.Preview)
 	return c
 }
 
@@ -137,6 +170,7 @@ func (c Config) summary() Summary {
 		Icon:      c.Icon,
 		Cmd:       slices.Clone(c.Cmd),
 		EnvNames:  names,
+		Preview:   clonePreview(c.Preview),
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
 	}

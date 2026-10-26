@@ -4,7 +4,7 @@
   import { isStandalone } from "../capabilities";
   import SessionStatus from "./SessionStatus.svelte";
   import type { SessionInfo } from "../schemas";
-  import { previewSettings } from "../previewSettings.svelte";
+  import { previewFor } from "../launchPreviews.svelte";
   import { selectPreview } from "../preview";
   import { copyText } from "../clipboard";
   import { locationHints } from "../session-location";
@@ -38,7 +38,8 @@
         ? `${Math.floor(seconds / 60)} 分钟前`
         : `${Math.floor(seconds / 3600)} 小时前`,
   );
-  const preview = $derived(selectPreview(session.preview, previewSettings));
+  const settings = $derived(previewFor(session.configId));
+  const preview = $derived(selectPreview(session.preview, settings));
   const hints = $derived(locationHints(session, groupPath));
   // A Home Screen app has no browser tabs; opening one would also lose the
   // app's local Token storage, so keep its navigation inside the app.
@@ -156,7 +157,7 @@
     <pre
       data-slot="terminal-preview"
       aria-label="终端输出预览"
-      style:--preview-lines={previewSettings.lines}
+      style:--preview-lines={settings.lines}
       class:preview-empty={!preview}
       class="h-preview mt-4 min-w-0 overflow-hidden px-4 pb-4 font-mono text-xs leading-5 whitespace-pre text-foreground/85">{preview ||
         (session.preview

@@ -60,8 +60,15 @@ func TestConfigIDRulesRunBeforeDirectoryChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	info := item.Info()
-	if !reflect.DeepEqual(info.Cmd, saved.Cmd) || info.Cwd != cwd {
+	if !reflect.DeepEqual(info.Cmd, saved.Cmd) || info.Cwd != cwd || info.ConfigID != saved.ID {
 		t.Fatalf("session from config: %+v", info)
+	}
+	direct, err := s.CreateSession(context.Background(), SessionInput{Cwd: cwd, Cmd: []string{"/bin/sh", "-c", "printf DIRECT"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := direct.Info().ConfigID; got != "" {
+		t.Fatalf("explicit command recorded config %q", got)
 	}
 }
 

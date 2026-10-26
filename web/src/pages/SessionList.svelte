@@ -26,6 +26,7 @@
   import DirectSessions from "../components/DirectSessions.svelte";
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
+  import { setLaunchPreviews } from "../launchPreviews.svelte";
   import { homeLayout, pruneHomeWorktrees, setPinned } from "../homeWorktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
@@ -130,16 +131,23 @@
     if (launchConfigs.status !== "ready") launchConfigs = { status: "loading" };
     void loadLaunchConfigs();
   }
-  async function loadLaunchConfigs() {
+  async function loadLaunchConfigs(initial = false) {
     try {
       const configs = await api("/launch-configs", LaunchConfigsSchema);
-      if (!disposed) launchConfigs = { status: "ready", configs };
+      if (!disposed) {
+        launchConfigs = { status: "ready", configs };
+        setLaunchPreviews(configs);
+      }
     } catch (err) {
-      if (!disposed)
+      if (!disposed) {
         launchConfigs = {
           status: "unavailable",
           error: (err as Error).message,
         };
+        // Cards keep the last loaded previews while a reload is in flight or
+        // fails; only an unavailable store on page load falls back to global.
+        if (initial) setLaunchPreviews([]);
+      }
     }
   }
   function pin(repositoryId: string, ids: string[], pinned: boolean) {
@@ -205,7 +213,7 @@
     const startup = new AbortController();
     const startupTimeout = setTimeout(() => startup.abort(), 1000);
     startupRefresh = refresh(startup.signal);
-    void loadLaunchConfigs();
+    void loadLaunchConfigs(true);
     void Promise.allSettled([loadSetup(startup.signal), startupRefresh]).then(
       () => {
         clearTimeout(startupTimeout);

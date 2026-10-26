@@ -9,6 +9,7 @@
       "sleep 60"
     ],
     "cols": 80,
+    "configId": "<id#2>",
     "createdAt": "<time>",
     "cwd": "<repo>",
     "exitCode": null,

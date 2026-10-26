@@ -38,11 +38,23 @@ export const SessionInfoSchema = z.object({
   workspace: WorkspaceLinkSchema.nullable(),
   attention: AttentionSchema.nullable(),
   reportedCwd: ReportedCwdSchema.nullable(),
+  // Saved launch config used at creation; absent for explicit commands.
+  configId: z
+    .string()
+    .regex(/^[a-z2-7]{8}$/)
+    .optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
 
+export const PreviewSettingsSchema = z.object({
+  lines: z.number().int().min(1).max(50),
+  skip: z.number().int().min(0).max(50),
+});
+export type PreviewSettings = z.infer<typeof PreviewSettingsSchema>;
+
 // Launch configs are server-stored launch commands. Summaries (list) carry only
 // env variable names; the full config with values is fetched per id for edits.
+// A null preview inherits the browser's global preview setting.
 const launchConfigFields = {
   id: z.string().regex(/^[a-z2-7]{8}$/),
   name: z.string().min(1),
@@ -51,6 +63,7 @@ const launchConfigFields = {
     .regex(/^[a-z][a-z0-9-]{0,63}$/)
     .optional(),
   cmd: z.array(z.string()).min(1),
+  preview: PreviewSettingsSchema.nullable().optional(),
   createdAt: z.iso.datetime({ offset: true }),
   updatedAt: z.iso.datetime({ offset: true }),
 };
@@ -285,11 +298,6 @@ export const FontSizeSchema = z.coerce.number().int().min(8).max(20);
 export const ThemeSchema = z.enum(["light", "dark"]);
 export type Theme = z.infer<typeof ThemeSchema>;
 export const TextSettingSchema = z.string();
-export const PreviewSettingsSchema = z.object({
-  lines: z.number().int().min(1).max(50),
-  skip: z.number().int().min(0).max(50),
-});
-export type PreviewSettings = z.infer<typeof PreviewSettingsSchema>;
 export const QuickCommandSchema = z.object({
   id: z.string().min(1).max(64),
   name: z.string().max(40),

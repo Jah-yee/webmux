@@ -33,6 +33,7 @@ func Session(i session.Info) contract.SessionInfo {
 		ID: i.ID, Generation: i.Generation, Title: i.Title, Cwd: i.Cwd,
 		Cmd: i.Cmd, Status: string(i.Status), ExitCode: i.ExitCode, Preview: i.Preview,
 		CreatedAt: i.CreatedAt, LastActiveAt: i.LastActiveAt, Cols: i.Cols, Rows: i.Rows, Clients: i.Clients,
+		ConfigID: i.ConfigID,
 	}
 	if i.Workspace != nil {
 		w := contract.SessionWorkspace(*i.Workspace)
@@ -100,13 +101,39 @@ func RemoveWorktree(r contract.RemoveWorktreeRequest) workspace.RemoveRequest {
 	return workspace.RemoveRequest(r)
 }
 
-func LaunchConfig(c launch.Config) contract.LaunchConfig { return contract.LaunchConfig(c) }
-
-func LaunchSummaries(in []launch.Summary) []contract.LaunchConfigSummary {
-	return each(in, func(s launch.Summary) contract.LaunchConfigSummary { return contract.LaunchConfigSummary(s) })
+func previewSettings(p *launch.PreviewSettings) *contract.PreviewSettings {
+	if p == nil {
+		return nil
+	}
+	return &contract.PreviewSettings{Lines: p.Lines, Skip: p.Skip}
 }
 
-func LaunchInput(r contract.LaunchConfigInput) launch.Input { return launch.Input(r) }
+func launchPreview(p *contract.PreviewSettings) *launch.PreviewSettings {
+	if p == nil {
+		return nil
+	}
+	return &launch.PreviewSettings{Lines: p.Lines, Skip: p.Skip}
+}
+
+func LaunchConfig(c launch.Config) contract.LaunchConfig {
+	return contract.LaunchConfig{
+		ID: c.ID, Name: c.Name, Icon: c.Icon, Cmd: c.Cmd, Env: c.Env, Preview: previewSettings(c.Preview),
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+	}
+}
+
+func LaunchSummaries(in []launch.Summary) []contract.LaunchConfigSummary {
+	return each(in, func(s launch.Summary) contract.LaunchConfigSummary {
+		return contract.LaunchConfigSummary{
+			ID: s.ID, Name: s.Name, Icon: s.Icon, Cmd: s.Cmd, EnvNames: s.EnvNames, Preview: previewSettings(s.Preview),
+			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
+		}
+	})
+}
+
+func LaunchInput(r contract.LaunchConfigInput) launch.Input {
+	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview)}
+}
 
 func PushTestReport(r push.TestReport) contract.PushTestReport { return contract.PushTestReport(r) }
 

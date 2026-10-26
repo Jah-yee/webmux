@@ -97,6 +97,42 @@ test("a saved launch config starts a session with its environment and survives r
   ).not.toBe("exited");
 });
 
+test("a saved launch config drives the session preview rows", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  const command = [
+    "/bin/bash",
+    "--noprofile",
+    "--norc",
+    "-c",
+    "for i in $(seq 1 30); do printf 'line-%02d\\n' $i; done; printf 'statusbar\\nprompt\\n'; sleep 60",
+  ];
+  const created = await request.post("/api/launch-configs", {
+    data: {
+      name: "E2E preview",
+      cmd: command,
+      preview: { lines: 5, skip: 2 },
+    },
+  });
+  expect(created.status()).toBe(201);
+  const config = await created.json();
+  const started = await request.post("/api/sessions", {
+    data: { configId: config.id, cwd: workDir, name: "E2E preview" },
+  });
+  expect(started.status()).toBe(201);
+  const session = await started.json();
+  expect(session.configId).toBe(config.id);
+
+  await page.goto("/");
+  const row = page.locator(`[data-session-id="${session.id}"]`);
+  const preview = row.locator('[data-slot="terminal-preview"]');
+  await expect(preview).toContainText("line-29");
+  await expect(preview).not.toContainText("statusbar");
+  await expect(preview).toHaveAttribute("style", /--preview-lines:\s*5/);
+});
+
 test("configs persist across a settings reload and remain selectable alongside manual commands", async ({
   page,
 }) => {

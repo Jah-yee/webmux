@@ -341,6 +341,10 @@
                           {#if config.envNames.length}<Badge variant="secondary"
                               >{config.envNames.length} 个环境变量</Badge
                             >{/if}
+                          {#if config.preview}<Badge variant="outline"
+                              >预览 {config.preview.lines} 行 · 跳过 {config
+                                .preview.skip} 行</Badge
+                            >{/if}
                         </span>
                         <span
                           class="truncate font-mono text-xs text-muted-foreground"
@@ -417,7 +421,7 @@
           <Card.Title>会话输出预览</Card.Title>
           <Card.Description
             >从当前终端屏幕的底部向上选取非空行，可隐藏 agent
-            的状态栏和输入提示符。</Card.Description
+            的状态栏和输入提示符。启动配置可单独覆盖这些值；此处的全局设置用于临时命令和未配置预览的启动配置。</Card.Description
           >
         </Card.Header>
         <Card.Content class="space-y-6">

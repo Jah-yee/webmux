@@ -51,7 +51,7 @@ func wireSchema(name string) wireRules {
 		}
 	}
 	sessionFields := func(prefix string) {
-		add(prefix, "id", "id", "generation", "workspace/repositoryId", "workspace/worktreeId")
+		add(prefix, "id", "id", "generation", "configId", "workspace/repositoryId", "workspace/worktreeId")
 		add(prefix, "time", "createdAt", "lastActiveAt", "attention/since", "reportedCwd/since")
 		add(prefix, "path", "cwd", "reportedCwd/path", "workspace/worktreePath")
 	}
@@ -808,7 +808,7 @@ func wirePush(f *wireFixture) {
 // These groups need a live session, not the sessions group's lifecycle or IDs.
 func (f *wireFixture) startSession() string {
 	f.t.Helper()
-	item, err := f.manager.Create(f.root, []string{"/bin/sh", "-c", "sleep 60"}, "wire", nil)
+	item, err := f.manager.Create(f.root, []string{"/bin/sh", "-c", "sleep 60"}, "wire", nil, "")
 	if err != nil {
 		f.t.Fatal(err)
 	}

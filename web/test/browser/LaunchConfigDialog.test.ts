@@ -145,8 +145,57 @@ test("the Bashrc checkbox saves a normal command without expanding its arguments
         "$HOME",
       ],
       env: {},
+      preview: null,
     },
   });
+});
+
+test("saves per-config preview settings", async () => {
+  const onsaved = vi.fn();
+  const requests = serve({
+    "/api/launch-configs/abcdefg2": (method, body) =>
+      method === "GET"
+        ? Response.json({ ...saved, preview: { lines: 24, skip: 3 } })
+        : Response.json({ ...saved, ...(body as object) }),
+  });
+  render(LaunchConfigDialog, {
+    open: true,
+    configId: saved.id,
+    onsaved,
+  });
+  const lines = page.getByLabelText("显示行数");
+  const skip = page.getByLabelText("跳过末尾行数");
+  await expect.element(lines).toHaveValue(24);
+  await expect.element(skip).toHaveValue(3);
+  await lines.fill("30");
+  await skip.fill("5");
+  await save().click();
+  await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
+  expect(requests.at(-1)?.body).toMatchObject({
+    preview: { lines: 30, skip: 5 },
+  });
+});
+
+test("following the global default saves a null preview", async () => {
+  const onsaved = vi.fn();
+  const requests = serve({
+    "/api/launch-configs/abcdefg2": (method, body) =>
+      method === "GET"
+        ? Response.json({ ...saved, preview: { lines: 24, skip: 3 } })
+        : Response.json({ ...saved, ...(body as object) }),
+  });
+  render(LaunchConfigDialog, {
+    open: true,
+    configId: saved.id,
+    onsaved,
+  });
+  await page.getByRole("checkbox", { name: "跟随全局默认" }).click();
+  await expect
+    .poll(() => page.getByLabelText("显示行数").elements().length)
+    .toBe(0);
+  await save().click();
+  await vi.waitFor(() => expect(onsaved).toHaveBeenCalledOnce());
+  expect(requests.at(-1)?.body).toMatchObject({ preview: null });
 });
 
 test.each([true, false])(
@@ -215,6 +264,7 @@ test("editing only the name keeps every env variable in the PUT body", async () 
       name: "Claude 新名称",
       cmd: ["claude", "--resume"],
       env: { API_KEY: "secret-value" },
+      preview: null,
     },
   });
 });
