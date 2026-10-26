@@ -48,7 +48,7 @@ export interface TerminalSocketAttachment {
 }
 
 // The terminal stream of one session (`/ws/s/{id}`, frames in
-// docs/protocol.md, mirrored by internal/hub): output continuity and replay,
+// docs/protocol/websocket.md, mirrored by internal/hub): output continuity and replay,
 // session info, exit, control, submissions and replay-aware parser handlers.
 // State outlives the mounted terminal; `attach` binds one xterm instance.
 export function createTerminalSocket(id: string) {

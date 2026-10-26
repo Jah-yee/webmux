@@ -60,6 +60,7 @@ flowchart LR
 | `internal/codeview`                           | 只读文件浏览、Git 修改列表、内容快照与变化检测                                                  |
 | `internal/push`                               | Web Push 订阅存储、注意力提醒与出站推送                                                         |
 | `internal/archtest`                           | 只含测试：分层清单与架构规则 R0–R10                                                             |
+| `internal/docguard`                           | 只含测试：文档与 spec 的行数、体积、目录扇出与树状组织规则                                      |
 | `internal/wslclient`                          | Windows 客户端共用：`wsl.exe --exec webmux bridge` 拨号器、目标发行版解析、Windows→WSL 路径换算 |
 | `internal/attach`                             | 原生终端附着核心（帧、控制权、尺寸、分离键、退出码）与 Unix / Windows 控制台适配                |
 | `internal/sessioncmd`, `cmd/webmux-windows`   | `run`/`attach`/`ls`/`open` 共用实现；Windows 控制台客户端入口                                   |

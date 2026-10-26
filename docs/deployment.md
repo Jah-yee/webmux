@@ -21,7 +21,7 @@ webmux config init                 # 手动预生成 0600 的 ~/.config/webmux/c
 - 通过 `--config` 显式指定的文件只读：文件存在时只读取该文件，不存在时启动失败且绝不创建。`--config` 与 `--log-file` 支持 `~/`。
 - 默认配置已存在时直接读取，不修改、不重写。生成失败（主目录只读、权限不足、磁盘满等）会报错退出，不会静默回退到内存默认值。
 - 命令行 `--listen`、`--token` 优先于配置文件，显式传入空 token 也会覆盖配置；覆盖只影响本次进程，不写入新生成的默认配置。仅 `config show`、`config validate`、`status`、`stop` 等客户端命令只读取配置，不会触发生成。
-- `webmux version` 输出版本号；`webmux version --json` 另含控制契约版本（见 [API 与协议](protocol.md#控制面-json-契约)）。
+- `webmux version` 输出版本号；`webmux version --json` 另含控制契约版本（见 [控制面 JSON 契约](protocol/control-json.md#控制面-json-契约)）。
 
 ```sh
 webmux --config ~/.config/webmux/config.toml   # 等同于 webmux serve --config ...
@@ -42,7 +42,7 @@ curl -H 'Authorization: Bearer YOUR_TOKEN' http://127.0.0.1:7681/api/health
 
 `webmux config check` 是 `config validate` 的别名；`webmux help` 显示全部命令。
 
-JSON 输出契约见 [协议文档](protocol.md#控制面-json-契约)。配置只在启动时读取；`status` 的 `drift` 列出已修改但尚未通过重启生效的 `listen`、`token`。
+JSON 输出契约见 [控制面 JSON 契约](protocol/control-json.md#控制面-json-契约)。配置只在启动时读取；`status` 的 `drift` 列出已修改但尚未通过重启生效的 `listen`、`token`。
 
 ### 配置项
 

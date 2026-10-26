@@ -51,18 +51,19 @@ pnpm --dir web dev    # http://127.0.0.1:5173
 
 ## 常用命令
 
-| 命令                        | 说明                                                                    |
-| --------------------------- | ----------------------------------------------------------------------- |
-| `make build`                | 构建前端并编译内嵌前端的 `bin/webmux`                                   |
-| `make release`              | 交叉编译 Linux / macOS 的 amd64 与 arm64 二进制                         |
-| `make test`                 | Go race 测试 + 前端全部测试                                             |
-| `make test-unit`            | Vitest 单元测试（Node）                                                 |
-| `make test-browser`         | Vitest 组件测试（无头 Chromium）                                        |
-| `make test-e2e`             | Playwright 端到端测试（桌面 + Pixel 7）                                 |
-| `make format`               | gofmt + Oxfmt 格式化                                                    |
-| `pnpm --dir web lint`       | Oxlint 前端代码检查                                                     |
-| `pnpm --dir web check:arch` | 前端架构守卫：设计系统 lint、分层、重复与未使用代码、架构测试           |
-| `make check`                | 类型检查、构建、格式检查、Oxlint、架构守卫、`go vet` 与 `golangci-lint` |
+| 命令                        | 说明                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| `make build`                | 构建前端并编译内嵌前端的 `bin/webmux`                                             |
+| `make release`              | 交叉编译 Linux / macOS 的 amd64 与 arm64 二进制                                   |
+| `make test`                 | Go race 测试 + 前端全部测试                                                       |
+| `make test-unit`            | Vitest 单元测试（Node）                                                           |
+| `make test-browser`         | Vitest 组件测试（无头 Chromium）                                                  |
+| `make test-e2e`             | Playwright 端到端测试（桌面 + Pixel 7）                                           |
+| `make format`               | gofmt + Oxfmt 格式化                                                              |
+| `pnpm --dir web lint`       | Oxlint 前端代码检查                                                               |
+| `pnpm --dir web check:arch` | 前端架构守卫：设计系统 lint、分层、重复与未使用代码、架构测试                     |
+| `make docs-check`           | 文档与 spec 的行数、体积、目录扇出与树状组织守卫                                  |
+| `make check`                | 类型检查、构建、格式检查、文档守卫、Oxlint、架构守卫、`go vet` 与 `golangci-lint` |
 
 运行单个测试：
 
@@ -107,6 +108,7 @@ DeepSeek 直连的 `DEEPSEEK_API_KEY`。
 - Go 使用 gofmt；前端使用 Oxfmt（80 列、两空格缩进、分号、尾随逗号）。提交前运行 `make format`。
 - 使用 `pnpm --dir web lint` 运行 Oxlint，`pnpm --dir web lint:fix` 应用自动修复。Oxlint 检查 JS/TS 和 Svelte 的脚本部分；Svelte 模板和类型检查继续由 `svelte-check` 负责。
 - 使用 `pnpm --dir web check:arch` 检查组件复用、设计令牌与分层；基线已清空，任何违规都会失败；只有引入带存量违规的新规则时才记录基线，并在修复后运行 `pnpm --dir web arch:ratchet` 收紧。规则见 [前端架构守卫](docs/frontend-architecture.md)。
+- 文档与 OpenSpec 规格遵循 [文档治理](docs/doc-governance.md)：单个文件 20–400 行且不超过 48 KiB，`docs/` 与 `openspec/` 每一级直接子目录不超过 20 个；`make docs-check` 失败时会给出拆分、合并或重新分组的具体指令，按提示整理并更新引用。
 - TypeScript 开启严格模式；HTTP 响应、WebSocket JSON 和本地设置必须经过 Zod 校验。
 - 修改后端 JSON 字段时，同步更新 `web/src/schemas.ts` 及其使用方。
 - 命令以 argv 执行，不经 shell 展开。
@@ -135,7 +137,7 @@ openspec list
 openspec validate --all --strict --no-interactive
 ```
 
-规格位于 `openspec/specs/`，在途变更位于 `openspec/changes/`。规格文档使用简体中文，结构标题与 SHALL / MUST 关键字保持英文。在 AI 工具中通过 `/opsx-propose`（omp）、`/opsx:propose`（Claude Code）或 `$openspec-propose`（Codex）发起提案。
+规格位于 `openspec/specs/`，在途变更位于 `openspec/changes/`。规格文档使用简体中文，结构标题与 SHALL / MUST 关键字保持英文；文件规模与目录结构遵循 [文档治理](docs/doc-governance.md)，归档变更不参与检查。在 AI 工具中通过 `/opsx-propose`（omp）、`/opsx:propose`（Claude Code）或 `$openspec-propose`（Codex）发起提案。
 
 ## 发布
 

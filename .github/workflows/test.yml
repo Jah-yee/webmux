@@ -31,6 +31,8 @@ jobs:
           go: "true"
       - name: Check formatting
         run: make format-check
+      - name: Check documentation governance
+        run: make docs-check
       - name: Lint frontend
         run: pnpm --dir web lint
       - name: Check frontend architecture

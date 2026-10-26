@@ -96,7 +96,7 @@ export const SessionEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("removed"), id: SessionInfoSchema.shape.id }),
 ]);
 export const ExitSchema = z.object({ exitCode: z.number().int() });
-// Terminal stream frames 0x04–0x06; see docs/protocol.md.
+// Terminal stream frames 0x04–0x06; see docs/protocol/websocket.md.
 const OffsetSchema = z.number().int().nonnegative();
 export const StreamPositionSchema = z.object({
   generation: SessionInfoSchema.shape.generation,

@@ -47,6 +47,7 @@ var webmux = manifest{
 		"internal/service":      client,
 
 		"internal/archtest": testOnly,
+		"internal/docguard": testOnly,
 	},
 	outbound: map[string]string{
 		"internal/push": "delivers Web Push messages to browser push services",

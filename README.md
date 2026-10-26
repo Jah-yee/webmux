@@ -182,12 +182,13 @@ webmux service uninstall     # 停止并移除服务，保留配置、日志和�
 
 | 文档                                             | 内容                                                             |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
-| [User Stories](docs/user-stories.md)             | 各项功能的用户目的、验收要点与功能覆盖索引                       |
+| [User Stories](docs/user-stories.md)             | 各项功能的用户目的、验收要点、分组文档与功能覆盖索引             |
 | [使用指南](docs/usage.md)                        | 会话、终端、草稿模式、代码工作区、worktree、移动端               |
 | [部署指南](docs/deployment.md)                   | 配置、systemd / launchd、Windows 托盘、手机访问、HTTPS、平台差异 |
 | [Cloudflare 公网隧道](docs/cloudflare-tunnel.md) | Named Tunnel 的创建、token、公共主机名、验证与排错               |
 | [架构设计](docs/architecture.md)                 | 会话模型、缓冲与回放、状态探测、并发与资源                       |
-| [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码                               |
+| [API 与协议](docs/protocol.md)                   | REST API、WebSocket 帧格式、错误码（按主题分页）                 |
+| [文档治理](docs/doc-governance.md)               | 文档与 spec 的行数、体积、目录扇出与树状组织规则                 |
 | [参与贡献](CONTRIBUTING.md)                      | 开发环境、测试、代码规范、OpenSpec 工作流                        |
 | [安全策略](SECURITY.md)                          | 安全模型与漏洞报告                                               |
 | [产品能力 baseline](baseline/README.md)          | 可复现评测、统计口径与首次量化结果                               |

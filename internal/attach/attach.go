@@ -44,7 +44,7 @@ const TakeControlKey = '\r'
 // ResizeInterval is how often the terminal size is polled.
 const ResizeInterval = 250 * time.Millisecond
 
-// Frame types of docs/protocol.md.
+// Frame types of docs/protocol/websocket.md.
 const (
 	frameOutput   = contract.FrameOutput
 	frameSnapshot = contract.FrameSnapshot
