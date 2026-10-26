@@ -281,7 +281,7 @@ export const UploadSchema = z.object({ path: z.string().startsWith("/") });
 export const RecentDirsSchema = z
   .array(z.string())
   .transform((dirs) => dirs.slice(0, 10));
-export const FontSizeSchema = z.coerce.number().int().min(12).max(20);
+export const FontSizeSchema = z.coerce.number().int().min(8).max(20);
 export const ThemeSchema = z.enum(["light", "dark"]);
 export type Theme = z.infer<typeof ThemeSchema>;
 export const TextSettingSchema = z.string();

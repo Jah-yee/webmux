@@ -166,6 +166,10 @@ test("touch tablets with a fine primary pointer only raise the keyboard from the
   await page.getByRole("menuitem", { name: "字体大小", exact: true }).tap();
   const dialog = page.getByRole("dialog", { name: "字体大小" });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("slider")).toHaveAttribute(
+    "aria-valuemin",
+    "8",
+  );
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(input).not.toBeFocused();

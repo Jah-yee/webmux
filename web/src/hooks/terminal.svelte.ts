@@ -215,7 +215,7 @@ export function useTerminal(
   }
 
   function setFontSize(value: number) {
-    fontSize = Math.max(12, Math.min(20, Math.round(value)));
+    fontSize = Math.max(8, Math.min(20, Math.round(value)));
     if (terminal) {
       terminal.options.fontSize = fontSize;
       safeFit();

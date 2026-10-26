@@ -369,8 +369,8 @@ test("font size is restored, clamped, persisted and re-fits the PTY grid", async
   expect(localStorage.getItem("webmux.fontSize")).toBe("20");
   await expect.poll(() => geometry(socket).cell).toBeGreaterThan(initial);
   api.setFontSize(3);
-  expect(api.fontSize).toBe(12);
-  expect(localStorage.getItem("webmux.fontSize")).toBe("12");
+  expect(api.fontSize).toBe(8);
+  expect(localStorage.getItem("webmux.fontSize")).toBe("8");
   await expect.poll(() => geometry(socket).cell).toBeLessThan(initial);
   api.setFontSize(15.6);
   expect(api.fontSize).toBe(16);
@@ -378,5 +378,16 @@ test("font size is restored, clamped, persisted and re-fits the PTY grid", async
   await expect
     .poll(() => getComputedStyle(host().querySelector(".xterm-rows")!).fontSize)
     .toBe("16px");
+  expectNoSessionMutation(socket);
+});
+
+test("a stored font size at the minimum is restored", async () => {
+  observeGlyphPixels(true);
+  localStorage.setItem("webmux.fontSize", "8");
+  const { socket, api } = await openTerminalApi();
+  expect(api.fontSize).toBe(8);
+  expect(getComputedStyle(host().querySelector(".xterm-rows")!).fontSize).toBe(
+    "8px",
+  );
   expectNoSessionMutation(socket);
 });

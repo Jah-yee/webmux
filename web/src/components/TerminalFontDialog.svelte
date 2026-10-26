@@ -27,7 +27,7 @@
     <Slider
       id="terminal-font"
       type="single"
-      min={12}
+      min={8}
       max={20}
       step={1}
       value={fontSize}
