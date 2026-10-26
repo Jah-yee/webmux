@@ -6,11 +6,14 @@ set -euo pipefail
 deadline=$((SECONDS + 300))
 
 # GitHub's API occasionally returns transient 5xx responses under load; retry
-# them instead of failing the shard on a single bad response.
+# them instead of failing the shard on a single bad response. A failed call
+# still prints the error body to stdout, so only a successful attempt's output
+# is passed on; otherwise it would be read as the producer's conclusion.
 gh_api() {
-  local attempt
+  local attempt out
   for attempt in 1 2 3 4 5; do
-    if gh api "$@"; then
+    if out=$(gh api "$@"); then
+      printf '%s' "$out"
       return 0
     fi
     if (( attempt < 5 )); then

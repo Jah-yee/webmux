@@ -109,6 +109,7 @@ DeepSeek 直连的 `DEEPSEEK_API_KEY`。
 - 使用 `pnpm --dir web lint` 运行 Oxlint，`pnpm --dir web lint:fix` 应用自动修复。Oxlint 检查 JS/TS 和 Svelte 的脚本部分；Svelte 模板和类型检查继续由 `svelte-check` 负责。
 - 使用 `pnpm --dir web check:arch` 检查组件复用、设计令牌与分层；基线已清空，任何违规都会失败；只有引入带存量违规的新规则时才记录基线，并在修复后运行 `pnpm --dir web arch:ratchet` 收紧。规则见 [前端架构守卫](docs/frontend-architecture.md)。
 - 文档与 OpenSpec 规格遵循 [文档治理](docs/doc-governance.md)：单个文件 20–400 行且不超过 48 KiB，`docs/` 与 `openspec/` 每一级直接子目录不超过 20 个；`make docs-check` 失败时会给出拆分、合并或重新分组的具体指令，按提示整理并更新引用。
+- 前端代码遵循 [前端代码质量基线](docs/frontend-style.md)：`$state` 只用于驱动界面更新，派生值用 `$derived`，`$effect` 只做副作用并清理，列表用稳定业务 ID 作 key，props 必须带类型，事件使用 Svelte 5 属性写法。
 - TypeScript 开启严格模式；HTTP 响应、WebSocket JSON 和本地设置必须经过 Zod 校验。
 - 修改后端 JSON 字段时，同步更新 `web/src/schemas.ts` 及其使用方。
 - 命令以 argv 执行，不经 shell 展开。
