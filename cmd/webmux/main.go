@@ -374,8 +374,8 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 }
 
 // printConfigNotice names the configuration in use and points at the local
-// API for a persisted token. Neither branch prints the token itself, so
-// service-manager logs never capture it.
+// API for a persisted token. This notice does not print the token; separately
+// emitted tunnel access links can still expose it in service-manager logs.
 func printConfigNotice(out io.Writer, c serverRun) {
 	if c.ConfigPath == "" {
 		return

@@ -267,6 +267,19 @@
 .terminal-host .xterm .xterm-viewport {
   background-color: var(--terminal-background);
 }
+.xterm-graphics-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+}
+.xterm-graphics-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
 /* Observers show the controller's grid at its own size and pan across it. */
 .terminal-host.observing {
   overflow: auto;

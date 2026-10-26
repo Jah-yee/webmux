@@ -5,7 +5,7 @@
 WebMux 以启动服务的系统用户身份执行任意命令，**等同于把一个 shell 暴露到网络上**。它不是进程沙箱，也不提供多用户隔离。安全依赖于网络隔离：
 
 - 默认监听所有接口 `0.0.0.0:7681`；仅本机使用请设为 `127.0.0.1:7681`。远程访问建议绑定 Tailscale / WireGuard 等可信 VPN 地址，并用防火墙限制可访问的接口。
-- 设置随机的共享 `token`。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件和持久化的 256 位 Token，不在终端打印 Token，可用 `webmux status --json --reveal-token` 查看。若现有配置的 token 为空且监听地址不是 loopback（包括默认的 `0.0.0.0`），则每次启动临时生成 256 位随机 Token，终端打印带 `#token=` 的本地链接；以 systemd / launchd 运行时该链接会写入 journal 或日志文件，且重启后更换。只有仅监听 loopback 且未启用隧道时，空 token 才表示不认证。
+- 设置随机的共享 `token`。未显式指定 `--config` 且默认配置不存在时，首次启动会生成 0600 配置文件和持久化的 256 位 Token；未启用隧道时不会在启动输出中打印该 Token，可用 `webmux status --json --reveal-token` 查看。启用隧道时仍会输出带 Token 的链接和二维码，详见下文；日志中的持久化 Token 不会因重启失效。若现有配置的 token 为空且监听地址不是 loopback（包括默认的 `0.0.0.0`），则每次启动临时生成 256 位随机 Token，终端打印带 `#token=` 的本地链接；以 systemd / launchd 运行时该链接会写入 journal 或日志文件，且重启后更换。只有仅监听 loopback 且未启用隧道时，空 token 才表示不认证。
 - **不要把 WebMux 直接暴露到公网。** 确需公网访问时，只使用受控 Cloudflare Tunnel 入口，并接受下面的风险模型。
 
 ### Cloudflare Tunnel

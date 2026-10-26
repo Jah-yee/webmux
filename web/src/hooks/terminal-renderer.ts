@@ -1,6 +1,7 @@
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
+import { observeDevicePixelRatio } from "./terminal-dpr";
 import {
   terminalFontFamilyAlt,
   terminalFontFamilyCss,
@@ -127,22 +128,11 @@ export function createTerminalRenderer(
       observer.observe(parent);
     }
   };
-  let resolution = matchMedia(
-    `(resolution: ${window.devicePixelRatio || 1}dppx)`,
-  );
-  const resolutionChanged = () => {
-    if (disposed) return;
-    resolution.removeEventListener("change", resolutionChanged);
-    resolution = matchMedia(
-      `(resolution: ${window.devicePixelRatio || 1}dppx)`,
-    );
-    resolution.addEventListener("change", resolutionChanged);
-    // A DPR change need not change the CSS box. Request a fresh observation
-    // rather than comparing the new DPR against stale physical dimensions.
+  const stopDpr = observeDevicePixelRatio(() => {
+    // Re-observe physical dimensions rather than comparing with stale pixels.
     observer.unobserve(parent);
     observeSize();
-  };
-  resolution.addEventListener("change", resolutionChanged);
+  });
   observeSize();
   let remeasureFrame = 0;
   const remeasure = () => {
@@ -174,7 +164,7 @@ export function createTerminalRenderer(
       document.fonts.removeEventListener("loadingdone", remeasure);
       clearTimeout(timer);
       observer.disconnect();
-      resolution.removeEventListener("change", resolutionChanged);
+      stopDpr();
       colors.disconnect();
       // Viewport.reset() queues syncScrollArea for the next frame, and that
       // frame reads RenderService.dimensions. Disposing in this turn removes

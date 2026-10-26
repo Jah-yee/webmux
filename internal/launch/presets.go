@@ -13,7 +13,7 @@ func Presets(shell string) []Input {
 		{Name: "Codex CLI", Cmd: bashrcCommand("codex")},
 		{Name: "Gemini CLI", Cmd: bashrcCommand("gemini")},
 		{Name: "Open Code", Cmd: bashrcCommand("opencode")},
-		{Name: "omp", Cmd: bashrcCommand("omp")},
+		{Name: "omp", Cmd: bashrcCommand("omp"), Env: map[string]string{"PI_FORCE_IMAGE_PROTOCOL": "kitty"}},
 	}
 }
 

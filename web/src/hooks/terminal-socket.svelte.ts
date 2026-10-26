@@ -18,6 +18,10 @@ import {
 import { connect, type Connection, type SocketConnection } from "../ws";
 import { osc52CopyText } from "../terminalClipboard";
 import { createOutputBudget } from "../terminal-output";
+import {
+  attachTerminalGraphics,
+  type TerminalGraphics,
+} from "./terminal-graphics";
 
 const inputSendError = "终端输入未发送：连接不可用或发送队列已满，请重试。";
 // CAN aborts an unfinished control sequence without executing it. Send it as
@@ -95,8 +99,13 @@ export function createTerminalSocket(id: string) {
     // reset boundary's callback opens the replay window exactly where the
     // snapshot starts and the snapshot's callback closes it.
     let replaying = false;
+    let graphics: TerminalGraphics | undefined;
+    const writeOutput = (data: Uint8Array, parsed: () => void) => {
+      if (graphics) graphics.write(data, parsed);
+      else term.write(data, parsed);
+    };
     const output = createOutputBudget(
-      (data, parsed) => term.write(data, parsed),
+      (data, parsed) => writeOutput(data, parsed),
       () => {
         // A scheduled reconnect already brings a fresh snapshot.
         if (connection !== "connected") return;
@@ -105,18 +114,20 @@ export function createTerminalSocket(id: string) {
     );
     const restore = (payload: Uint8Array) => {
       output.replay();
+      // Invalidate old decodes before queuing the new replay generation.
+      graphics?.reset();
       const version = ++restoreVersion;
       cancelAnimationFrame(restoreFrame);
       restoring = true;
       // Public reset() resets the screen, not xterm's pending parser sequence.
       // Parse CAN first, then reset away the old screen before replay/live bytes.
-      term.write(resetBoundary, () => {
+      writeOutput(resetBoundary, () => {
         if (disposed) return;
         term.reset();
         view.resetFind();
         replaying = true;
       });
-      term.write(payload, () => {
+      writeOutput(payload, () => {
         replaying = false;
         if (disposed || version !== restoreVersion) return;
         restoreFrame = requestAnimationFrame(() => {
@@ -296,6 +307,9 @@ export function createTerminalSocket(id: string) {
       },
     );
     socket = ws;
+    graphics = attachTerminalGraphics(term, (text) => {
+      if (!replaying) ws.send(6, encoder.encode(text));
+    });
     const resize = term.onResize(sendSize);
     // OSC 52 is the application copy request handled by xterm's clipboard
     // addon. Selection copy (Ctrl+Shift+C and the selection toolbar) already
@@ -345,6 +359,7 @@ export function createTerminalSocket(id: string) {
         clearTimeout(recoveryNoticeTimer);
         discardedHistory = false;
         document.removeEventListener("visibilitychange", visible);
+        graphics?.dispose();
         resize.dispose();
         oscClipboard.dispose();
         schemeQuery.dispose();
