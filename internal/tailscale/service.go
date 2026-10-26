@@ -395,24 +395,28 @@ func (s *Service) Apply(ctx context.Context, mode string, httpsPort, localPort i
 	return nil
 }
 
-// Remove closes only the exact HTTPS port owned by this instance. It attempts
-// both commands so a stale Funnel flag never blocks removing the Serve entry.
-func (s *Service) Remove(ctx context.Context, httpsPort int, wasPublic bool) error {
+// Remove closes only the exact HTTPS port owned by this instance. A single
+// `serve off` removes the handler and the Funnel flag; running `funnel off`
+// first would make the follow-up fail with "handler does not exist". A missing
+// handler means the entry is already gone, so retries succeed.
+func (s *Service) Remove(ctx context.Context, httpsPort int) error {
 	cli, err := s.requireCLI(ctx)
 	if err != nil {
 		return err
 	}
 	port := strconv.Itoa(httpsPort)
-	var funnelErr error
-	if wasPublic {
-		if _, stderr, err := s.exec(ctx, cli, "funnel", "--https="+port, "off"); err != nil {
-			funnelErr = cliError("tailscale funnel off", stderr, err)
-		}
-	}
 	if _, stderr, err := s.exec(ctx, cli, "serve", "--https="+port, "off"); err != nil {
+		if missingHandler(stderr) {
+			return nil
+		}
 		return cliError("tailscale serve off", stderr, err)
 	}
-	return funnelErr
+	return nil
+}
+
+func missingHandler(stderr []byte) bool {
+	text := strings.ToLower(string(stderr))
+	return strings.Contains(text, "handler does not exist") || strings.Contains(text, "no serve config")
 }
 
 func (s *Service) requireCLI(ctx context.Context) (string, error) {
@@ -454,12 +458,23 @@ func (s *Service) exec(ctx context.Context, cli string, args ...string) ([]byte,
 	return stdout.Bytes(), stderr.Bytes(), err
 }
 
+// CLIError is a failed Tailscale CLI invocation. Callers may map only this
+// type to user-facing guidance; controller-authored reasons stay verbatim.
+type CLIError struct {
+	Action string
+	Detail string
+}
+
+func (e *CLIError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Action, e.Detail)
+}
+
 func cliError(action string, stderr []byte, err error) error {
 	msg := strings.TrimSpace(string(stderr))
 	if msg == "" {
 		msg = err.Error()
 	}
-	return fmt.Errorf("%s: %s", action, msg)
+	return &CLIError{Action: action, Detail: msg}
 }
 
 // safeCLIReason maps CLI stderr to a fixed reason so detection errors never

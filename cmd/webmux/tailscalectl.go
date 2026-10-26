@@ -138,6 +138,12 @@ func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error
 		if !ok || record.Target != target {
 			changed = true
 		}
+		// An explicit provider change must close the old entry through the
+		// recorded provider before applying on the new one. "auto" never
+		// rewrites ownership because detection may legitimately change.
+		if tc.cfg.Provider != "auto" && providerFamily(record.Provider) != tc.cfg.Provider {
+			changed = true
+		}
 		if changed {
 			if err := tc.removeRecord(ctx, record); err != nil {
 				return err
@@ -208,35 +214,45 @@ func (tc *tailscaleController) deleteRecord() {
 }
 
 func (tc *tailscaleController) removeRecord(ctx context.Context, record *tailscaleState) error {
-	tc.public.Clear("tailscale")
-	tc.svc.SetProvider(providerFamily(record.Provider))
-	defer func() {
-		tc.svc.SetProvider(tc.cfg.Provider)
-	}()
-	status := tc.svc.Detect(ctx)
-	serve, err := tc.svc.ServeStatus(ctx)
-	if err == nil {
-		info, exists := serve.Lookup(record.DNSName, record.Port)
-		if !exists && status.DNSName != "" {
-			info, exists = serve.Lookup(status.DNSName, record.Port)
-		}
-		if !exists {
-			if status.Provider == tailscale.ProviderNone || !providerMatches(record.Provider, status.Provider) {
-				return fmt.Errorf("无法确认上次运行的 Tailscale 入口是否仍然存在（recorded provider %q, detected %q）", record.Provider, status.Provider)
-			}
-			tc.deleteRecord()
-			tc.record = nil
-			return nil
-		}
-		if info.Proxy != record.Target {
-			return fmt.Errorf("端口 %d 的现有入口不属于上次记录的 target；拒绝删除，请手工确认", record.Port)
-		}
-	}
-	if err := tc.svc.Remove(ctx, record.Port, record.Public || record.Mode == config.TailscaleFunnel); err != nil {
-		return fmt.Errorf("无法移除上次运行的 Tailscale 入口；请先手工执行 `tailscale funnel --https=%d off` 与 `tailscale serve --https=%d off`：%s", record.Port, record.Port, classifyTailscaleError(err, providerFamily(record.Provider)))
+	if err := tc.removeVerified(ctx, record); err != nil {
+		// Never leave an unverified record in memory: Close must not retry a
+		// deletion that this process could not prove it owns.
+		tc.clearRecord()
+		return err
 	}
 	tc.deleteRecord()
-	tc.record = nil
+	tc.clearRecord()
+	return nil
+}
+
+// removeVerified deletes the exact recorded entry only when the live Serve
+// status proves the same provider, DNS/port and proxy target. A read failure or
+// a target mismatch fails closed and removes nothing.
+func (tc *tailscaleController) removeVerified(ctx context.Context, record *tailscaleState) error {
+	tc.public.Clear("tailscale")
+	tc.svc.SetProvider(providerFamily(record.Provider))
+	defer tc.svc.SetProvider(tc.cfg.Provider)
+	status := tc.svc.Detect(ctx)
+	serve, err := tc.svc.ServeStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("无法确认 Tailscale 入口所有权: %w", err)
+	}
+	if status.Provider == tailscale.ProviderNone || !providerMatches(record.Provider, status.Provider) {
+		return fmt.Errorf("无法确认上次运行的 Tailscale 入口所有权（recorded provider %q, detected %q）", record.Provider, status.Provider)
+	}
+	info, exists := serve.Lookup(record.DNSName, record.Port)
+	if !exists && status.DNSName != "" && status.DNSName != record.DNSName {
+		info, exists = serve.Lookup(status.DNSName, record.Port)
+	}
+	if !exists {
+		return nil
+	}
+	if info.Proxy != record.Target {
+		return fmt.Errorf("端口 %d 的现有入口不属于上次记录的 target；拒绝删除，请手工确认", record.Port)
+	}
+	if err := tc.svc.Remove(ctx, record.Port); err != nil {
+		return fmt.Errorf("无法移除上次运行的 Tailscale 入口；请先手工执行 `tailscale serve --https=%d off`：%s", record.Port, tailscaleReason(err, providerFamily(record.Provider)))
+	}
 	return nil
 }
 
@@ -400,6 +416,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 					tc.ready(status, rec.Port, target, false)
 					return
 				}
+				tc.clearRecord()
 				tc.fail(fmt.Errorf("端口 %d 的现有入口与记录不匹配；WebMux 不会覆盖，请先手工移除", rec.Port), false)
 				return
 			}
@@ -418,6 +435,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 			tc.ready(status, port, target, false)
 			return
 		}
+		tc.clearRecord()
 		tc.fail(fmt.Errorf("端口 %d 已被其他 Tailscale 入口占用，WebMux 不会覆盖", port), false)
 		return
 	}
@@ -430,6 +448,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 	tc.record = &record
 	tc.mu.Unlock()
 	if err := tc.saveRecord(record); err != nil {
+		tc.clearRecord()
 		tc.fail(fmt.Errorf("无法写入 tailscale.json: %w", err), false)
 		return
 	}
@@ -490,28 +509,39 @@ func (tc *tailscaleController) ready(status tailscale.Status, port int, target s
 }
 
 func (tc *tailscaleController) cleanupFailed(ctx context.Context, record tailscaleState, cause error) {
-	tc.public.Clear("tailscale")
-	removeErr := tc.svc.Remove(ctx, record.Port, record.Public)
-	if removeErr != nil {
-		tc.fail(fmt.Errorf("%v；本次入口可能仍存在，请手工执行 `tailscale funnel --https=%d off` 与 `tailscale serve --https=%d off`", cause, record.Port, record.Port), false)
+	if err := tc.removeVerified(ctx, &record); err != nil {
+		tc.fail(fmt.Errorf("%s；本次入口可能仍存在，请手工执行 `tailscale serve --https=%d off`：%s", tailscaleReason(cause, providerFamily(record.Provider)), record.Port, err), false)
 		return
 	}
-	tc.mu.Lock()
-	tc.record = nil
-	tc.mu.Unlock()
+	tc.clearRecord()
 	tc.deleteRecord()
 	tc.fail(cause, false)
+}
+
+// tailscaleReason maps only genuine CLI errors to user-facing guidance.
+func tailscaleReason(err error, provider string) string {
+	var cliErr *tailscale.CLIError
+	if errors.As(err, &cliErr) {
+		return classifyTailscaleError(cliErr, provider)
+	}
+	return err.Error()
 }
 
 func (tc *tailscaleController) fail(err error, revoke bool) {
 	if revoke {
 		tc.public.Clear("tailscale")
 	}
-	reason := classifyTailscaleError(err, tc.cfg.Provider)
+	reason := tailscaleReason(err, tc.cfg.Provider)
 	tc.mu.Lock()
 	tc.state, tc.url, tc.reason = contract.TailscaleFailed, "", reason
 	tc.mu.Unlock()
 	tc.logger.Warn("tailscale entry failed; local HTTP continues", "error", reason)
+}
+
+func (tc *tailscaleController) clearRecord() {
+	tc.mu.Lock()
+	tc.record = nil
+	tc.mu.Unlock()
 }
 
 func (tc *tailscaleController) failLocked(reason string, revoke bool) {
@@ -546,13 +576,12 @@ func (tc *tailscaleController) Close() {
 	if record != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := tc.svc.Remove(ctx, record.Port, record.Public || record.Mode == config.TailscaleFunnel); err == nil {
-			tc.deleteRecord()
-		} else {
+		if err := tc.removeVerified(ctx, record); err != nil {
 			tc.logger.Warn("tailscale entry not removed; remove it manually and it will be reconciled on the next start",
 				"error", err, "port", record.Port,
-				"funnelHint", fmt.Sprintf("tailscale funnel --https=%d off", record.Port),
 				"serveHint", fmt.Sprintf("tailscale serve --https=%d off", record.Port))
+		} else {
+			tc.deleteRecord()
 		}
 	}
 	if tc.lock != nil {

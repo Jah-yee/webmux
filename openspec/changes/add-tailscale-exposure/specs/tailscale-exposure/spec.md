@@ -69,7 +69,7 @@
 
 执行前系统 SHALL 要求 `CertDomains` 包含节点 DNS 名；`CertDomains` 为空时 MUST NOT 执行会等待证书的 Serve 命令，而应失败并提示在 Tailscale 管理台启用 HTTPS。端口已有入口时，只有状态记录中属于本次实例、且精确匹配当前 target、端口并仅有一个 `/` handler 的入口可以复用；没有记录或其他入口 MUST NOT 被覆盖。`tailscale.json` 是唯一的所有权依据。`port = 0` 时 SHALL 按 443、8443、10000 选择第一个没有他人入口的端口；三者都被占用时 MUST 失败并提示在 Serve 下显式指定其他空闲端口。显式端口冲突 MUST 失败，不静默换端口。
 
-命令成功退出后，系统 SHALL 回读 `serve status --json`，要求目标端口存在指向当前 target 的 `/` handler 且 `AllowFunnel` 不为真；确认后才 SHALL 把 `https://<dns>`（443）或 `https://<dns>:<port>`（其他端口）登记为受权来源并报告 `ready`。停止、失败或切换模式前 SHALL 先撤销来源，再只对本次记录执行 `tailscale serve --https=<port> off`（需要时先关闭 Funnel）。系统 MUST NOT 调用 `tailscale serve reset`。
+命令成功退出后，系统 SHALL 回读 `serve status --json`，要求目标端口存在指向当前 target 的 `/` handler 且 `AllowFunnel` 不为真；确认后才 SHALL 把 `https://<dns>`（443）或 `https://<dns>:<port>`（其他端口）登记为受权来源并报告 `ready`。停止、失败或切换模式前 SHALL 先撤销来源，再只对本次记录执行 `tailscale serve --https=<port> off`；该命令同时清除 Funnel 标记，系统 MUST NOT 先执行 `tailscale funnel ... off`，也不得调用 `tailscale serve reset`。
 
 #### Scenario: 首次开启 Serve
 
@@ -107,7 +107,7 @@
 
 执行前系统 SHALL 校验 HTTPS 证书、端口与已有入口；缺少证书或端口冲突时直接失败。命令失败时 SHALL 把 stderr 映射为缺少节点 `funnel` 属性、权限不足、HTTPS 未启用或端口冲突的可操作原因，并指向 Tailscale 管理台或 Windows operator 设置。命令成功不等于生效：系统 SHALL 回读 `serve status --json`，要求目标 handler 指向当前 target 且 `AllowFunnel[<dns>:<port>] == true`，确认后才登记公开来源并报告 `ready`。
 
-从 Serve 切换到 Funnel、从 Funnel 切换到 Serve 或端口变化时，系统 SHALL 先关闭旧记录的精确目标（按需执行 `tailscale funnel --https=<旧端口> off` 与 `tailscale serve --https=<旧端口> off`），再应用新目标，避免旧端口继续公开。Funnel 启动失败或切换失败时，系统 SHALL 撤销公开来源，并尝试移除本次记录中可能残留的公开入口；无法确认移除时 MUST 保持 `failed` 并给出人工命令，不得报告 `ready`。系统 MUST NOT 调用 `tailscale funnel reset`。
+从 Serve 切换到 Funnel、从 Funnel 切换到 Serve 或端口变化时，系统 SHALL 先关闭旧记录的精确目标（执行 `tailscale serve --https=<旧端口> off`，该命令同时清除 Funnel 标记），再应用新目标，避免旧端口继续公开。Funnel 启动失败或切换失败时，系统 SHALL 撤销公开来源，并尝试移除本次记录中可能残留的公开入口；无法确认移除时 MUST 保持 `failed` 并给出人工命令，不得报告 `ready`。系统 MUST NOT 调用 `tailscale funnel reset`。
 
 #### Scenario: 显式开启公网 Funnel
 
@@ -224,7 +224,7 @@ Tailscale 来源 SHALL 只在命令成功并由 serve 配置回读确认后登�
 #### Scenario: 无法清理旧入口
 
 - **WHEN** `mode = "off"` 或模式/端口已变化，状态文件中的旧入口无法关闭
-- **THEN** 系统拒绝启动并输出精确的 `funnel ... off` / `serve ... off` 命令，不在旧入口仍指向本进程时开始监听
+- **THEN** 系统拒绝启动并输出精确的 `serve ... off` 命令，不在旧入口仍指向本进程时开始监听
 
 #### Scenario: 绑定监听失败
 

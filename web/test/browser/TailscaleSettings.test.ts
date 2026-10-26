@@ -49,7 +49,9 @@ test("shows ready Serve state and copies the URL", async () => {
   await expect
     .element(page.getByText("https://node.tailnet.ts.net", { exact: true }))
     .toBeVisible();
-  expect(page.getByText("Serve（仅 tailnet）", { exact: true })).toBeTruthy();
+  await expect
+    .element(page.getByText("Serve（仅 tailnet）", { exact: true }))
+    .toBeVisible();
   await page.getByRole("button", { name: "复制 Tailscale 地址" }).click();
   expect(writeText).toHaveBeenCalledWith("https://node.tailnet.ts.net");
 });
@@ -65,7 +67,9 @@ test("warns about public Funnel", async () => {
   await expect
     .element(page.getByText("公网 HTTPS", { exact: false }))
     .toBeVisible();
-  expect(page.getByText("Funnel（公网）", { exact: true })).toBeTruthy();
+  await expect
+    .element(page.getByText("Funnel（公网）", { exact: true }))
+    .toBeVisible();
 });
 
 test("shows WSL NAT guidance and no fake toggle", async () => {
@@ -92,9 +96,19 @@ test("shows WSL NAT guidance and no fake toggle", async () => {
       }),
     )
     .toBeVisible();
-  expect(page.getByText("mirrored", { exact: false })).toBeTruthy();
-  expect(page.getByText("other.tailnet.ts.net", { exact: true })).toBeTruthy();
-  expect(page.getByText("公网（Funnel）", { exact: true })).toBeTruthy();
+  await expect
+    .element(
+      page.getByText("托管 Windows Tailscale 需要 mirrored 网络", {
+        exact: false,
+      }),
+    )
+    .toBeVisible();
+  await expect
+    .element(page.getByText("other.tailnet.ts.net", { exact: true }))
+    .toBeVisible();
+  await expect
+    .element(page.getByText("公网（Funnel）", { exact: true }))
+    .toBeVisible();
 });
 
 test("refresh re-reads the status", async () => {
@@ -113,5 +127,7 @@ test("keeps the page usable when detection fails", async () => {
   await expect
     .element(page.getByText("检测失败", { exact: false }))
     .toBeVisible();
-  expect(page.getByRole("button", { name: "刷新检测" })).toBeTruthy();
+  await expect
+    .element(page.getByRole("button", { name: "刷新检测" }))
+    .toBeVisible();
 });

@@ -56,12 +56,15 @@ DNS、模式、端口、target 与 `pending`/`active` 状态，是唯一的所�
 
 ## 手工移除与排错
 
-精确关闭 WebMux 记录的端口（先 Funnel，后 Serve）：
+精确关闭 WebMux 记录的端口：
 
 ```sh
-tailscale funnel --https=<port> off
-tailscale serve  --https=<port> off
+tailscale serve --https=<port> off
 ```
+
+`serve off` 同时移除该端口的 handler 与 Funnel 标记；重复执行返回的
+`handler does not exist` 可视为已移除。不要先执行 `funnel off`，它会让随后的
+`serve off` 报错。
 
 常见原因：
 

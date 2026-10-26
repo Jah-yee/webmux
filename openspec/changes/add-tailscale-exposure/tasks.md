@@ -28,8 +28,8 @@
 - [x] 3.5 应用前读取 serve 配置：只有状态记录匹配且 target 精确、唯一 `/` handler 可复用；无记录、其他入口、额外 handler 或不匹配 target 一律不覆盖并失败
 - [x] 3.6 执行写命令前先持久化 `pending` 意图，再用 argv 执行 `tailscale serve --bg --https=<port> http://127.0.0.1:<port>`；不使用 shell，不传用户拼接字符串
 - [x] 3.7 应用到 Serve 后回读 `serve status --json`：要求目标 handler 指向当前 target 且 `AllowFunnel` 不为真；不满足则撤销并失败
-- [x] 3.8 实现精确移除：先按需 `tailscale funnel --https=<port> off`，再 `tailscale serve --https=<port> off`；绝不调用 `serve reset` 或 `funnel reset`
-- [x] 3.9 启动对账：`mode=off` 或模式/端口/target 变化时在绑定监听前移除旧精确目标，失败则拒绝启动；匹配入口复用后绑定失败也要关闭并报告风险；`pending`/`active` 记录中的入口缺失则重建；记录匹配才复用；无记录或不匹配则失败关闭，禁止仅凭 target 相同接管入口
+- [x] 3.8 实现精确移除：执行 `tailscale serve --https=<port> off`，同时清除 Funnel 标记；把重复移除的 `handler does not exist` 视为成功；绝不调用 `serve reset` 或 `funnel reset`
+- [x] 3.9 启动对账：`mode=off` 或模式/端口/target/provider 变化时在绑定监听前移除旧精确目标，失败则拒绝启动；移除前用 `serve status --json` 复核 provider、DNS/端口与 target，读取失败或 target 不符时失败关闭；匹配入口复用后绑定失败也要关闭并报告风险；`pending`/`active` 记录中的入口缺失则重建；记录匹配才复用；无记录或不匹配则失败关闭，禁止仅凭 target 相同接管入口
 - [x] 3.10 退出时在短超时内移除本次入口；成功后删除状态记录，CLI 不可用或超时保留 `pending`/`active` 记录供下次启动对账；不结束 tailscaled、不阻塞会话清理
 - [x] 3.11 就绪后打印 `WebMux tailscale: <url>`；Token 为本次生成时附 `#token=<Token>` 与二维码，配置 Token 只打印 URL；结构化日志不含 Token
 - [x] 3.12 测试写命令前落盘、命令成功后标记前崩溃、失败清理成功/失败、退出清理成功/失败的 `pending`/`active` 状态转换，以及 `mode=off`/端口变化/损坏状态/绑定失败下的启动前清理与拒绝启动

@@ -27,7 +27,7 @@ WebMux 以启动服务的系统用户身份执行任意命令，**等同于把�
 
 - Funnel 必须由用户显式配置，WebMux 不会因为检测到 Tailscale 就自动公开。任何拿到 Funnel 链接与 Token 的人都能执行命令。
 - Serve/Funnel 都要求至少 43 字符的 WebMux 登录 Token；留空时生成本次进程 Token，带 Token 的启动链接可能写入日志。
-- WebMux 只操作 `tailscale.json` 记录的精确端口与 target，不覆盖其他入口，也不调用 `serve reset` / `funnel reset`；退出、失败或切换时先撤销来源授权，旧 ts.net Host/Origin 立即返回 403。
+- WebMux 只操作 `tailscale.json` 记录的精确端口与 target，不覆盖其他入口，也不调用 `serve reset` / `funnel reset`；退出、失败或切换时先撤销来源授权，正常路径下旧 ts.net Host/Origin 立即返回 403。若此前按手工方案把 ts.net 主机名写入了 `allowed_origins`，该白名单独立于来源注册表，撤销后仍会接受旧 Origin；迁移到托管的 Serve/Funnel 时请删除这些手工条目。
 - `GET /api/tailscale` 不返回 Token、其他入口的 target 或原始 CLI 输出。配置由 TOML 管理，修改后需重启。
 - WSL 中的 Windows provider 必须显式选择且要求 mirrored 网络；WebMux 不会自动修改 `.wslconfig`、Windows 防火墙、tailnet ACL 或自动提权。
 - 配置、端口与故障排查见 [Tailscale Serve / Funnel 入口](docs/tailscale.md)。

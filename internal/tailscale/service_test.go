@@ -2,6 +2,7 @@ package tailscale
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,7 +89,7 @@ func TestApplyAndRemoveUseArgv(t *testing.T) {
 	if err := svc.Apply(context.Background(), "funnel", 8443, 7681); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Remove(context.Background(), 8443, true); err != nil {
+	if err := svc.Remove(context.Background(), 8443); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(logPath)
@@ -98,7 +99,6 @@ func TestApplyAndRemoveUseArgv(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	want := []string{
 		"funnel --bg --https=8443 http://127.0.0.1:7681",
-		"funnel --https=8443 off",
 		"serve --https=8443 off",
 	}
 	if len(lines) != len(want) {
@@ -108,6 +108,48 @@ func TestApplyAndRemoveUseArgv(t *testing.T) {
 		if lines[i] != want[i] {
 			t.Errorf("call %d = %q, want %q", i, lines[i], want[i])
 		}
+	}
+}
+
+func TestRemoveTreatsMissingHandlerAsSuccess(t *testing.T) {
+	dir := t.TempDir()
+	cli := filepath.Join(dir, "tailscale")
+	script := `#!/bin/sh
+case "$*" in
+"status --json") echo '` + runningStatus + `';;
+"serve status --json") echo '` + emptyServe + `';;
+"serve --https=8443 off") echo "handler does not exist" >&2; exit 1;;
+*) exit 1;;
+esac
+`
+	if err := os.WriteFile(cli, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Options{Command: cli, Provider: "linux", IsWSL: func() bool { return false }})
+	if err := svc.Remove(context.Background(), 8443); err != nil {
+		t.Fatalf("missing handler was not treated as success: %v", err)
+	}
+}
+
+func TestRemovePropagatesCLIError(t *testing.T) {
+	dir := t.TempDir()
+	cli := filepath.Join(dir, "tailscale")
+	script := `#!/bin/sh
+case "$*" in
+"status --json") echo '` + runningStatus + `';;
+"serve status --json") echo '` + emptyServe + `';;
+"serve --https=8443 off") echo "access denied" >&2; exit 1;;
+*) exit 1;;
+esac
+`
+	if err := os.WriteFile(cli, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Options{Command: cli, Provider: "linux", IsWSL: func() bool { return false }})
+	err := svc.Remove(context.Background(), 8443)
+	var cliErr *CLIError
+	if !errors.As(err, &cliErr) {
+		t.Fatalf("error type = %T (%v), want *CLIError", err, err)
 	}
 }
 
