@@ -24,28 +24,33 @@ func encode(t *testing.T, v any) string {
 	return string(data)
 }
 
-// Conversions keep nil as null and empty as []/{}: the browser schema
-// distinguishes them.
-func TestNilAndEmptyCollectionsKeepTheirShape(t *testing.T) {
+// Required arrays normalize nil to []; nullable fields retain null.
+func TestRequiredArraysAndNullableCollections(t *testing.T) {
 	for _, row := range []struct {
 		name string
 		got  any
 		want []string
 	}{
-		{"nil sessions", Sessions(nil), []string{"null"}},
+		{"nil sessions", Sessions(nil), []string{"[]"}},
 		{"empty sessions", Sessions([]session.Info{}), []string{"[]"}},
-		{"nil cmd", Session(session.Info{}), []string{`"cmd":null`, `"workspace":null`, `"attention":null`, `"reportedCwd":null`, `"exitCode":null`}},
+		{"nil cmd", Session(session.Info{}), []string{`"cmd":[]`, `"workspace":null`, `"attention":null`, `"reportedCwd":null`, `"exitCode":null`}},
 		{"empty cmd", Session(session.Info{Cmd: []string{}}), []string{`"cmd":[]`}},
 		{"empty env", LaunchConfig(launch.Config{Env: map[string]string{}}), []string{`"env":{}`}},
-		{"nil env", LaunchConfig(launch.Config{}), []string{`"env":null`}},
+		{"nil env", LaunchConfig(launch.Config{}), []string{`"env":{}`}},
+		{"nil env names", LaunchSummaries([]launch.Summary{{}}), []string{`"envNames":[]`, `"cmd":[]`}},
+		{"nil branches", Branches(workspace.Branches{Branches: []workspace.Branch{{}}}), []string{`"worktreePaths":[]`, `"bases":[]`}},
+		{"nil preview arrays", Preview(workspace.Preview{}), []string{`"sessions":[]`, `"blockers":[]`}},
+		{"nil report arrays", PushTestReport(push.TestReport{}), []string{`"removed":[]`, `"errors":[]`}},
+		{"nil listing children", CodeListing(codeview.Listing{}), []string{`"children":[]`}},
+		{"nil change entries", CodeChanges(codeview.Changes{}), []string{`"entries":[]`}},
 		{"empty env names", LaunchSummaries([]launch.Summary{{EnvNames: []string{}}}), []string{`"envNames":[]`}},
-		{"repository without worktrees", Repository(workspace.Repository{}), []string{`"worktrees":null`}},
+		{"repository without worktrees", Repository(workspace.Repository{}), []string{`"worktrees":[]`}},
 		{"repository with no worktrees", Repository(workspace.Repository{Worktrees: []workspace.Worktree{}}), []string{`"worktrees":[]`}},
 		{"preview", Preview(workspace.Preview{Sessions: []session.Info{}, Blockers: []string{}}), []string{`"sessions":[]`, `"blockers":[]`}},
 		{"test report", PushTestReport(push.TestReport{Removed: []string{}, Errors: []string{}}), []string{`"removed":[]`, `"errors":[]`}},
 		{"listing", CodeListing(codeview.Listing{Children: []codeview.Node{}}), []string{`"children":[]`}},
 		{"node link omitted", CodeListing(codeview.Listing{Children: []codeview.Node{{}}}), []string{`"mediaType":""`}},
-		{"check maps", CodeCheck(codeview.Check{Snapshots: map[string]string{}}), []string{`"snapshots":{}`, `"directories":null`}},
+		{"check maps", CodeCheck(codeview.Check{Snapshots: map[string]string{}}), []string{`"snapshots":{}`, `"directories":{}`}},
 	} {
 		got := encode(t, row.got)
 		for _, want := range row.want {

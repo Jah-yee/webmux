@@ -54,6 +54,7 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 
 ## Code Conventions & Common Patterns
 
+- Go follows [the Go quality baseline](docs/go-style.md), based on the Uber Go Style Guide with documented local exceptions. New Go code must add no lint warnings; use the pinned golangci-lint release and `make go-lint`.
 - Go uses gofmt. Frontend files use Oxfmt with an 80-column print width, two spaces, semicolons, trailing commas, and Svelte formatting enabled. Oxlint checks JS/TS and Svelte script blocks; keep `svelte-check` for Svelte template and type diagnostics. TypeScript is strict; `$lib` aliases `web/src/lib`.
 - Before writing UI, look for an existing component in `web/src/lib/components/ui/`, then `web/src/components/`, then the shadcn-svelte registry; give design-system components a new variant or size instead of restyling them with `class`. Run `pnpm --dir web check:arch` before finishing frontend work. The committed baselines are empty, so any violation fails; fix it rather than adding `eslint-disable`/`jscpd:ignore` or growing a baseline. A baseline is only for adopting a new rule that has existing violations, followed by `pnpm --dir web arch:ratchet` as they are fixed. See [Frontend Architecture Guard](docs/frontend-architecture.md).
 - Follow existing names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune-bearing hooks, Go `*_test.go`, and Playwright `*.spec.ts`.
@@ -109,7 +110,7 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 
 Use Go 1.26+, Node.js 26.12.1 (Current, pinned in `.nvmrc`), pnpm 12.11.2, and GNU Make. Use pnpm—not npm, Yarn, or Bun—to manage frontend dependencies; retain the frozen lockfile workflow and the `esbuild`-only dependency build-script allowlist.
 
-Production needs only the Linux or macOS binary, a shell, and any chosen CLI agents; it does not require Node or Go. `deploy/webmux.service` (systemd) and `deploy/com.webmux.plist` (launchd) are the service examples. Release builds use `CGO_ENABLED=0`. `make check` needs a separately installed `golangci-lint`; current CI does not run that lint target. OpenSpec 1.13.0 is optional workflow tooling, not a frontend runtime dependency.
+Production needs only the Linux or macOS binary, a shell, and any chosen CLI agents; it does not require Node or Go. `deploy/webmux.service` (systemd) and `deploy/com.webmux.plist` (launchd) are the service examples. Release builds use `CGO_ENABLED=0`. `make check` needs golangci-lint v2.15.0; CI runs the same configured linters and `go vet ./...` after building embedded frontend assets. OpenSpec 1.13.0 is optional workflow tooling, not a frontend runtime dependency.
 
 ## Testing & QA
 

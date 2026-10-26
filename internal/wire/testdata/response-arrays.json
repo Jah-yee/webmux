@@ -1,0 +1,140 @@
+{
+  "branches": {
+    "branches": [
+      {
+        "name": "main",
+        "head": "",
+        "worktreePaths": []
+      }
+    ],
+    "bases": [],
+    "defaultBase": null,
+    "defaultParent": ""
+  },
+  "changes": {
+    "nextCursor": "",
+    "total": 0,
+    "entries": [],
+    "contentVersion": "",
+    "checkedAt": "0001-01-01T00:00:00Z"
+  },
+  "check": {
+    "snapshots": {},
+    "directories": {},
+    "changes": "unchanged",
+    "checkedAt": "0001-01-01T00:00:00Z"
+  },
+  "launch": [
+    {
+      "id": "abcdefgh",
+      "name": "Shell",
+      "cmd": [
+        "sh"
+      ],
+      "envNames": [],
+      "preview": null,
+      "createdAt": "0001-01-01T00:00:00Z",
+      "updatedAt": "0001-01-01T00:00:00Z"
+    }
+  ],
+  "launchConfig": {
+    "id": "abcdefgh",
+    "name": "Shell",
+    "cmd": [
+      "sh"
+    ],
+    "env": {},
+    "preview": null,
+    "createdAt": "0001-01-01T00:00:00Z",
+    "updatedAt": "0001-01-01T00:00:00Z"
+  },
+  "launches": [],
+  "listing": {
+    "children": [],
+    "nextCursor": "",
+    "limited": false,
+    "complete": false,
+    "contentVersion": "",
+    "checkedAt": "0001-01-01T00:00:00Z"
+  },
+  "preview": {
+    "confirmationId": "",
+    "expiresAt": "0001-01-01T00:00:00Z",
+    "worktree": {
+      "id": "",
+      "repositoryId": "",
+      "path": "",
+      "kind": "main",
+      "branch": null,
+      "head": null,
+      "detached": false,
+      "locked": false,
+      "lockReason": "",
+      "prunable": false,
+      "available": false,
+      "dirty": null,
+      "hasUntracked": false,
+      "hasIgnored": false,
+      "error": ""
+    },
+    "sessions": [],
+    "blockers": [],
+    "forceAllowed": false
+  },
+  "push": {
+    "devices": 0,
+    "accepted": 0,
+    "removed": [],
+    "errors": []
+  },
+  "repositories": [],
+  "repository": {
+    "id": "",
+    "name": "",
+    "commonDir": "",
+    "anchorPath": "",
+    "availability": "unavailable",
+    "error": "",
+    "checkedAt": "0001-01-01T00:00:00Z",
+    "worktrees": []
+  },
+  "session": {
+    "id": "abcdefgh",
+    "generation": "0123456789abcdef",
+    "title": "",
+    "cwd": "",
+    "cmd": [
+      "sh"
+    ],
+    "status": "running",
+    "exitCode": null,
+    "preview": "",
+    "createdAt": "0001-01-01T00:00:00Z",
+    "lastActiveAt": "0001-01-01T00:00:00Z",
+    "cols": 80,
+    "rows": 24,
+    "clients": 0,
+    "workspace": null,
+    "attention": null,
+    "reportedCwd": null
+  },
+  "sessions": [],
+  "snapshot": {
+    "type": "snapshot",
+    "sessions": []
+  },
+  "tailscale": {
+    "provider": "none",
+    "configuredProvider": "auto",
+    "backendState": "",
+    "httpsReady": false,
+    "funnelAvailable": "",
+    "mode": "",
+    "port": 0,
+    "source": "",
+    "storageAvailable": false,
+    "canEnable": false,
+    "state": "",
+    "entries": []
+  }
+}

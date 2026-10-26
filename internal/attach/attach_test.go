@@ -42,7 +42,18 @@ func newTerminal(cols, rows int) *fakeTerminal {
 	return &fakeTerminal{input: r, feed: w, cols: cols, rows: rows}
 }
 
-func (f *fakeTerminal) Read(p []byte) (int, error) { return f.input.Read(p) }
+func (f *fakeTerminal) ReadContext(ctx context.Context, p []byte) (int, error) {
+	finished := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		_ = f.input.CloseWithError(ctx.Err())
+		close(finished)
+	})
+	n, err := f.input.Read(p)
+	if !stop() {
+		<-finished
+	}
+	return n, err
+}
 func (f *fakeTerminal) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -269,6 +280,16 @@ func TestAttachReportsNativeColorScheme(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, client := server(t)
+			connections := make(chan net.Conn, 1)
+			transport := client.HTTP.Transport.(*http.Transport)
+			dial := transport.DialContext
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				conn, err := dial(ctx, network, addr)
+				if err == nil {
+					connections <- conn
+				}
+				return conn, err
+			}
 			s, err := m.Create("", []string{"sh", "-c", `stty -icanon -echo; printf '\033[?2031hready\n'; head -c 9 | tr '\033' E; echo; sleep 30`}, "", nil, "")
 			if err != nil {
 				t.Fatal(err)
@@ -359,5 +380,93 @@ func TestTakeControlIndexRecognisesPlainEnterOnly(t *testing.T) {
 		if got := takeControlIndex([]byte(tc.in)); got != tc.want {
 			t.Errorf("takeControlIndex(%q) = %d, want %d", tc.in, got, tc.want)
 		}
+	}
+}
+
+// heldTerminal deliberately delays completion after cancellation, proving Run
+// joins input rather than merely asking it to stop.
+type heldTerminal struct {
+	started  chan struct{}
+	canceled chan struct{}
+	release  chan struct{}
+}
+
+func (h *heldTerminal) ReadContext(ctx context.Context, _ []byte) (int, error) {
+	close(h.started)
+	<-ctx.Done()
+	close(h.canceled)
+	<-h.release
+	return 0, ctx.Err()
+}
+func (*heldTerminal) Write(p []byte) (int, error) { return len(p), nil }
+func (*heldTerminal) Size() (int, int, error)     { return 80, 24, nil }
+
+func TestRunCancelsAndJoinsIdleInput(t *testing.T) {
+	for _, end := range []string{"cancel", "exit", "disconnect"} {
+		t.Run(end, func(t *testing.T) {
+			m, client := server(t)
+			connections := make(chan net.Conn, 1)
+			transport := client.HTTP.Transport.(*http.Transport)
+			dial := transport.DialContext
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				conn, err := dial(ctx, network, addr)
+				if err == nil {
+					connections <- conn
+				}
+				return conn, err
+			}
+			s, err := m.Create("", []string{"sh", "-c", "sleep 60"}, "", nil, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			term := &heldTerminal{started: make(chan struct{}), canceled: make(chan struct{}), release: make(chan struct{})}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan readResult, 1)
+			go func() {
+				r, err := Run(ctx, client, s.Info().ID, term, Options{Observe: true})
+				done <- readResult{result: r, err: err}
+			}()
+			select {
+			case <-term.started:
+			case <-time.After(5 * time.Second):
+				t.Fatal("input did not start")
+			}
+			switch end {
+			case "cancel":
+				cancel()
+			case "exit":
+				s.Close()
+			case "disconnect":
+				if err := (<-connections).Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			select {
+			case <-term.canceled:
+			case <-time.After(5 * time.Second):
+				t.Fatal("input was not canceled")
+			}
+			select {
+			case <-done:
+				t.Fatal("Run returned while input still owned the terminal")
+			case <-time.After(20 * time.Millisecond):
+			}
+			close(term.release)
+			select {
+			case r := <-done:
+				if end == "cancel" && !errors.Is(r.err, context.Canceled) {
+					t.Fatalf("cancel result: %+v", r)
+				}
+				if end == "exit" && !r.result.Exited {
+					t.Fatalf("exit result: %+v", r)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("Run did not join input")
+			}
+			if end == "cancel" && s.Info().Status == session.StatusExited {
+				t.Fatal("cancel killed persistent session")
+			}
+		})
 	}
 }

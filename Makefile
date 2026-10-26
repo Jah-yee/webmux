@@ -2,6 +2,8 @@ VERSION ?= 0.1.0
 GO ?= go
 PNPM ?= pnpm
 GOFMT ?= gofmt
+GOLANGCI_LINT ?= golangci-lint
+GOLANGCI_LINT_VERSION := 2.15.0
 BASELINE_SAMPLES ?= 30
 BASELINE_OUTPUT ?= baseline/results/latest.json
 LDFLAGS = -s -w -X main.version=$(VERSION)
@@ -11,7 +13,7 @@ TRAY_LDFLAGS ?=
 RELEASE_FILES = webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
 	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe
 
-.PHONY: web build tray release check docs-check test test-unit test-browser test-e2e test-browsers-install format format-check install baseline
+.PHONY: web build tray release check docs-check go-lint test test-unit test-browser test-e2e test-browsers-install format format-check install baseline
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -47,7 +49,13 @@ check: web format-check docs-check
 	$(PNPM) --dir web lint
 	$(PNPM) --dir web check:arch
 	$(GO) vet ./...
-	golangci-lint run ./...
+	$(MAKE) go-lint
+
+# Keep local checks on the same linter release as CI.
+go-lint:
+	@$(GOLANGCI_LINT) version --short | grep -qx '$(GOLANGCI_LINT_VERSION)' || { \
+		echo 'Install golangci-lint v$(GOLANGCI_LINT_VERSION); see docs/go-style.md' >&2; exit 1; }
+	$(GOLANGCI_LINT) run ./...
 
 test:
 	$(GO) test -race -parallel=4 ./...

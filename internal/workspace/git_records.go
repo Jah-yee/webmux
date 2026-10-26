@@ -30,7 +30,7 @@ func ReadGitRecordsInput(ctx context.Context, cwd string, input io.Reader, visit
 		return err
 	}
 	if len(records.pending) != 0 {
-		return fmt.Errorf("Git NUL 输出不完整")
+		return fmt.Errorf("读取 Git NUL 输出不完整")
 	}
 	return nil
 }
@@ -51,7 +51,7 @@ func (r *nulRecords) Write(p []byte) (int, error) {
 		}
 		// This bounds one malformed record, never the number of repository paths.
 		if len(r.pending)+end > 1024*1024 {
-			r.err = fmt.Errorf("Git 单条路径记录超过 1 MiB")
+			r.err = fmt.Errorf("读取 Git 单条路径记录超过 1 MiB")
 		} else {
 			r.pending = append(r.pending, p[:end]...)
 			if end < len(p) {

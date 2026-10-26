@@ -39,7 +39,7 @@ func StreamGit(ctx context.Context, cwd string, w io.Writer, args ...string) err
 	out := &streamOutput{w: w, cancel: cancel}
 	err = runReadGit(ctx, cwd, nil, overrides, out, args...)
 	if out.err != nil {
-		return fmt.Errorf("Git 输出写入失败: %w", out.err)
+		return fmt.Errorf("处理 Git 输出写入失败: %w", out.err)
 	}
 	return err
 }
@@ -122,7 +122,7 @@ func runReadGit(ctx context.Context, cwd string, input io.Reader, overrides []st
 		if len(args) > 0 && (args[0] == "diff" || args[0] == "check-ignore" || args[0] == "config") && errors.As(err, &exit) && exit.ExitCode() == 1 {
 			return nil
 		}
-		return fmt.Errorf("Git 读取失败: %s (%w)", strings.TrimSpace(run.stderr), err)
+		return fmt.Errorf("执行 Git 读取失败: %s (%w)", strings.TrimSpace(run.stderr), err)
 	}
 	return nil
 }

@@ -21,6 +21,8 @@ export const ReportedCwdSchema = z.object({
 });
 export type ReportedCwd = z.infer<typeof ReportedCwdSchema>;
 
+// Required response arrays encode as [] even when service slices are nil.
+// Only fields explicitly marked nullable accept null. Commands remain nonempty.
 export const SessionInfoSchema = z.object({
   id: z.string().regex(/^[a-z2-7]{8}$/),
   generation: z.string().regex(/^[0-9a-f]{16}$/),

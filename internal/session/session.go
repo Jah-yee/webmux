@@ -86,6 +86,9 @@ type Subscriber struct {
 	seq    uint64
 }
 
+// Absorb output bursts without blocking the PTY reader; slow subscribers disconnect.
+const terminalOutputQueueCapacity = 256
+
 // AttachOptions identifies the browser behind a connection and where its
 // terminal already is. A matching resume point replays only the missing tail.
 type AttachOptions struct {
@@ -284,7 +287,7 @@ func (s *Session) AttachClient(o AttachOptions) *Subscriber {
 		o.Client = randomClientID()
 	}
 	s.nextSeq++
-	sub := &Subscriber{Out: make(chan Message, 256), Slow: make(chan struct{}), client: o.Client, label: o.Label, seq: s.nextSeq}
+	sub := &Subscriber{Out: make(chan Message, terminalOutputQueueCapacity), Slow: make(chan struct{}), client: o.Client, label: o.Label, seq: s.nextSeq}
 	if s.control == nil {
 		s.setControlLocked(sub)
 	} else if s.control.ClientID == sub.client {

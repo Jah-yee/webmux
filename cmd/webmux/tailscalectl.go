@@ -281,7 +281,7 @@ func (tc *tailscaleController) openLock() error {
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = lock.Close()
-		return errors.New("Tailscale 状态目录已被另一实例使用")
+		return errors.New("检测到 Tailscale 状态目录已被另一实例使用")
 	}
 	tc.lock = lock
 	return nil
@@ -658,7 +658,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 	info, ok := after.Lookup(status.DNSName, port)
 	wantPublic := cfg.Mode == config.TailscaleFunnel
 	if !ok || info.Handlers != 1 || info.Proxy != target || info.Public != wantPublic {
-		tc.cleanupFailed(ctx, record, errors.New("Tailscale 命令已结束，但回读的入口与预期不符"))
+		tc.cleanupFailed(ctx, record, errors.New("执行 Tailscale 命令已结束，但回读的入口与预期不符"))
 		return
 	}
 	tc.ready(ctx, status, port, target, true)

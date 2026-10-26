@@ -86,7 +86,7 @@ func (s *Service) openRaw(ctx context.Context, id, sid, side string) (*Transfer,
 			}
 			info, e := f.Stat()
 			if e != nil || !info.Mode().IsRegular() || *fileIdentity(info) != *d.identity {
-				f.Close()
+				_ = f.Close()
 				return nil, problem(ErrConflict, "内容已变化，请刷新")
 			}
 			t.file, t.identity = f, d.identity
@@ -111,7 +111,7 @@ func (s *Service) openRaw(ctx context.Context, id, sid, side string) (*Transfer,
 // Close releases the opened file and the transfer slot; safe to call twice.
 func (t *Transfer) Close() {
 	if t.file != nil {
-		t.file.Close()
+		_ = t.file.Close()
 		t.file = nil
 	}
 	if t.release != nil {
@@ -172,7 +172,8 @@ func (t *Transfer) WriteTo(ctx context.Context, w io.Writer) error {
 	if e != nil {
 		return ErrChanged
 	}
-	defer current.Close()
+	// Read-only descriptor cleanup cannot affect the captured contents.
+	defer func() { _ = current.Close() }()
 	now, e := current.Stat()
 	if e != nil || !os.SameFile(info, now) || *fileIdentity(now) != *t.identity {
 		return ErrChanged

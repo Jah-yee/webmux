@@ -1,6 +1,7 @@
 package workspace
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -18,7 +19,12 @@ func gitTest(t *testing.T, cwd string, args ...string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", cwd}, args...)...)
-	out, err := cmd.CombinedOutput()
+	// Test fixture commands share the process with session cleanup. Register
+	// ownership so the adopted-child reaper cannot collect their exit status.
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	err := session.RunCommand(cmd)
+	out := output.Bytes()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}

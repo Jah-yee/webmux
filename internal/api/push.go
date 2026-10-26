@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -114,6 +115,7 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 		case errors.Is(err, push.ErrFull):
 			failure(w, http.StatusConflict, err)
 		case err != nil:
+			slog.Error("save push subscription", "err", err)
 			failure(w, http.StatusInternalServerError, errors.New("推送订阅保存失败，请查看服务日志"))
 		default:
 			reply(w, http.StatusOK, contract.PushSubscriptionCreated{ID: id})
@@ -125,6 +127,7 @@ func (s *Server) pushRoutes(mux *http.ServeMux) {
 				pushConflict(w, pushUnavailableReason(unavailable), unavailable)
 				return
 			}
+			slog.Error("delete push subscription", "err", err)
 			failure(w, http.StatusInternalServerError, errors.New("推送订阅删除失败，请查看服务日志"))
 			return
 		}

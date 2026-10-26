@@ -21,6 +21,11 @@ import (
 	"github.com/rainchan/webmux/internal/localclient"
 )
 
+var (
+	_ net.Conn           = (*bridgeConn)(nil)
+	_ localclient.Dialer = (*BridgeDialer)(nil)
+)
+
 // ErrNotRunning is localclient.ErrNotRunning, returned when the bridge exits
 // with status 3 before producing any output.
 var ErrNotRunning = localclient.ErrNotRunning

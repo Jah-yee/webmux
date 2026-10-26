@@ -103,10 +103,6 @@ func (p processSnapshot) timerLeaves(pid int) bool {
 	return leaves > 0
 }
 
-func cString(b []byte) string {
-	return cutCString(string(b))
-}
-
 func cutCString(s string) string {
 	if i := strings.IndexByte(s, 0); i >= 0 {
 		s = s[:i]

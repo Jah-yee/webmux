@@ -179,7 +179,8 @@ func (s *Service) StoreUpload(filename string, src io.Reader, limit int64) (*Upl
 	if err != nil {
 		return nil, failf(ErrInternal, "create uploaded file: %w", err)
 	}
-	defer file.Close()
+	// Cleanup on failure; the successful write path checks Close below.
+	defer func() { _ = file.Close() }()
 	if err := file.Chmod(0600); err != nil {
 		return nil, failf(ErrInternal, "set uploaded file permissions: %w", err)
 	}

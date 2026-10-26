@@ -39,7 +39,8 @@ func (b *binding) directory(ctx context.Context, p string, include bool, ignored
 	if e != nil {
 		return r, e
 	}
-	defer f.Close()
+	// Read-only descriptor cleanup cannot affect the captured contents.
+	defer func() { _ = f.Close() }()
 	entries, e := f.ReadDir(10001)
 	if e != nil && e != io.EOF {
 		return r, e
@@ -102,7 +103,7 @@ func (b *binding) directory(ctx context.Context, p string, include bool, ignored
 			} else if unix.Fstatat(fd, "HEAD", &st, unix.AT_SYMLINK_NOFOLLOW) == nil && unix.Fstatat(fd, "objects", &st, unix.AT_SYMLINK_NOFOLLOW) == nil {
 				kind = "boundary"
 			}
-			unix.Close(fd)
+			_ = unix.Close(fd)
 		} else if entry.Type()&os.ModeSymlink != 0 {
 			kind = "symlink"
 		} else if !entry.Type().IsRegular() {

@@ -71,6 +71,9 @@ func parseSubmission(p []byte) (*submission, bool) {
 	return &item, true
 }
 
+// Buffer short input bursts; overflow disconnects a slow connection.
+const terminalInputQueueCapacity = 16
+
 type input struct {
 	data   []byte
 	reply  bool
@@ -127,7 +130,7 @@ func Attach(ctx context.Context, s *session.Session, c *websocket.Conn, o sessio
 	c.SetReadLimit(1024 * 1024)
 	readerDone := make(chan struct{})
 	inputDone := make(chan struct{})
-	inputs := make(chan input, 16)
+	inputs := make(chan input, terminalInputQueueCapacity)
 	go func() {
 		defer close(inputDone)
 		defer cancel()

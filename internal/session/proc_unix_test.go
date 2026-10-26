@@ -54,21 +54,23 @@ func TestForegroundBlockedStates(t *testing.T) {
 }
 
 func TestAwaitingInputIgnoresTimerLeaves(t *testing.T) {
-	parent := processTable{1: {state: 'S'}, 2: {ppid: 1, state: 'S', timer: true}}
-	if newProcessSnapshot(parent).awaitingInput(1) {
+	// Timer enrichment may read the OS process table; never collide with PID 1.
+	const root = 1 << 30
+	parent := processTable{root: {state: 'S'}, root + 1: {ppid: root, state: 'S', timer: true}}
+	if newProcessSnapshot(parent).awaitingInput(root) {
 		t.Fatal("parent waiting on sleep was treated as terminal input")
 	}
-	if !newProcessSnapshot(processTable{1: {state: 'S'}}).awaitingInput(1) {
+	if !newProcessSnapshot(processTable{root: {state: 'S'}}).awaitingInput(root) {
 		t.Fatal("unclassified sleep should still count as input wait")
 	}
-	if newProcessSnapshot(processTable{1: {state: 'S', timer: true}}).awaitingInput(1) {
+	if newProcessSnapshot(processTable{root: {state: 'S', timer: true}}).awaitingInput(root) {
 		t.Fatal("sleeping root timer was treated as terminal input")
 	}
-	mixed := processTable{1: {state: 'S'}, 2: {ppid: 1, state: 'S', timer: true}, 3: {ppid: 1, state: 'S'}}
-	if !newProcessSnapshot(mixed).awaitingInput(1) {
+	mixed := processTable{root: {state: 'S'}, root + 1: {ppid: root, state: 'S', timer: true}, root + 2: {ppid: root, state: 'S'}}
+	if !newProcessSnapshot(mixed).awaitingInput(root) {
 		t.Fatal("non-timer leaf was hidden by a timer sibling")
 	}
-	if newProcessSnapshot(processTable{1: {state: 'S', timer: true}, 2: {ppid: 1, state: 'R'}}).awaitingInput(1) {
+	if newProcessSnapshot(processTable{root: {state: 'S', timer: true}, root + 1: {ppid: root, state: 'R'}}).awaitingInput(root) {
 		t.Fatal("running descendant was treated as terminal input")
 	}
 }
