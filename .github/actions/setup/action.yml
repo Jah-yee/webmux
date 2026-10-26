@@ -14,9 +14,6 @@ inputs:
   go:
     description: Install Go from go.mod and restore its module/build cache.
     default: "false"
-  browsers:
-    description: Install Playwright Chromium and its system dependencies.
-    default: "false"
 
 outputs:
   pnpm-store:
@@ -86,9 +83,3 @@ runs:
         path: ${{ steps.go-paths.outputs.paths }}
         key: go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
         restore-keys: go-${{ runner.os }}-${{ runner.arch }}-
-
-    # The shell runs most suites; the push E2E needs new headless Chromium,
-    # whose notification permission and service worker notifications work.
-    - if: inputs.browsers == 'true'
-      shell: bash
-      run: pnpm --dir web exec playwright install --with-deps chromium
