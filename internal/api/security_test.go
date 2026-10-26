@@ -123,7 +123,7 @@ func TestPublicOriginBoundaries(t *testing.T) {
 	c := config.Config{Listen: "127.0.0.1:7681", Token: "secret"}
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	public := &PublicOrigin{}
+	public := &PublicOrigins{}
 	handler := New(testDeps(t, Deps{Config: c, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Public: public}))
 	request := func(host, origin string) int {
 		r := httptest.NewRequest(http.MethodPost, "http://"+host+"/api/fs/mkdir", strings.NewReader(`{}`))
@@ -137,7 +137,7 @@ func TestPublicOriginBoundaries(t *testing.T) {
 	if got := request(host, "https://"+host); got != http.StatusForbidden {
 		t.Fatalf("public host before Set: %d", got)
 	}
-	if err := public.Set("https://ABC.trycloudflare.com"); err != nil {
+	if err := public.Set("cloudflare", "https://ABC.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range []struct {
@@ -157,12 +157,12 @@ func TestPublicOriginBoundaries(t *testing.T) {
 			t.Errorf("%s: status %d, want %d", row.name, got, row.want)
 		}
 	}
-	public.Clear()
+	public.Clear("cloudflare")
 	if got := request(host, "https://"+host); got != http.StatusForbidden {
 		t.Fatalf("public host after Clear: %d", got)
 	}
-	for _, invalid := range []string{"http://abc.example", "https://abc.example/x", "https://abc.example:8443", "https://u@abc.example", "https://abc.example?x"} {
-		if public.Set(invalid) == nil {
+	for _, invalid := range []string{"http://abc.example", "https://abc.example/x", "https://u@abc.example", "https://abc.example?x"} {
+		if public.Set("cloudflare", invalid) == nil {
 			t.Errorf("accepted public origin %q", invalid)
 		}
 	}
@@ -171,7 +171,7 @@ func TestPublicOriginBoundaries(t *testing.T) {
 func TestPublicOriginWebSocketHandshake(t *testing.T) {
 	m := session.NewManager(session.Options{})
 	defer m.Shutdown(context.Background())
-	public := &PublicOrigin{}
+	public := &PublicOrigins{}
 	server := httptest.NewServer(New(testDeps(t, Deps{Config: config.Config{Listen: "127.0.0.1:7681", Token: "secret"}, Manager: m, Workspace: testWorkspace(t, m, t.TempDir()), Public: public})))
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -181,7 +181,7 @@ func TestPublicOriginWebSocketHandshake(t *testing.T) {
 		header := http.Header{"Origin": {"https://" + host}}
 		return websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/sessions", &websocket.DialOptions{HTTPHeader: header, Host: host, Subprotocols: tokenProtocols("secret")})
 	}
-	if err := public.Set("https://" + host); err != nil {
+	if err := public.Set("cloudflare", "https://"+host); err != nil {
 		t.Fatal(err)
 	}
 	conn, _, err := dial()
@@ -192,7 +192,7 @@ func TestPublicOriginWebSocketHandshake(t *testing.T) {
 		t.Fatalf("snapshot: %q %v", data, err)
 	}
 	_ = conn.CloseNow()
-	public.Clear()
+	public.Clear("cloudflare")
 	conn, response, err := dial()
 	if err == nil {
 		_ = conn.CloseNow()

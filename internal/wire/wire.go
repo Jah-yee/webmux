@@ -12,6 +12,7 @@ import (
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
@@ -190,6 +191,29 @@ func SessionEvent(e session.Event) contract.SessionEvent {
 
 func StreamPosition(p session.Position) contract.StreamPosition {
 	return contract.StreamPosition(p)
+}
+
+// TailscaleStatus converts the read-only detection result. Runtime state and
+// configured mode are layered on by the controller.
+func TailscaleStatus(s tailscale.Status) contract.TailscaleStatus {
+	out := contract.TailscaleStatus{
+		Provider: s.Provider, ConfiguredProvider: s.ConfiguredProvider,
+		BackendState: s.BackendState, DNSName: s.DNSName,
+		HTTPSReady: s.HTTPSReady, FunnelAvailable: s.FunnelAvailable,
+		Entries: each(s.Entries, func(e tailscale.Entry) contract.TailscaleEntry {
+			return contract.TailscaleEntry{Host: e.Host, Port: e.Port, Public: e.Public}
+		}),
+	}
+	if s.WSL != nil {
+		out.WSL = &contract.TailscaleWSL{
+			NetworkingMode: s.WSL.NetworkingMode, WindowsDetected: s.WSL.WindowsDetected,
+			WindowsRunning: s.WSL.WindowsRunning, WindowsDNSName: s.WSL.WindowsDNSName,
+		}
+	}
+	if out.Entries == nil {
+		out.Entries = []contract.TailscaleEntry{}
+	}
+	return out
 }
 
 func SubmissionStatus(s session.SubmissionStatus) contract.SubmissionStatus {

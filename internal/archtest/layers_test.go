@@ -24,6 +24,7 @@ var webmux = manifest{
 		"internal/codeview":       service,
 		"internal/files":          service,
 		"internal/tunnelsettings": service,
+		"internal/tailscale":      service,
 
 		// Wire contracts and infrastructure every layer may use.
 		"internal/contract":      shared,
@@ -33,6 +34,7 @@ var webmux = manifest{
 		"internal/fetch":         shared,
 		"internal/pathutil":      shared,
 		"internal/attentionkind": shared,
+		"internal/wsl":           shared,
 
 		// Programs that run outside the server and talk to it over the wire.
 		"internal/client":       client,

@@ -116,6 +116,18 @@
       {error instanceof Error ? error.message : "终端加载失败"}
     </p>
   {/await}
+{:else if path === "/settings/tailscale"}
+  {#await import("./pages/TailscaleSettingsPage.svelte")}
+    <p role="status" class="p-6 text-muted-foreground">
+      正在加载 Tailscale 设置…
+    </p>
+  {:then page}
+    <page.default />
+  {:catch}
+    <p role="alert" class="p-6 text-destructive">
+      Tailscale 设置加载失败，请刷新页面后重试。
+    </p>
+  {/await}
 {:else if path === "/settings/tunnel"}
   {#await import("./pages/TunnelSettingsPage.svelte")}
     <p role="status" class="p-6 text-muted-foreground">正在加载公网访问设置…</p>

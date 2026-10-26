@@ -246,9 +246,11 @@ Windows 托盘经 `wsl.exe --exec` 启动 WebMux，同样不经过登录 shell�
 ## 手机访问（Tailscale）
 
 1. 在服务器和手机上安装 Tailscale 并加入同一网络。
-2. 将 `listen` 设置为服务器的 Tailscale 地址（如 `100.64.0.5:7681`），并设置 `token`。
-3. 手机浏览器打开 `http://<Tailscale IP 或主机名>:7681` 并输入一次 token（保存在浏览器 localStorage 中）；也可以打开启动时打印的 `WebMux local:` 链接（把主机换成 Tailscale 地址）。
+2. 推荐在 `[tailscale]` 设置 `mode = "serve"`，让 WebMux 通过 `127.0.0.1` 监听并托管自动证书的 HTTPS 入口；也可以手工把 `listen` 设为服务器 Tailscale 地址（如 `100.64.0.5:7681`）。
+3. 托管 Serve 时手机打开 `https://<节点>.ts.net/`；手工方式打开 `http://<Tailscale IP 或主机名>:7681` 并输入一次 token（保存在浏览器 localStorage 中）。也可以打开启动时打印的访问链接并把主机换成 Tailscale 地址。
 4. 可“添加到主屏幕”以独立模式运行。
+
+详细配置、端口、WSL Windows provider 与故障排查见 [Tailscale Serve / Funnel 入口](tailscale.md)。
 
 防火墙应只允许可信 VPN 接口访问该端口。
 
@@ -308,10 +310,12 @@ include_title = true # false 时通知标题固定为 WebMux
 
 ## HTTPS
 
-WebMux 不内置 TLS。需要浏览器安全上下文（系统剪贴板 API）时，可使用 `tailscale serve` 或 Caddy 反向代理 HTTPS：
+WebMux 不内置 TLS。需要浏览器安全上下文（系统剪贴板 API）时，推荐使用托管的 `[tailscale] mode = "serve"`（仅 tailnet）或 `mode = "funnel"`（显式公网），WebMux 会自动处理证书、端口、Host/Origin 与启动对账，详见 [Tailscale Serve / Funnel 入口](tailscale.md)。
+
+也可以手工使用 `tailscale serve`、Cloudflare Tunnel 或 Caddy 反向代理 HTTPS：
 
 - 保留原始请求 `Host`；
-- 把公开的 HTTPS Origin 加入 `allowed_origins`。
+- 把公开的 HTTPS Origin 加入 `allowed_origins`；非 443 端口必须写成带端口的完整 Origin。
 
 ## 升级
 

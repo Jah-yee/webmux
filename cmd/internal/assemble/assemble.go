@@ -7,6 +7,8 @@ import (
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/tailscale"
+	"github.com/rainchan/webmux/internal/wsl"
 )
 
 // SessionOptions converts the loaded configuration for session.NewManager.
@@ -20,5 +22,15 @@ func SessionOptions(c config.Config) session.Options {
 		DisableAgentProtocol: !c.AgentProtocol,
 		DisableBellAttention: !c.BellAttention,
 		DisableProgramStatus: !c.ProgramStatus,
+	}
+}
+
+// TailscaleOptions converts [tailscale] for tailscale.New.
+func TailscaleOptions(c config.Config) tailscale.Options {
+	return tailscale.Options{
+		Command:        c.Tailscale.Command,
+		Provider:       c.Tailscale.Provider,
+		IsWSL:          wsl.Detected,
+		NetworkingMode: wsl.NetworkingMode,
 	}
 }

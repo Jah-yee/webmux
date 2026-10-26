@@ -41,6 +41,7 @@
   import LaunchConfigDialog from "../components/LaunchConfigDialog.svelte";
   import InlineNotice from "../components/InlineNotice.svelte";
   import TunnelSettings from "../components/TunnelSettings.svelte";
+  import TailscaleSettings from "../components/TailscaleSettings.svelte";
   import PushSettings from "../components/PushSettings.svelte";
   import SettingsNavigation from "../components/SettingsNavigation.svelte";
   import { Switch } from "$lib/components/ui/switch";
@@ -415,6 +416,7 @@
         </Card.Content>
       </Card.Root>
       <TunnelSettings />
+      <TailscaleSettings />
       <PushSettings />
       <Card.Root id="preview">
         <Card.Header>

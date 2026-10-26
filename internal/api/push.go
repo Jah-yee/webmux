@@ -43,7 +43,7 @@ func (s *Server) pushOrigin(r *http.Request) (string, string) {
 		// over plain HTTP, but the browser saw https.
 		host := authorityHostname(r.Host)
 		scheme := "http"
-		if r.TLS != nil || host != "" && (host == named || s.Public.hostAllowed(host)) {
+		if r.TLS != nil || host != "" && (host == named || s.Public.hostAllowed(r.Host)) {
 			scheme = "https"
 		}
 		origin = scheme + "://" + r.Host
@@ -58,7 +58,7 @@ func (s *Server) pushOrigin(r *http.Request) (string, string) {
 		return "https://" + named, ""
 	case (u.Scheme == "http" || u.Scheme == "https") && (host == "127.0.0.1" || host == "::1" || host == "localhost"):
 		return u.Scheme + "://" + u.Host, ""
-	case named == "" && s.Public.load() != nil && origin == s.Public.load().origin:
+	case named == "" && s.Public.load("cloudflare") != nil && origin == s.Public.load("cloudflare").origin:
 		return "", pushQuickTunnel
 	}
 	return "", pushUnsupportedOrigin

@@ -21,6 +21,17 @@ WebMux 以启动服务的系统用户身份执行任意命令，**等同于把�
 - Cloudflare 凭据只写不读，保存于状态目录内 0600 文件，目录为 0700；不要共享该目录。损坏或不可读存储不回退配置文件开启公网。关闭时即使持久化失败也立即撤销公网授权并停止隧道，返回未持久化错误；修复后重新保存，避免重启恢复旧开关。
 - Named Tunnel 的控制台步骤、两个 token 的区别与排错见 [Cloudflare Named Tunnel 配置指南](docs/cloudflare-tunnel.md)。
 
+### Tailscale Serve / Funnel
+
+`[tailscale] mode = "serve"` 通过 tailscaled 为当前节点创建 HTTPS 入口，默认只在 tailnet 内可达；`mode = "funnel"` 会显式公开到互联网，风险与 Named Tunnel 相当：
+
+- Funnel 必须由用户显式配置，WebMux 不会因为检测到 Tailscale 就自动公开。任何拿到 Funnel 链接与 Token 的人都能执行命令。
+- Serve/Funnel 都要求至少 43 字符的 WebMux 登录 Token；留空时生成本次进程 Token，带 Token 的启动链接可能写入日志。
+- WebMux 只操作 `tailscale.json` 记录的精确端口与 target，不覆盖其他入口，也不调用 `serve reset` / `funnel reset`；退出、失败或切换时先撤销来源授权，正常路径下旧 ts.net Host/Origin 立即返回 403。若此前按手工方案把 ts.net 主机名写入了 `allowed_origins`，该白名单独立于来源注册表，撤销后仍会接受旧 Origin；迁移到托管的 Serve/Funnel 时请删除这些手工条目。
+- `GET /api/tailscale` 不返回 Token、其他入口的 target 或原始 CLI 输出。配置由 TOML 管理，修改后需重启。
+- WSL 中的 Windows provider 必须显式选择且要求 mirrored 网络；WebMux 不会自动修改 `.wslconfig`、Windows 防火墙、tailnet ACL 或自动提权。
+- 配置、端口与故障排查见 [Tailscale Serve / Funnel 入口](docs/tailscale.md)。
+
 内置的防护措施：
 
 - 所有 API 与 WebSocket 都需要认证（启用 token 时），token 以常量时间比较。

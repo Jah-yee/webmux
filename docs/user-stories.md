@@ -52,6 +52,8 @@
 
 本次局部核对（2026-10-26）：#141 的文档与 spec 治理对应新增 US-L08；新增 `internal/docguard` 守卫与 `docs/doc-governance.md`，拆分 `docs/protocol.md` 和 `docs/user-stories.md`。`go test ./internal/docguard`、`go test ./internal/archtest` 与 gofmt/Oxfmt 格式检查通过；未重新核对其余功能组。
 
+本次局部核对（2026-10-26）：#144 的 Tailscale Serve/Funnel 托管对应新增 US-P01–US-P06，并更新 US-K10 的设置分区入口。fake CLI 单元、`internal/tailscale`/`internal/config`/`internal/api`/`internal/wire`/`cmd/webmux` Go race、`internal/archtest`、`go vet`、新增 Tailscale 浏览器用例、`svelte-check`、Oxlint、前端架构守卫、生产构建、格式检查与 OpenSpec 严格校验通过。真实 Tailscale Serve/Funnel、WSL Windows mirrored 主机、真机与亮暗/桌面/手机截图尚未验收；CI 不连接真实 Tailscale。
+
 ## 阅读约定与产品边界
 
 - **使用者**：通过桌面、手机或平板浏览器使用服务器上的 Shell、CLI agent 和其他终端程序的人。
@@ -82,6 +84,7 @@
 | M    | 原生终端、CLI 与本机控制面       | US-M01–US-M08 |
 | N    | Cloudflare 公网隧道              | US-N01–US-N08 |
 | O    | Windows/WSL 托盘管理             | US-O01–US-O11 |
+| P    | Tailscale Serve / Funnel         | US-P01–US-P06 |
 
 ## 分组文档
 
@@ -93,5 +96,5 @@
 | [终端、输入与移动端](user-stories/terminal.md)                   | D–H                |
 | [代码工作区与工作树](user-stories/code-and-worktrees.md)         | I–J                |
 | [配置、运行与贡献者工具](user-stories/operations-and-tooling.md) | K–L                |
-| [原生客户端、隧道与托盘](user-stories/clients-network-tray.md)   | M–O                |
+| [原生客户端、隧道与托盘](user-stories/clients-network-tray.md)   | M–P                |
 | [功能覆盖核对与后续维护](user-stories/coverage.md)               | 覆盖索引与维护约定 |

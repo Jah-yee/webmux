@@ -301,7 +301,7 @@ func TestServeShutdownStopsRuntimeTunnel(t *testing.T) {
 }
 
 func TestTunnelControllerStopCancelsLocate(t *testing.T) {
-	public := &api.PublicOrigin{}
+	public := &api.PublicOrigins{}
 	entered := make(chan struct{})
 	locate := func(ctx context.Context) (string, error) {
 		close(entered)

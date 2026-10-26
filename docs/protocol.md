@@ -17,6 +17,7 @@
 | [HTTP API：会话、启动配置与其他](protocol/http-sessions.md) | 会话 CRUD、上传、目录、健康检查与启动配置            |
 | [HTTP API：仓库与代码工作区](protocol/http-workspace.md)    | 仓库与 worktree、只读代码、Diff、图片与下载          |
 | [HTTP API：公网隧道设置](protocol/http-tunnel.md)           | `/api/tunnel` 系列、持久化与错误语义                 |
+| [HTTP API：Tailscale 状态](protocol/http-tailscale.md)      | `/api/tailscale` 只读检测、入口与运行状态            |
 | [HTTP API：注意力推送](protocol/http-push.md)               | Web Push 订阅、来源资格与推送负载                    |
 | [WebSocket 接口](protocol/websocket.md)                     | 会话列表事件、终端帧、回放、提交、控制端与关闭码     |
 | [本机 API](protocol/local-api.md)                           | Unix 套接字认证与 `/local/v1/*` 控制面               |
