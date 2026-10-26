@@ -657,18 +657,23 @@ func wireSessions(f *wireFixture) {
 	f.frame(live, "ws-terminal-submission-written", 5, func(p map[string]any) bool { return p["state"] == "written" })
 	_ = live.CloseNow()
 	// Closing the socket does not join the server's detach goroutine.
-	// Record the settled client count, not a scheduler-dependent intermediate.
+	// A written submission acknowledges PTY input, not its echoed output.
+	// Wait for both before recording a scheduler-independent list snapshot.
 	current, err := f.manager.Get(runningID)
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	ticker := time.NewTicker(time.Millisecond)
 	defer ticker.Stop()
-	for current.Info().Clients != 0 {
+	for {
+		info := current.Info()
+		if info.Clients == 0 && info.Preview == "x" {
+			break
+		}
 		select {
 		case <-ticker.C:
 		case <-f.ctx.Done():
-			f.t.Fatal("terminal clients did not detach")
+			f.t.Fatal("terminal echo or client detach did not settle")
 		}
 	}
 
