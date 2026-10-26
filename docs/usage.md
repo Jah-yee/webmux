@@ -54,26 +54,40 @@ add-zsh-hook precmd _webmux_osc7
 | 空闲       | 超过 `idle_after_seconds` 无输出，且没有上述等待特征                  |
 | 已退出     | 进程已结束，显示退出码（信号退出记为 `128 + signal`）                 |
 
+上表是没有任何程序信号时的启发式。程序报告了自己的状态时以报告为准，按下面的顺序判定：
+
+1. 进程已退出：已退出。
+2. 程序通过 `OSC 7501` 报告了状态：工作中显示“运行中”（超过 `idle_after_seconds` 没有任何输出时视为空闲），阻塞显示等待，空闲显示“空闲”；完成或出错在提醒未处理前显示等待，处理后显示“空闲”。
+3. 存在下文的介入提醒：等待。
+4. 程序曾发出 `OSC 7501` 或 Warp 结构化事件：这类 agent 总在读终端，末行也可能像提示符，因此不再使用“可能在等你”的启发式，只按输出新旧显示运行中或空闲。
+5. 其他：上表的启发式。
+
 状态只用于展示，不触发任何自动动作。
 
 ### 需要你介入的提醒
 
 程序主动发出的终端信号优先于上述启发式：一旦收到，会话显示具体提醒并保持“等待”，即使 agent 仍在刷新 spinner、计时器或状态栏。
 
-| 提醒     | 来源                                                         |
-| -------- | ------------------------------------------------------------ |
-| 需要回答 | agent 结构化事件 `question_asked`                            |
-| 等待授权 | agent 结构化事件 `permission_request`                        |
-| 已完成   | agent 结构化事件 `stop` / `idle_prompt`                      |
-| 出错停止 | agent 结构化事件 `stop_failure`                              |
-| 有通知   | 桌面通知序列 `OSC 9` / `OSC 777;notify`                      |
-| 响铃提醒 | 终端响铃（BEL），在你最后一次输入 1 秒后才计入，避开补全响铃 |
+| 提醒     | 来源                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| 需要回答 | `OSC 7501` 状态 `blocked`（`kind=question`、`auth` 或未注明）；Warp 结构化事件 `question_asked` |
+| 等待授权 | `OSC 7501` 状态 `blocked` 且 `kind=permission`；Warp 结构化事件 `permission_request`            |
+| 已完成   | `OSC 7501` 状态 `done`；Warp 结构化事件 `stop` / `idle_prompt`                                  |
+| 出错停止 | `OSC 7501` 状态 `error`；Warp 结构化事件 `stop_failure`                                         |
+| 有通知   | 桌面通知序列 `OSC 9` / `OSC 777;notify`                                                         |
+| 响铃提醒 | 终端响铃（BEL），在你最后一次输入 1 秒后才计入，避开补全响铃                                    |
 
-结构化事件使用 Warp 的 `OSC 777;notify;warp://cli-agent;{json}` 格式，webmux 只读取其中的事件名，不保存提问、回答等正文。提醒在你向该会话输入（终端自动应答除外）、agent 报告重新开始工作或进程退出时清除；输出和浏览器断线重连都不会清除它。
+`OSC 7501` 是 [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status)：程序直接报告自己处于空闲、工作中、阻塞、完成还是出错。webmux 只读取无 `id` 的根记录中的 `state` 与 `kind`，`msg`、`title` 等正文从不解析、保存或下发。程序发出 `OSC 7501;?` 探测时，由 webmux 服务端立即应答，即使没有浏览器打开该会话也一样。结构化事件使用 Warp 的 `OSC 777;notify;warp://cli-agent;{json}` 格式，webmux 只读取其中的事件名。
 
-**omp**：无需配置。webmux 默认在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，omp 据此发出结构化事件；关闭 `agent_protocol` 后 omp 改用响铃报告提问和完成。
+同一会话可能同时发出多种信号，按来源分层合并：`OSC 7501` > Warp 结构化事件 > `OSC 9` / `OSC 777` 通知 > 响铃。程序报告了 `OSC 7501` 状态后，其状态变化决定提醒（例如从“等待授权”转为工作中会清除提醒），其他来源不再改变提醒；较低层的信号也不会覆盖或清除较高层的提醒。启发式只影响上面的状态，从不产生提醒或推送。
 
-**Claude Code**（2.1.141 及以上）：在 `~/.claude/settings.json` 中注册 hook，由 Claude Code 代为输出事件序列：
+提醒在以下情况清除：你向该会话输入（终端自动应答除外）；`OSC 7501` 报告工作中、空闲或清除；没有 `OSC 7501` 状态时 agent 发出重新开始的 Warp 事件；进程退出。程序报告的工作中或阻塞状态会在 shell 提示符（`OSC 133;A`）出现时作废，完全重置（RIS）会丢弃全部状态。agent 正常退出时会自行清除状态；如果它在等待授权或回答时被强制结束（如 `kill -9`），而 shell 没有启用发出 `OSC 133;A` 的 shell 集成，会话会一直显示等待，直到 shell 集成作废该状态、程序再次报告或会话退出。输出和浏览器断线重连都不会清除提醒。重复报告同一状态不会在你处理后再次提醒。
+
+**omp**、**Codex CLI**（0.164.0 及以上）：无需配置，它们在终端中直接报告 `OSC 7501` 状态。其他直接报告 `OSC 7501` 的程序（例如按其源码，OpenCode 2.x）同样无需配置。webmux 还默认在会话环境中设置 `WARP_CLI_AGENT_PROTOCOL_VERSION=1`，omp 会同时发出 Warp 结构化事件；关闭 `agent_protocol` 后 omp 改用响铃报告提问和完成。
+
+**Claude Code**（2.1.295 及以上）：无需配置。它在启动时发出 `OSC 7501;?` 探测，得到 webmux 的应答后报告状态。如果启动 webmux 的环境中设置了 `CLAUDE_CODE_DISABLE_TERMINAL_TITLE`，该变量会传入会话，Claude Code 将不再报告状态。
+
+**Claude Code**（2.1.141 至 2.1.294）：在 `~/.claude/settings.json` 中注册 hook，由 Claude Code 代为输出事件序列：
 
 ```json
 {
@@ -124,9 +138,9 @@ seq=$(printf '\033]777;notify;warp://cli-agent;{"v":1,"agent":"claude","event":"
 jq -nc --arg seq "$seq" '{terminalSequence: $seq}'
 ```
 
-**Codex CLI**：在 `~/.codex/config.toml` 的 `[tui]` 中设置 `notifications = true`，Codex 在回合结束和请求授权时发出 `OSC 9` 或响铃，webmux 分别显示“有通知”或“响铃提醒”。
+**Codex CLI**（0.164.0 以前）：在 `~/.codex/config.toml` 的 `[tui]` 中设置 `notifications = true`，Codex 在回合结束和请求授权时发出 `OSC 9` 或响铃，webmux 分别显示“有通知”或“响铃提醒”。
 
-其他程序只要输出上述任一序列即可获得提醒，不需要 webmux 适配。
+其他程序只要输出上述任一序列即可获得提醒，不需要 webmux 适配。设置 `program_status = false` 可停用 `OSC 7501` 的识别与探测应答。
 
 ### 设置分区导航
 

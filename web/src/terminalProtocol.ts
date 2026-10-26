@@ -1,4 +1,4 @@
-// Pure helpers for the terminal WebSocket contract in docs/protocol.md.
+// Pure helpers for the terminal WebSocket contract in docs/protocol/websocket.md.
 
 const encoder = new TextEncoder();
 

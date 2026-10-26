@@ -6,39 +6,96 @@ import (
 	"time"
 )
 
-func classify(now, last time.Time, line string, exited, attention, blocked bool, idleAfter time.Duration, patterns []*regexp.Regexp) Status {
-	if exited {
+// statusInput is everything status composition reads, in priority order:
+// exit, the OSC 7501 root record, latched attention, structured agent
+// signals, then the heuristics (output window, prompt patterns, a process
+// blocked on terminal input, idle threshold).
+type statusInput struct {
+	now, last  time.Time
+	line       string
+	exited     bool
+	program    *programRecord
+	attention  bool
+	structured bool
+	blocked    bool
+	idleAfter  time.Duration
+	patterns   []*regexp.Regexp
+}
+
+func classify(in statusInput) Status {
+	if in.exited {
 		return StatusExited
 	}
-	if attention {
+	age := in.now.Sub(in.last)
+	if in.program != nil {
+		switch in.program.state {
+		case "blocked":
+			return StatusWaiting
+		case "done", "error":
+			if in.attention {
+				return StatusWaiting
+			}
+			return StatusIdle
+		case "idle":
+			return StatusIdle
+		}
+		// working: a program that stopped drawing for this long has likely
+		// died without clearing its record.
+		if age > in.idleAfter {
+			return StatusIdle
+		}
+		return StatusRunning
+	}
+	if in.attention {
 		return StatusWaiting
 	}
-	age := now.Sub(last)
 	if age < 2*time.Second {
 		return StatusRunning
 	}
-	for _, pattern := range patterns {
-		if pattern.MatchString(strings.TrimSpace(line)) {
+	// An agent that reports its own waiting is always reading the terminal
+	// and may print prompt-like text, so the waiting heuristics would lie.
+	if !in.structured {
+		for _, pattern := range in.patterns {
+			if pattern.MatchString(strings.TrimSpace(in.line)) {
+				return StatusWaiting
+			}
+		}
+		if in.blocked {
 			return StatusWaiting
 		}
 	}
-	if blocked {
-		return StatusWaiting
-	}
-	if age > idleAfter {
+	if age > in.idleAfter {
 		return StatusIdle
 	}
 	return StatusRunning
 }
+
+func (s *Session) statusInputLocked(now time.Time, idleAfter time.Duration, patterns []*regexp.Regexp) statusInput {
+	return statusInput{
+		now: now, last: s.info.LastActiveAt, line: s.preview.last,
+		exited: s.info.ExitCode != nil, program: s.program, attention: s.info.Attention != nil,
+		structured: s.structured, idleAfter: idleAfter, patterns: patterns,
+	}
+}
+
 func (s *Session) evaluate(now time.Time, snapshot processSnapshot, idleAfter time.Duration, patterns []*regexp.Regexp) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	blocked := false
-	if s.info.ExitCode == nil && s.info.Attention == nil && now.Sub(s.info.LastActiveAt) >= 2*time.Second {
-		blocked = snapshot.awaitingInput(s.cmd.Process.Pid)
+	in := s.statusInputLocked(now, idleAfter, patterns)
+	if !in.exited && in.program == nil && !in.attention && !in.structured && now.Sub(in.last) >= 2*time.Second {
+		in.blocked = snapshot.awaitingInput(s.cmd.Process.Pid)
 	}
-	s.info.Status = classify(now, s.info.LastActiveAt, s.preview.last, s.info.ExitCode != nil, s.info.Attention != nil, blocked, idleAfter, patterns)
+	s.info.Status = classify(in)
 }
+
+// outputStatusLocked is the status right after PTY output: the output window
+// makes every heuristic report running, so only the record and attention
+// matter.
+func (s *Session) outputStatusLocked() Status {
+	now := time.Now()
+	return classify(statusInput{now: now, last: now, program: s.program, attention: s.info.Attention != nil, idleAfter: time.Hour})
+}
+
 func (s *Session) publishState() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

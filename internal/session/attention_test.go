@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"regexp"
@@ -14,9 +15,20 @@ import (
 )
 
 func attentionSession() *Session {
-	s := &Session{bellAttention: true}
+	s := &Session{bellAttention: true, programStatus: true}
 	s.signals = s.signalHandler()
 	return s
+}
+
+func programOutput(body string) string {
+	return "\x1b]7501;" + body + "\a"
+}
+
+func attentionKind(s *Session) attentionkind.Kind {
+	if s.info.Attention == nil {
+		return ""
+	}
+	return s.info.Attention.Kind
 }
 
 func feedSignals(s *Session, output string) {
@@ -30,25 +42,25 @@ func agentEventOutput(event string) string {
 func TestAttentionPriority(t *testing.T) {
 	s := attentionSession()
 	start := time.Now()
-	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, start)
-	s.raiseAttentionLocked(attentionkind.Bell, SourceTerminal, start.Add(time.Second))
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, layerAgent, start)
+	s.raiseAttentionLocked(attentionkind.Bell, SourceTerminal, layerBell, start.Add(time.Second))
 	if a := s.info.Attention; a.Kind != attentionkind.Done || !a.Since.Equal(start) {
 		t.Fatalf("weaker bell changed attention: %+v", a)
 	}
-	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, start.Add(2*time.Second))
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, layerAgent, start.Add(2*time.Second))
 	if a := s.info.Attention; !a.Since.Equal(start) {
 		t.Fatalf("same kind refreshed since: %+v", a)
 	}
 	later := start.Add(3 * time.Second)
-	s.raiseAttentionLocked(attentionkind.Permission, SourceAgent, later)
+	s.raiseAttentionLocked(attentionkind.Permission, SourceAgent, layerAgent, later)
 	if a := s.info.Attention; a.Kind != attentionkind.Permission || !a.Since.Equal(later) {
 		t.Fatalf("stronger signal did not replace: %+v", a)
 	}
-	s.raiseAttentionLocked(attentionkind.Question, SourceAgent, later.Add(time.Second))
+	s.raiseAttentionLocked(attentionkind.Question, SourceAgent, layerAgent, later.Add(time.Second))
 	if a := s.info.Attention; a.Kind != attentionkind.Question {
 		t.Fatalf("equal-rank signal did not replace: %+v", a)
 	}
-	s.raiseAttentionLocked(attentionkind.Error, SourceAgent, later.Add(2*time.Second))
+	s.raiseAttentionLocked(attentionkind.Error, SourceAgent, layerAgent, later.Add(2*time.Second))
 	if a := s.info.Attention; a.Kind != attentionkind.Question {
 		t.Fatalf("error downgraded question: %+v", a)
 	}
@@ -206,17 +218,17 @@ func TestCancelledInputKeepsAttention(t *testing.T) {
 func TestStatusWithAttention(t *testing.T) {
 	now := time.Now()
 	patterns := []*regexp.Regexp{regexp.MustCompile(`never`)}
-	if got := classify(now, now, "", false, true, false, 30*time.Second, patterns); got != StatusWaiting {
+	if got := classify(statusInput{now: now, last: now, attention: true, idleAfter: 30 * time.Second, patterns: patterns}); got != StatusWaiting {
 		t.Fatalf("recent output with attention: %s", got)
 	}
-	if got := classify(now, now, "", true, true, false, 30*time.Second, patterns); got != StatusExited {
+	if got := classify(statusInput{now: now, last: now, exited: true, attention: true, idleAfter: 30 * time.Second, patterns: patterns}); got != StatusExited {
 		t.Fatalf("exited with attention: %s", got)
 	}
 }
 
 func TestInfoAttentionIsCopied(t *testing.T) {
 	s := attentionSession()
-	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, time.Now())
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, layerAgent, time.Now())
 	info := s.infoLocked()
 	info.Attention.Kind = attentionkind.Bell
 	if s.info.Attention.Kind != attentionkind.Done {
@@ -309,5 +321,148 @@ func TestRealSessionAttentionSurvivesSpinner(t *testing.T) {
 	}
 	if s.Info().Attention != nil {
 		t.Fatal("user input did not clear attention")
+	}
+}
+
+func TestProgramStatusMovesAttention(t *testing.T) {
+	s := attentionSession()
+	for _, row := range []struct {
+		body string
+		want attentionkind.Kind
+	}{
+		{"state=idle:app=codex", ""},
+		{"state=blocked:kind=permission", attentionkind.Permission},
+		{"state=working", ""},
+		{"state=done:msg=aGk=", attentionkind.Done},
+		{"state=blocked:kind=auth", attentionkind.Question},
+		{"state=blocked", attentionkind.Question},
+		{"state=error", attentionkind.Error},
+		{"state=idle", ""},
+		{"state=blocked:kind=question", attentionkind.Question},
+		{"state=clear", ""},
+	} {
+		feedSignals(s, programOutput(row.body))
+		if got := attentionKind(s); got != row.want {
+			t.Fatalf("%s: attention %q, want %q", row.body, got, row.want)
+		}
+		if s.info.Attention != nil && s.info.Attention.Source != SourceAgent {
+			t.Fatalf("%s: source %s", row.body, s.info.Attention.Source)
+		}
+	}
+	if s.program != nil || !s.structured {
+		t.Fatalf("after clear: program %+v, structured %v", s.program, s.structured)
+	}
+}
+
+func TestProgramStatusDowngradesAndKeepsSince(t *testing.T) {
+	s := attentionSession()
+	start := time.Now()
+	s.programStatusLocked("blocked", "question", start)
+	s.programStatusLocked("blocked", "auth", start.Add(time.Second))
+	if a := s.info.Attention; a.Kind != attentionkind.Question || !a.Since.Equal(start) {
+		t.Fatalf("same kind changed since: %+v", a)
+	}
+	s.programStatusLocked("done", "", start.Add(2*time.Second))
+	if a := s.info.Attention; a.Kind != attentionkind.Done || !a.Since.Equal(start.Add(2*time.Second)) {
+		t.Fatalf("record downgrade ignored: %+v", a)
+	}
+}
+
+func TestProgramRecordSilencesOtherLayers(t *testing.T) {
+	s := attentionSession()
+	feedSignals(s, programOutput("state=done"))
+	since := s.info.Attention.Since
+	feedSignals(s, agentEventOutput("stop")+agentEventOutput("question_asked")+"\x1b]9;Turn complete\a\a")
+	if a := s.info.Attention; a.Kind != attentionkind.Done || !a.Since.Equal(since) || a.layer != layerProgram {
+		t.Fatalf("lower layers changed program attention: %+v", a)
+	}
+	feedSignals(s, agentEventOutput("prompt_submit"))
+	if attentionKind(s) != attentionkind.Done {
+		t.Fatal("Warp clear event overrode the root record")
+	}
+	s.recordInputLocked(time.Now())
+	feedSignals(s, programOutput("state=done"))
+	if s.info.Attention != nil {
+		t.Fatal("repeated report revived cleared attention")
+	}
+	feedSignals(s, "\x1b]9;Turn complete\a")
+	if s.info.Attention != nil {
+		t.Fatal("notification raised attention under a root record")
+	}
+	feedSignals(s, programOutput("state=done:kind=question"))
+	if s.info.Attention != nil {
+		t.Fatal("a kind outside blocked made an unchanged record look new")
+	}
+}
+
+func TestWarpBeforeProgramStatusAlertsOnce(t *testing.T) {
+	s := attentionSession()
+	feedSignals(s, agentEventOutput("stop"))
+	since := s.info.Attention.Since
+	feedSignals(s, programOutput("state=done"))
+	if a := s.info.Attention; a.Kind != attentionkind.Done || !a.Since.Equal(since) || a.layer != layerProgram {
+		t.Fatalf("same kind from a stronger layer re-raised attention: %+v", a)
+	}
+}
+
+func TestLowerLayerKeepsHigherLayerAttention(t *testing.T) {
+	s := attentionSession()
+	s.raiseAttentionLocked(attentionkind.Done, SourceAgent, layerAgent, time.Now())
+	s.raiseAttentionLocked(attentionkind.Done, SourceTerminal, layerNotify, time.Now())
+	if a := s.info.Attention; a.Source != SourceAgent || a.layer != layerAgent {
+		t.Fatalf("lower layer took over attention: %+v", a)
+	}
+}
+
+func TestProgramRecordLifetime(t *testing.T) {
+	s := attentionSession()
+	feedSignals(s, programOutput("state=blocked:kind=permission")+"\x1b]133;A\a")
+	if s.program != nil || s.info.Attention != nil {
+		t.Fatalf("prompt kept blocked record: %+v %+v", s.program, s.info.Attention)
+	}
+	feedSignals(s, programOutput("state=done")+"\x1b]133;A\a")
+	if s.program == nil || attentionKind(s) != attentionkind.Done {
+		t.Fatal("prompt dropped a done record")
+	}
+	s.recordInputLocked(time.Now())
+	if s.program == nil {
+		t.Fatal("user input dropped the record")
+	}
+	feedSignals(s, "\x1bc")
+	if s.program != nil {
+		t.Fatal("full reset kept the record")
+	}
+	// Without a record the shell's prompts and resets change nothing.
+	s.raiseAttentionLocked(attentionkind.Notify, SourceTerminal, layerNotify, time.Now())
+	feedSignals(s, "\x1b]133;A\a\x1bc")
+	if attentionKind(s) != attentionkind.Notify {
+		t.Fatal("prompt cleared attention without a record")
+	}
+}
+
+func TestProgramStatusDisabled(t *testing.T) {
+	s := &Session{bellAttention: true}
+	s.signals = s.signalHandler()
+	feedSignals(s, programOutput("state=blocked:kind=question")+"\x1b]7501;?\a")
+	if s.program != nil || s.info.Attention != nil || s.structured || len(s.replies) != 0 {
+		t.Fatalf("disabled program status changed state: %+v %+v %v", s.program, s.info.Attention, s.structured)
+	}
+	feedSignals(s, agentEventOutput("question_asked"))
+	if attentionKind(s) != attentionkind.Question {
+		t.Fatal("Warp events stopped working")
+	}
+}
+
+func TestProgramStatusTextNeverRetained(t *testing.T) {
+	s := attentionSession()
+	feedSignals(s, programOutput("state=error:msg=c2VjcmV0LWVycm9y:title=dGl0bGUtdGV4dA==:app=codex"))
+	encoded, err := json.Marshal(s.infoLocked())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"secret-error", "c2VjcmV0LWVycm9y", "title-text", "dGl0bGUtdGV4dA", "codex"} {
+		if strings.Contains(string(encoded), leak) {
+			t.Fatalf("info retained %q: %s", leak, encoded)
+		}
 	}
 }

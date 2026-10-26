@@ -22,9 +22,11 @@ type Options struct {
 	DefaultCwd      string
 	IdleAfter       time.Duration
 	PromptPatterns  []string
-	// Zero values keep both signal sources enabled.
+	// Zero values keep every signal source enabled.
 	DisableAgentProtocol bool
 	DisableBellAttention bool
+	// DisableProgramStatus ignores OSC 7501 and leaves its query unanswered.
+	DisableProgramStatus bool
 }
 type Event struct {
 	Type     string
@@ -117,6 +119,7 @@ func (m *Manager) Create(cwd string, cmd []string, name string, env map[string]s
 	s, err := start(id, cwd, name, cmd, m.options.ScrollbackBytes, startOptions{
 		agentProtocol: !m.options.DisableAgentProtocol,
 		bellAttention: !m.options.DisableBellAttention,
+		programStatus: !m.options.DisableProgramStatus,
 		env:           env,
 		configID:      configID,
 	})

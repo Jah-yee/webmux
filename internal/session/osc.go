@@ -25,6 +25,14 @@ type SignalHandler struct {
 	Notify func()
 	Event  func(string)
 	Cwd    func(path, host string)
+	// ProgramStatus receives an OSC 7501 root record's state and kind; kind
+	// is empty unless it is permission, question or auth. Probe receives the
+	// OSC 7501 capability query. Prompt receives OSC 133;A and Reset a full
+	// reset (RIS); both may end a program's records.
+	ProgramStatus func(state, kind string)
+	Probe         func()
+	Prompt        func()
+	Reset         func()
 }
 
 // OSCScanner is incremental and bounded, including across split ST terminators.
@@ -65,6 +73,11 @@ func (s *OSCScanner) Feed(p []byte, h *SignalHandler) {
 				s.overflow = false
 			case 'P', 'X', '^', '_':
 				s.state = scanString
+			case 'c':
+				s.state = scanGround
+				if h.Reset != nil {
+					h.Reset()
+				}
 			case 27:
 			case 7:
 				s.state = scanGround
@@ -131,6 +144,18 @@ func (s *OSCScanner) finish(h *SignalHandler) {
 	case strings.HasPrefix(text, "9;"):
 		if !numericSubcommand(text[2:]) && h.Notify != nil {
 			h.Notify()
+		}
+	case text == "7501;?":
+		if h.Probe != nil {
+			h.Probe()
+		}
+	case strings.HasPrefix(text, "7501;"):
+		if state, kind, ok := programStatus(text[len("7501;"):]); ok && h.ProgramStatus != nil {
+			h.ProgramStatus(state, kind)
+		}
+	case text == "133;A" || strings.HasPrefix(text, "133;A;"):
+		if h.Prompt != nil {
+			h.Prompt()
 		}
 	case strings.HasPrefix(text, "777;notify;"):
 		title, body, _ := strings.Cut(text[len("777;notify;"):], ";")
@@ -210,6 +235,61 @@ func shortHost(host string) string {
 		return host[:i]
 	}
 	return host
+}
+
+// programStatus parses an OSC 7501 report body and returns the root record's
+// state and kind. Reports with an unknown state, and reports carrying an id,
+// are rejected: a valid id addresses a child record and a malformed one voids
+// the report, so neither changes the root. msg, title, app and every other
+// value are never retained.
+func programStatus(body string) (state, kind string, ok bool) {
+	hasID := false
+	for _, pair := range strings.Split(body, ":") {
+		key, value, found := strings.Cut(pair, "=")
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if !found || !programStatusKey(key) {
+			continue
+		}
+		switch key {
+		case "state":
+			state = value
+		case "kind":
+			kind = value
+		case "id":
+			hasID = true
+		}
+	}
+	switch state {
+	case "idle", "working", "done", "blocked", "error", "clear":
+	default:
+		return "", "", false
+	}
+	if hasID {
+		return "", "", false
+	}
+	// kind means something only for blocked; keeping it elsewhere would make
+	// an unchanged report look like a new one.
+	switch kind {
+	case "permission", "question", "auth":
+		if state != "blocked" {
+			kind = ""
+		}
+	default:
+		kind = ""
+	}
+	return state, kind, true
+}
+
+func programStatusKey(key string) bool {
+	if key == "" || len(key) > 16 {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] < 'a' || key[i] > 'z' {
+			return false
+		}
+	}
+	return true
 }
 
 // numericSubcommand reports ConEmu-style OSC 9 subcommands such as 9;4 progress.

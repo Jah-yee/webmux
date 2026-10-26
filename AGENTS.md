@@ -22,10 +22,12 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 | `internal/api/`, `internal/hub/`, `internal/wire/` | Controllers: HTTP/security boundaries, status mapping (`api/errors.go`), streaming transport, and service↔wire conversion. No direct filesystem, process, or service package-level calls. |
 | `internal/contract/`, `internal/config/`           | Stdlib-only wire types and frame constants; configuration parsing and validation.                                                                                                         |
 | `internal/archtest/`                               | Test-only layer manifest and architecture rules; classify every new `internal/` package in `layers_test.go`. The fixture under `testdata/fixture` proves each rule.                       |
+| `internal/docguard/`                               | Test-only documentation/spec size and tree-layout guard; thresholds and exemptions live in `docs/doc-governance.md` and `doc_test.go`.                                                    |
 | `web/src/pages/`, `web/src/hooks/`                 | Page state and resource-owning terminal/mobile behavior.                                                                                                                                  |
 | `web/src/lib/components/ui/`                       | shadcn-svelte base components; compose them in business components instead of inventing replacement dialogs or menus.                                                                     |
 | `web/test/`                                        | Node unit, browser component, and isolated backend E2E suites.                                                                                                                            |
-| `deploy/`, `openspec/`                             | Deployment examples and specification workflow artifacts.                                                                                                                                 |
+| `deploy/`                                          | Deployment examples.                                                                                                                                                                      |
+| `docs/`, `openspec/`                               | User/contributor docs and specification artifacts; obey `docs/doc-governance.md` (20–400 lines, ≤48 KiB per file, ≤20 child directories).                                                 |
 
 `web/dist/`, `bin/`, and browser reports are generated outputs. `acceptance.local/` is gitignored, machine-specific experimentation with fixed ports/tokens and live-session side effects—not the standard QA suite.
 
@@ -42,7 +44,8 @@ Run from the repository root:
 | `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                                                          |
 | `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                                                                  |
 | `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                                                             |
-| `make check`                               | Build frontend, check formatting, run Oxlint, the architecture guard, `go vet` and `golangci-lint`.                   |
+| `make check`                               | Build frontend, check formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint`.    |
+| `make docs-check`                          | Run the documentation/spec size and tree-layout guard (`internal/docguard`).                                          |
 | `pnpm --dir web lint`                      | Run Oxlint on frontend code.                                                                                          |
 | `pnpm --dir web check:arch`                | Run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test). |
 | `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                                                                    |
@@ -69,12 +72,13 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
 - `Makefile`, `go.mod`, `web/package.json`, `web/pnpm-lock.yaml`, `web/pnpm-workspace.yaml`: build commands, tool/dependency versions, and permitted install scripts.
 - `web/vite.config.ts`, `web/tsconfig.json`, `web/components.json`, `.oxfmtrc.json`, `web/.oxlintrc.json`: proxy/alias, strict typing, UI generation, formatting, and lint configuration.
 - `web/eslint.config.mjs`, `web/.dependency-cruiser.cjs`, `web/.jscpd.json`, `web/knip.json`, `web/test/architecture.test.ts` and their baselines (`web/eslint-suppressions.json`, `web/.dependency-cruiser-known-violations.json`, `web/.jscpd-baseline.json`): frontend architecture guard.
-- `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level; confirm implementation details against source. Maintain `docs/user-stories.md` under the rules below; update other documentation when relevant. `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.
+- `README.md`, `docs/` (usage, deployment, architecture, protocol), `CONTRIBUTING.md`, `SECURITY.md`: user and contributor documentation at overview level; confirm implementation details against source. Maintain `docs/user-stories.md` (index) and `docs/user-stories/` (group files) under the rules below; follow `docs/doc-governance.md` for file size and tree layout, and update other documentation when relevant. `deploy/config.example.toml`, `deploy/webmux.service`, `deploy/com.webmux.plist`: TOML, systemd, and launchd examples.
 - `openspec/config.yaml`: spec-driven workflow context. Write new specification artifacts in Simplified Chinese, retaining English structural headings and SHALL/MUST keywords. `.agents/`, `.claude/`, and `.omp/` contain generated workflow integrations.
 
 ## User Stories Maintenance
 
-- Read `docs/user-stories.md` before changing a capability. Every implemented
+- Read `docs/user-stories.md` (the index) and the relevant group file under
+  `docs/user-stories/` before changing a capability. Every implemented
   capability MUST have one or more stories explaining the user role, intended
   action, purpose, and observable acceptance criteria.
 - In the same change, update the affected stories when adding, changing, or
@@ -86,9 +90,11 @@ Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately a
   purposes. Keep IDs stable: do not renumber existing stories or reuse retired
   IDs. When removing a capability, mark its stories as retired and explain the
   replacement when applicable rather than silently losing their history.
-- Keep acceptance criteria, per-group source references, both feature indexes,
-  and any stated counts consistent. Use the existing Chinese story format and
-  functional groups; add a group only when existing groups do not fit.
+- Keep acceptance criteria, per-group source references in `docs/user-stories/`,
+  both feature indexes (`docs/user-stories.md` and
+  `docs/user-stories/coverage.md`), and any stated counts consistent. Use the
+  existing Chinese story format and functional groups; add a group only when
+  existing groups do not fit.
 - Check behavior against the implementation and relevant tests. Distinguish
   implemented capabilities from OpenSpec plans; investigate disagreements
   before updating the catalog. Keep verification notes accurate and never claim

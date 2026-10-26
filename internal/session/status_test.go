@@ -17,7 +17,7 @@ func TestStatusBoundaries(t *testing.T) {
 		exited, blocked bool
 		want            Status
 	}{{time.Second, "", false, false, StatusRunning}, {2 * time.Second, "", false, false, StatusRunning}, {3500 * time.Millisecond, "background timer", false, false, StatusRunning}, {31 * time.Second, "done", false, false, StatusIdle}, {31 * time.Second, "Continue?", false, false, StatusWaiting}, {31 * time.Second, "", false, true, StatusWaiting}, {time.Second, "$", true, true, StatusExited}} {
-		got := classify(now, now.Add(-row.age), row.line, row.exited, false, row.blocked, 30*time.Second, patterns)
+		got := classify(statusInput{now: now, last: now.Add(-row.age), line: row.line, exited: row.exited, blocked: row.blocked, idleAfter: 30 * time.Second, patterns: patterns})
 		if got != row.want {
 			t.Fatalf("%+v got %s", row, got)
 		}
@@ -91,5 +91,40 @@ func TestReportedCwdParticipatesInDisplayComparison(t *testing.T) {
 	b.ReportedCwd.Remote = true
 	if sameDisplay(a, b) {
 		t.Fatal("remote classification change was invisible")
+	}
+}
+
+func TestStatusComposition(t *testing.T) {
+	now := time.Now()
+	patterns := []*regexp.Regexp{regexp.MustCompile(`[$?]$`)}
+	record := func(state string) *programRecord { return &programRecord{state: state} }
+	for _, row := range []struct {
+		name string
+		age  time.Duration
+		in   statusInput
+		want Status
+	}{
+		{"exit beats record", 0, statusInput{exited: true, program: record("working")}, StatusExited},
+		{"working ignores silence", 10 * time.Second, statusInput{program: record("working")}, StatusRunning},
+		{"working stale", 31 * time.Second, statusInput{program: record("working")}, StatusIdle},
+		{"idle despite output", 0, statusInput{program: record("idle"), line: "Continue?"}, StatusIdle},
+		{"blocked", 31 * time.Second, statusInput{program: record("blocked")}, StatusWaiting},
+		{"unseen done", 0, statusInput{program: record("done"), attention: true}, StatusWaiting},
+		{"seen done", 0, statusInput{program: record("done")}, StatusIdle},
+		{"seen error", 0, statusInput{program: record("error"), blocked: true}, StatusIdle},
+		{"attention", 0, statusInput{attention: true}, StatusWaiting},
+		{"structured skips prompt pattern", 3 * time.Second, statusInput{line: "Continue?", structured: true}, StatusRunning},
+		{"structured skips terminal read", 3 * time.Second, statusInput{blocked: true, structured: true}, StatusRunning},
+		{"structured goes idle", 31 * time.Second, statusInput{blocked: true, structured: true}, StatusIdle},
+		{"structured recent output", 0, statusInput{structured: true}, StatusRunning},
+		{"heuristic prompt", 3 * time.Second, statusInput{line: "Continue?"}, StatusWaiting},
+		{"heuristic terminal read", 3 * time.Second, statusInput{blocked: true}, StatusWaiting},
+	} {
+		in := row.in
+		in.now, in.last = now, now.Add(-row.age)
+		in.idleAfter, in.patterns = 30*time.Second, patterns
+		if got := classify(in); got != row.want {
+			t.Errorf("%s: got %s, want %s", row.name, got, row.want)
+		}
 	}
 }

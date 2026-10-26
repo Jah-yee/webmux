@@ -21,6 +21,7 @@ func testSessionOptions(c config.Config) session.Options {
 		PromptPatterns:       c.PromptPatterns,
 		DisableAgentProtocol: !c.AgentProtocol,
 		DisableBellAttention: !c.BellAttention,
+		DisableProgramStatus: !c.ProgramStatus,
 	}
 }
 

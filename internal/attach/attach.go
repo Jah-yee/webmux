@@ -44,7 +44,7 @@ const TakeControlKey = '\r'
 // ResizeInterval is how often the terminal size is polled.
 const ResizeInterval = 250 * time.Millisecond
 
-// Frame types of docs/protocol.md.
+// Frame types of docs/protocol/websocket.md.
 const (
 	frameOutput   = contract.FrameOutput
 	frameSnapshot = contract.FrameSnapshot
@@ -156,6 +156,8 @@ type attachment struct {
 	term    Terminal
 	observe bool
 	client  string
+	// statusProbes is used only by the output pump.
+	statusProbes probeFilter
 
 	writeMu    sync.Mutex
 	sizeMu     sync.Mutex
@@ -540,10 +542,11 @@ func (a *attachment) pumpOutput(ctx context.Context) readResult {
 		var out []byte
 		switch frame[0] {
 		case frameOutput:
-			out = frame[1:]
+			out = a.statusProbes.filter(frame[1:])
 		case frameSnapshot:
 			// A full replay: reset the terminal first, as xterm.js does.
-			out = append([]byte("\x1bc"), frame[1:]...)
+			a.statusProbes.reset()
+			out = append([]byte("\x1bc"), a.statusProbes.filter(frame[1:])...)
 		case frameExit:
 			var body contract.ExitFrame
 			_ = json.Unmarshal(frame[1:], &body)

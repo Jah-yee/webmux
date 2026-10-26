@@ -21,6 +21,7 @@ func SessionOptions(c config.Config) session.Options {
 
 		DisableAgentProtocol: !c.AgentProtocol,
 		DisableBellAttention: !c.BellAttention,
+		DisableProgramStatus: !c.ProgramStatus,
 	}
 }
 
