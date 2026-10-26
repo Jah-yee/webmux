@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Start runner setup while the producer is building. Only this workflow run's
 # artifact can satisfy the dependency; never reuse another commit's executable.
-deadline=$((SECONDS + 300))
+# Type-aware frontend lint can make the producer longer than the old 5-minute wait.
+deadline=$((SECONDS + 1200))
 
 # GitHub's API occasionally returns transient 5xx responses under load; retry
 # them instead of failing the shard on a single bad response. A failed call
