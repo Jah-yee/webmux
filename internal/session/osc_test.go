@@ -15,6 +15,12 @@ func (l *signalLog) handler() *SignalHandler {
 		Notify: func() { *l = append(*l, "notify") },
 		Event:  func(e string) { *l = append(*l, "event:"+e) },
 		Cwd:    func(path, host string) { *l = append(*l, "cwd:"+path+"|"+host) },
+		ProgramStatus: func(state, kind string) {
+			*l = append(*l, "status:"+state+"/"+kind)
+		},
+		Probe:  func() { *l = append(*l, "probe") },
+		Prompt: func() { *l = append(*l, "prompt") },
+		Reset:  func() { *l = append(*l, "reset") },
 	}
 }
 
@@ -160,5 +166,50 @@ func TestSignalClassification(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, row.want)
 			}
 		})
+	}
+}
+
+func TestProgramStatusClassification(t *testing.T) {
+	long := "\x1b]7501;state=done:msg=" + strings.Repeat("x", 5000) + "\a"
+	for _, row := range []struct{ name, input, want string }{
+		{"blocked permission", "\x1b]7501;state=blocked:kind=permission:app=codex\x1b\\", "status:blocked/permission"},
+		{"bel terminator", "\x1b]7501;state=idle:app=claude-code\a", "status:idle/"},
+		{"whitespace", "\x1b]7501; state = blocked : kind = question \a", "status:blocked/question"},
+		{"auth kind", "\x1b]7501;state=blocked:kind=auth\a", "status:blocked/auth"},
+		{"unknown kind", "\x1b]7501;state=blocked:kind=maybe\a", "status:blocked/"},
+		{"kind outside blocked", "\x1b]7501;state=done:kind=question\a", "status:done/"},
+		{"repeated key", "\x1b]7501;state=working:state=done\a", "status:done/"},
+		{"malformed pairs skipped", "\x1b]7501;junk:State=x:state=error:=y:msg=aGk=\a", "status:error/"},
+		{"long key skipped", "\x1b]7501;abcdefghijklmnopq=1:state=idle\a", "status:idle/"},
+		{"clear", "\x1b]7501;state=clear\x1b\\", "status:clear/"},
+		{"unknown state", "\x1b]7501;state=thinking:kind=question\a", ""},
+		{"missing state", "\x1b]7501;kind=question\a", ""},
+		{"child record", "\x1b]7501;id=task/1:state=blocked:kind=question\a", ""},
+		{"malformed id", "\x1b]7501;id=a b:state=done\a", ""},
+		{"probe", "\x1b]7501;?\a\x1b[c", "probe"},
+		{"probe st", "\x1b]7501;?\x1b\\", "probe"},
+		{"reply is not a probe", "\x1b]7501;?:states=idle\x1b\\", ""},
+		{"oversized", long, ""},
+		{"recovers after oversized", long + "\x1b]7501;state=done\a", "status:done/"},
+		{"semantic prompt", "\x1b]133;A\a\x1b]133;A;cl=m\x1b\\\x1b]133;B\a\x1b]133;D;0\a", "prompt,prompt"},
+		{"full reset", "a\x1bcb", "reset"},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			if got := strings.Join(scanSignals(row.input), ","); got != row.want {
+				t.Fatalf("got %q, want %q", got, row.want)
+			}
+		})
+	}
+}
+
+func TestProgramStatusChunkBoundaries(t *testing.T) {
+	sequence := "\x1b]7501;?\a\x1b]7501;state=blocked:kind=question\x1b\\\x1b]133;A\a\x1bc"
+	want := "probe,status:blocked/question,prompt,reset"
+	bytewise := make([]string, len(sequence))
+	for i := range sequence {
+		bytewise[i] = sequence[i : i+1]
+	}
+	if got := strings.Join(scanSignals(bytewise...), ","); got != want {
+		t.Fatalf("bytewise %s, want %s", got, want)
 	}
 }

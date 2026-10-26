@@ -17,6 +17,9 @@ allowed_origins = []
 agent_protocol = true
 # Treat a terminal bell (not within 1 s of your own input) as needing attention.
 bell_attention = true
+# Answer the OSC 7501 program status query and read the status agents such as
+# Claude Code, Codex, OpenCode and omp report with it.
+program_status = true
 
 # Cloudflare Tunnel: `webmux --tunnel` or enabled = true. Without a token a
 # random 256-bit one is generated per start; tunnel mode prints it in links.

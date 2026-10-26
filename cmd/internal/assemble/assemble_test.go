@@ -17,13 +17,14 @@ import (
 func TestAttentionSignalOptions(t *testing.T) {
 	dir := t.TempDir()
 	for _, row := range []struct {
-		name, body                  string
-		disableProtocol, disableBel bool
+		name, body                                 string
+		disableProtocol, disableBel, disableStatus bool
 	}{
-		{"defaults", "", false, false},
-		{"legacy file", "idle_after_seconds = 30\n", false, false},
-		{"disabled", "agent_protocol = false\nbell_attention = false\n", true, true},
-		{"protocol only off", "agent_protocol = false\n", true, false},
+		{"defaults", "", false, false, false},
+		{"legacy file", "idle_after_seconds = 30\n", false, false, false},
+		{"disabled", "agent_protocol = false\nbell_attention = false\nprogram_status = false\n", true, true, true},
+		{"protocol only off", "agent_protocol = false\n", true, false, false},
+		{"program status only off", "program_status = false\n", false, false, true},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			path := filepath.Join(dir, row.name+".toml")
@@ -38,7 +39,7 @@ func TestAttentionSignalOptions(t *testing.T) {
 				t.Fatal(err)
 			}
 			o := SessionOptions(c)
-			if o.DisableAgentProtocol != row.disableProtocol || o.DisableBellAttention != row.disableBel {
+			if o.DisableAgentProtocol != row.disableProtocol || o.DisableBellAttention != row.disableBel || o.DisableProgramStatus != row.disableStatus {
 				t.Fatalf("options = %+v", o)
 			}
 		})

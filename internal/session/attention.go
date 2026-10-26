@@ -20,11 +20,32 @@ const (
 const bellQuietPeriod = time.Second
 
 // Attention latches a signal that the session needs the user. Output never
-// clears it; only user input, an agent's resume event, or exit does.
+// clears it; only user input, an agent's own status or resume event, or exit
+// does.
 type Attention struct {
 	Kind   attentionkind.Kind
 	Source AttentionSource
 	Since  time.Time
+	// layer records which signal source raised it; it is merge policy only
+	// and never leaves the session package.
+	layer signalLayer
+}
+
+// signalLayer orders signal sources: a weaker layer never replaces or clears
+// attention raised by a stronger one, and an OSC 7501 root record silences
+// every other layer while it exists.
+type signalLayer int
+
+const (
+	layerBell    signalLayer = iota + 1 // bare BEL
+	layerNotify                         // OSC 9 / OSC 777 notifications
+	layerAgent                          // Warp cli-agent events
+	layerProgram                        // OSC 7501 root record
+)
+
+// programRecord is the OSC 7501 root record: only state and kind are kept.
+type programRecord struct {
+	state, kind string
 }
 
 func attentionRank(kind attentionkind.Kind) int {
@@ -41,46 +62,111 @@ func attentionRank(kind attentionkind.Kind) int {
 	return 0
 }
 
-// raiseAttentionLocked keeps a stronger existing signal and refreshes Since
-// only when the kind changes.
-func (s *Session) raiseAttentionLocked(kind attentionkind.Kind, source AttentionSource, now time.Time) {
+// raiseAttentionLocked merges a signal below the program layer: it is ignored
+// while a root record exists or when the current attention comes from a
+// stronger layer, and otherwise keeps a stronger existing kind. Since changes
+// only when the kind does.
+func (s *Session) raiseAttentionLocked(kind attentionkind.Kind, source AttentionSource, layer signalLayer, now time.Time) {
+	if s.program != nil {
+		return
+	}
 	current := s.info.Attention
 	if current != nil {
-		if attentionRank(kind) < attentionRank(current.Kind) {
+		if current.layer > layer || attentionRank(kind) < attentionRank(current.Kind) {
 			return
 		}
 		if current.Kind == kind {
-			current.Source = source
+			current.Source, current.layer = source, layer
 			return
 		}
 	}
-	s.info.Attention = &Attention{Kind: kind, Source: source, Since: now}
+	s.info.Attention = &Attention{Kind: kind, Source: source, Since: now, layer: layer}
+}
+
+// programStatusLocked applies an OSC 7501 root record report. Only a change
+// of the record moves attention, so a repeated report never revives attention
+// the user already cleared; a change replaces attention whatever its rank.
+func (s *Session) programStatusLocked(state, kind string, now time.Time) {
+	s.structured = true
+	if state == "clear" {
+		if s.program != nil {
+			s.program = nil
+			s.info.Attention = nil
+		}
+		return
+	}
+	next := programRecord{state: state, kind: kind}
+	if s.program != nil && *s.program == next {
+		return
+	}
+	s.program = &next
+	switch state {
+	case "blocked":
+		if kind == "permission" {
+			s.setProgramAttentionLocked(attentionkind.Permission, now)
+		} else {
+			s.setProgramAttentionLocked(attentionkind.Question, now)
+		}
+	case "done":
+		s.setProgramAttentionLocked(attentionkind.Done, now)
+	case "error":
+		s.setProgramAttentionLocked(attentionkind.Error, now)
+	default: // working, idle
+		s.info.Attention = nil
+	}
+}
+
+func (s *Session) setProgramAttentionLocked(kind attentionkind.Kind, now time.Time) {
+	if current := s.info.Attention; current != nil && current.Kind == kind {
+		current.Source, current.layer = SourceAgent, layerProgram
+		return
+	}
+	s.info.Attention = &Attention{Kind: kind, Source: SourceAgent, Since: now, layer: layerProgram}
+}
+
+// dropProgramLocked forgets the root record and the attention it raised.
+func (s *Session) dropProgramLocked() {
+	s.program = nil
+	if s.info.Attention != nil && s.info.Attention.layer == layerProgram {
+		s.info.Attention = nil
+	}
+}
+
+// promptLocked handles OSC 133;A: a new shell prompt ends a working or
+// blocked program, while done and error outlive it.
+func (s *Session) promptLocked() {
+	if s.program != nil && (s.program.state == "working" || s.program.state == "blocked") {
+		s.dropProgramLocked()
+	}
 }
 
 func (s *Session) agentEventLocked(event string, now time.Time) {
+	s.structured = true
 	switch event {
 	case "question_asked":
-		s.raiseAttentionLocked(attentionkind.Question, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Question, SourceAgent, layerAgent, now)
 	case "permission_request":
-		s.raiseAttentionLocked(attentionkind.Permission, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Permission, SourceAgent, layerAgent, now)
 	case "stop", "idle_prompt":
-		s.raiseAttentionLocked(attentionkind.Done, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Done, SourceAgent, layerAgent, now)
 	case "stop_failure":
-		s.raiseAttentionLocked(attentionkind.Error, SourceAgent, now)
+		s.raiseAttentionLocked(attentionkind.Error, SourceAgent, layerAgent, now)
 	case "prompt_submit", "permission_replied", "session_start":
-		s.info.Attention = nil
+		if s.program == nil {
+			s.info.Attention = nil
+		}
 	}
 }
 
 func (s *Session) bellLocked(now time.Time) {
 	if s.bellAttention && now.Sub(s.lastInputAt) >= bellQuietPeriod {
-		s.raiseAttentionLocked(attentionkind.Bell, SourceTerminal, now)
+		s.raiseAttentionLocked(attentionkind.Bell, SourceTerminal, layerBell, now)
 	}
 }
 
 func (s *Session) signalHandler() *SignalHandler {
 	hostname, _ := os.Hostname()
-	return &SignalHandler{
+	h := &SignalHandler{
 		Title: func(title string) {
 			if s.userTitle == "" {
 				if title == "" {
@@ -90,7 +176,7 @@ func (s *Session) signalHandler() *SignalHandler {
 			}
 		},
 		Bell:   func() { s.bellLocked(time.Now()) },
-		Notify: func() { s.raiseAttentionLocked(attentionkind.Notify, SourceTerminal, time.Now()) },
+		Notify: func() { s.raiseAttentionLocked(attentionkind.Notify, SourceTerminal, layerNotify, time.Now()) },
 		Event:  func(event string) { s.agentEventLocked(event, time.Now()) },
 		Cwd: func(path, host string) {
 			remote := !reportedHostIsLocal(host, hostname)
@@ -102,6 +188,13 @@ func (s *Session) signalHandler() *SignalHandler {
 			s.info.ReportedCwd = &ReportedCwd{Path: path, Host: host, Remote: remote, Since: time.Now()}
 		},
 	}
+	if s.programStatus {
+		h.ProgramStatus = func(state, kind string) { s.programStatusLocked(state, kind, time.Now()) }
+		h.Probe = s.queueProbeReplyLocked
+		h.Prompt = s.promptLocked
+		h.Reset = s.dropProgramLocked
+	}
+	return h
 }
 
 // userInputLocked records accepted input; terminal replies leave state alone.

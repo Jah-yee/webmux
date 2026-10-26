@@ -79,6 +79,11 @@ func (s *Session) writeParts(ctx context.Context, origin inputOrigin, parts ...[
 	case <-s.inputGate:
 	}
 	defer func() { s.inputGate <- struct{}{} }()
+	// Replies queued before this input's sender could have seen their
+	// queries go first, so a reply always precedes later client input.
+	if err := s.flushRepliesGated(ctx); err != nil {
+		return 0, err
+	}
 	written := 0
 	for _, p := range parts {
 		if len(p) == 0 {
@@ -127,4 +132,74 @@ func (s *Session) writeGated(ctx context.Context, origin inputOrigin, p []byte) 
 		s.mu.Unlock()
 	}
 	return n, err
+}
+
+// maxPendingReplies bounds session-written query replies awaiting the gate;
+// queries beyond it get no reply.
+const maxPendingReplies = 4
+
+// programStatusReply answers the OSC 7501 capability query.
+const programStatusReply = "\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\"
+
+// queueProbeReplyLocked queues the OSC 7501 reply. It runs in the read path
+// before the query is published, so every client input sent in response to
+// that output is written after the reply.
+func (s *Session) queueProbeReplyLocked() {
+	if len(s.replies) >= maxPendingReplies {
+		return
+	}
+	s.replies = append(s.replies, []byte(programStatusReply))
+	select {
+	case s.replyWake <- struct{}{}:
+	default:
+	}
+}
+
+// flushRepliesGated writes queued replies while the caller holds the input
+// gate. A reply none of whose bytes was written goes back to the queue for
+// the reply loop, so a cancelled client writer cannot discard it; after a
+// partial write the rest is dropped, since a query is never answered twice.
+func (s *Session) flushRepliesGated(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	replies := s.replies
+	s.replies = nil
+	s.mu.Unlock()
+	for i, reply := range replies {
+		n, err := s.writeGated(ctx, inputReply, reply)
+		if err == nil {
+			continue
+		}
+		if n == 0 {
+			s.mu.Lock()
+			s.replies = append(replies[i:len(replies):len(replies)], s.replies...)
+			// Replies queued meanwhile must not push the queue past its bound.
+			if len(s.replies) > maxPendingReplies {
+				s.replies = s.replies[:maxPendingReplies]
+			}
+			s.mu.Unlock()
+			select {
+			case s.replyWake <- struct{}{}:
+			default:
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+// replyLoop writes queued replies when no client input arrives to carry
+// them, for example while no browser is attached. It ends with the process.
+func (s *Session) replyLoop() {
+	defer close(s.repliesDone)
+	for {
+		select {
+		case <-s.lifetime.Done():
+			return
+		case <-s.replyWake:
+			_, _ = s.writeParts(s.lifetime, inputReply)
+		}
+	}
 }

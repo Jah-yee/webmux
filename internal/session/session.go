@@ -110,10 +110,24 @@ type Session struct {
 	// lastInputAt and bellAttention are owned by mu, like info.Attention.
 	lastInputAt   time.Time
 	bellAttention bool
-	preview       Preview
-	subs          map[*Subscriber]struct{}
-	nextSeq       uint64
-	control       *Controller
+	// program, structured and replies are owned by mu. program is the OSC
+	// 7501 root record; structured records that the process reported a 7501
+	// status or a Warp cli-agent event, so the waiting heuristics no longer
+	// apply. replies holds session-written query replies that the next
+	// holder of inputGate writes before its own input.
+	program       *programRecord
+	structured    bool
+	programStatus bool
+	replies       [][]byte
+	replyWake     chan struct{}
+	// lifetime ends when the process exits; it cancels pending replies.
+	lifetime    context.Context
+	endLifetime context.CancelFunc
+	repliesDone chan struct{}
+	preview     Preview
+	subs        map[*Subscriber]struct{}
+	nextSeq     uint64
+	control     *Controller
 	// controlSub is the controlling client's authoritative connection: the
 	// most recent one. A duplicated browser tab can carry the same client ID;
 	// only one of its connections may resize the PTY or answer queries.
@@ -129,6 +143,7 @@ type Session struct {
 type startOptions struct {
 	agentProtocol bool
 	bellAttention bool
+	programStatus bool
 	// env is the caller's explicit launch environment.
 	env map[string]string
 	// configID is the saved launch config used at creation, if any.
@@ -185,7 +200,11 @@ func start(id, cwd, name string, argv []string, capacity int, options startOptio
 		done:          make(chan struct{}),
 		readerDone:    make(chan struct{}),
 		bellAttention: options.bellAttention,
+		programStatus: options.programStatus,
+		replyWake:     make(chan struct{}, 1),
+		repliesDone:   make(chan struct{}),
 	}
+	s.lifetime, s.endLifetime = context.WithCancel(context.Background())
 	s.signals = s.signalHandler()
 	s.inputGate = make(chan struct{}, 1)
 	s.inputGate <- struct{}{}
@@ -194,6 +213,7 @@ func start(id, cwd, name string, argv []string, capacity int, options startOptio
 		s.info.Title = name
 	}
 	go s.read()
+	go s.replyLoop()
 	go s.wait()
 	return s, nil
 }
@@ -483,12 +503,9 @@ func (s *Session) read() {
 			reports := s.preview.colorSchemeReports
 			s.info.Preview = s.preview.Feed(p)
 			s.info.LastActiveAt = time.Now()
-			// Latched attention outlives redraws such as spinners and timers.
-			if s.info.Attention != nil {
-				s.info.Status = StatusWaiting
-			} else {
-				s.info.Status = StatusRunning
-			}
+			// Latched attention and a program's own status outlive redraws
+			// such as spinners and timers.
+			s.info.Status = s.outputStatusLocked()
 			if len(s.subs) > 0 {
 				s.broadcastLocked(outputMessage(p))
 				// After the output that toggled it, so the mode applies from there.
@@ -531,13 +548,16 @@ func (s *Session) wait() {
 	}
 	s.info.Status = StatusExited
 	s.info.Attention = nil
+	s.program = nil
 	// A finished program can no longer stand behind its last directory report.
 	s.info.ReportedCwd = nil
 	s.info.ExitCode = &code
 	s.broadcastLocked(s.stateLocked())
 	s.broadcastLocked(exitMessage(code))
+	s.endLifetime()
 	close(s.done)
 	s.mu.Unlock()
+	<-s.repliesDone
 	slog.Info("session exited", "id", s.info.ID, "exitCode", code)
 }
 func (s *Session) Close() {

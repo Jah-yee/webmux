@@ -25,6 +25,7 @@ type Config struct {
 	PromptPatterns   []string     `toml:"prompt_patterns"`
 	AgentProtocol    bool         `toml:"agent_protocol"`
 	BellAttention    bool         `toml:"bell_attention"`
+	ProgramStatus    bool         `toml:"program_status"`
 	AllowedOrigins   []string     `toml:"allowed_origins"`
 	Tunnel           TunnelConfig `toml:"tunnel"`
 	Push             PushConfig   `toml:"push"`
@@ -161,6 +162,7 @@ func Load(path string, required bool) (Config, error) {
 		IdleAfterSeconds: 30,
 		AgentProtocol:    true,
 		BellAttention:    true,
+		ProgramStatus:    true,
 		PromptPatterns: []string{
 			`[$#%>❯›?:]\s*$`,
 			`(?i)\(y/n\)|\[y/n\]|yes.*no|press enter`,
