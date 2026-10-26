@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,8 +33,9 @@ func fakeTailscale(t *testing.T, status, serve string) (string, string) {
 	}
 	script := `#!/bin/sh
 case "$*" in
-"status --json") cat "$FAKE_STATUS";;
+"status --json --peers=false") cat "$FAKE_STATUS";;
 "serve status --json") cat "$FAKE_SERVE";;
+*--bg*) echo "$@" >> "$FAKE_LOG"; if [ -n "$FAKE_AFTER" ]; then cp "$FAKE_AFTER" "$FAKE_SERVE"; fi;;
 *) echo "$@" >> "$FAKE_LOG";;
 esac
 `
@@ -80,7 +84,50 @@ func TestPrepareRemovesExplicitPortBeforeAutomaticSelection(t *testing.T) {
 	}
 }
 
-func TestPrepareAndCloseKeepForeignTarget(t *testing.T) {
+func TestStartAppliesServeAndCloseRemovesIt(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ln.Close() }()
+	target := fmt.Sprintf("http://127.0.0.1:%d", ln.Addr().(*net.TCPAddr).Port)
+	cli, logPath := fakeTailscale(t, tailscaleRunning, `{"Web":{},"AllowFunnel":{}}`)
+	after := filepath.Join(t.TempDir(), "after.json")
+	applied := `{"Web":{"node.tailnet.ts.net:8443":{"Handlers":{"/":{"Proxy":"` + target + `"}}}},"AllowFunnel":{}}`
+	if err := os.WriteFile(after, []byte(applied), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FAKE_AFTER", after)
+	dir := t.TempDir()
+	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "serve", Port: 8443, Provider: "auto"})
+	if err := ctl.Prepare(context.Background(), ln.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
+	ctl.Start(context.Background(), target)
+	<-ctl.done
+	if status := ctl.Status(); status.State != "ready" || status.PublicURL != "https://node.tailnet.ts.net:8443" {
+		t.Fatalf("status = %+v", status)
+	}
+	var record tailscaleState
+	data, err := os.ReadFile(filepath.Join(dir, "tailscale.json"))
+	if err != nil || json.Unmarshal(data, &record) != nil || record.Status != "active" || record.Port != 8443 || record.Target != target {
+		t.Fatalf("record = %s (%v)", data, err)
+	}
+	ctl.Close()
+	calls, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "serve --bg --https=8443 " + target + "\nserve --https=8443 off\n"
+	if string(calls) != want {
+		t.Fatalf("calls = %q, want %q", calls, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+		t.Fatalf("state record survived Close: %v", err)
+	}
+}
+
+func TestPrepareDropsStaleRecordKeepingForeignTarget(t *testing.T) {
 	cli, logPath := fakeTailscale(t,
 		tailscaleRunning,
 		`{"Web":{"node.tailnet.ts.net:9000":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:9999"}}}},"AllowFunnel":{}}`)
@@ -90,12 +137,15 @@ func TestPrepareAndCloseKeepForeignTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
-	if err := ctl.Prepare(context.Background(), "127.0.0.1:7681"); err == nil {
-		t.Fatal("Prepare accepted an entry with a different target")
+	if err := ctl.Prepare(context.Background(), "127.0.0.1:7681"); err != nil {
+		t.Fatalf("a record whose port now proxies elsewhere blocked startup: %v", err)
 	}
 	ctl.Close()
 	if data, err := os.ReadFile(logPath); err == nil && strings.Contains(string(data), "off") {
 		t.Fatalf("foreign entry was removed: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+		t.Fatalf("stale record survived: %v", err)
 	}
 }
 
@@ -107,8 +157,9 @@ func TestPrepareFailsClosedWhenServeStatusUnreadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
-	if err := ctl.Prepare(context.Background(), "127.0.0.1:7681"); err == nil {
-		t.Fatal("Prepare removed an entry it could not verify")
+	err := ctl.Prepare(context.Background(), "127.0.0.1:7681")
+	if err == nil || !strings.Contains(err.Error(), filepath.Join(dir, "tailscale.json")) {
+		t.Fatalf("Prepare = %v; want a refusal naming the state file", err)
 	}
 	ctl.Close()
 	if data, err := os.ReadFile(logPath); err == nil && strings.Contains(string(data), "off") {

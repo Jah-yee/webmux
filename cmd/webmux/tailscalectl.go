@@ -226,34 +226,40 @@ func (tc *tailscaleController) removeRecord(ctx context.Context, record *tailsca
 }
 
 // removeVerified deletes the exact recorded entry only when the live Serve
-// status proves the same provider, DNS/port and proxy target. A read failure or
-// a target mismatch fails closed and removes nothing.
+// status proves the same provider, DNS/port and proxy target. An unreadable
+// status fails closed and removes nothing. A port that is empty or now
+// proxies elsewhere no longer holds this record's entry: the record is stale,
+// the foreign entry stays untouched, and the caller may drop the record.
 func (tc *tailscaleController) removeVerified(ctx context.Context, record *tailscaleState) error {
 	tc.public.Clear("tailscale")
-	tc.svc.SetProvider(providerFamily(record.Provider))
-	defer tc.svc.SetProvider(tc.cfg.Provider)
-	status := tc.svc.Detect(ctx)
-	serve, err := tc.svc.ServeStatus(ctx)
-	if err != nil {
-		return fmt.Errorf("无法确认 Tailscale 入口所有权: %w", err)
+	node := tc.svc.Inspect(ctx, providerFamily(record.Provider))
+	status := node.Status
+	if node.ServeErr != nil {
+		return fmt.Errorf("无法确认 Tailscale 入口所有权: %w；%s", node.ServeErr, tc.staleHint(record.Port))
 	}
 	if status.Provider == tailscale.ProviderNone || !providerMatches(record.Provider, status.Provider) {
-		return fmt.Errorf("无法确认上次运行的 Tailscale 入口所有权（recorded provider %q, detected %q）", record.Provider, status.Provider)
+		return fmt.Errorf("无法确认上次运行的 Tailscale 入口所有权（recorded provider %q, detected %q）；%s", record.Provider, status.Provider, tc.staleHint(record.Port))
 	}
-	info, exists := serve.Lookup(record.DNSName, record.Port)
+	info, exists := node.Serve.Lookup(record.DNSName, record.Port)
 	if !exists && status.DNSName != "" && status.DNSName != record.DNSName {
-		info, exists = serve.Lookup(status.DNSName, record.Port)
+		info, exists = node.Serve.Lookup(status.DNSName, record.Port)
 	}
 	if !exists {
 		return nil
 	}
 	if info.Proxy != record.Target {
-		return fmt.Errorf("端口 %d 的现有入口不属于上次记录的 target；拒绝删除，请手工确认", record.Port)
+		tc.logger.Warn("tailscale record is stale; the entry on its port belongs to another target and is left untouched", "port", record.Port)
+		return nil
 	}
-	if err := tc.svc.Remove(ctx, record.Port); err != nil {
+	if err := node.Remove(ctx, record.Port); err != nil {
 		return fmt.Errorf("无法移除上次运行的 Tailscale 入口；请先手工执行 `tailscale serve --https=%d off`：%s", record.Port, tailscaleReason(err, providerFamily(record.Provider)))
 	}
 	return nil
+}
+
+// staleHint names the manual recovery when ownership cannot be read.
+func (tc *tailscaleController) staleHint(port int) string {
+	return fmt.Sprintf("确认 Tailscale 可用后重试；若端口 %d 的入口已手工移除或 Tailscale 已卸载，请删除 %s", port, tc.path)
 }
 
 func providerFamily(provider string) string {
@@ -467,10 +473,6 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 		tc.cleanupFailed(ctx, record, errors.New("Tailscale 命令已结束，但回读的入口与预期不符"))
 		return
 	}
-	record.Status = "active"
-	if err := tc.saveRecord(record); err != nil {
-		tc.logger.Warn("tailscale state not marked active", "error", err)
-	}
 	tc.ready(status, port, target, true)
 }
 
@@ -495,10 +497,18 @@ func (tc *tailscaleController) ready(status tailscale.Status, port int, target s
 	}
 	tc.mu.Lock()
 	tc.state, tc.url, tc.reason = contract.TailscaleReady, url, ""
-	if record := tc.record; record != nil {
+	var persist *tailscaleState
+	if record := tc.record; record != nil && record.Status != "active" {
 		record.Status = "active"
+		saved := *record
+		persist = &saved
 	}
 	tc.mu.Unlock()
+	if persist != nil {
+		if err := tc.saveRecord(*persist); err != nil {
+			tc.logger.Warn("tailscale state not marked active", "error", err)
+		}
+	}
 	if announce {
 		link := url
 		if tc.tokenGenerated {
@@ -567,14 +577,18 @@ func (tc *tailscaleController) Close() {
 		tc.cancel()
 	}
 	done := tc.done
-	record := tc.record
 	tc.public.Clear("tailscale")
 	tc.mu.Unlock()
 	if done != nil {
 		<-done
 	}
+	// Read the record only after apply has stopped: a conflict found during
+	// apply clears it, and a stale snapshot would authorize removal.
+	tc.mu.Lock()
+	record := tc.record
+	tc.mu.Unlock()
 	if record != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := tc.removeVerified(ctx, record); err != nil {
 			tc.logger.Warn("tailscale entry not removed; remove it manually and it will be reconciled on the next start",

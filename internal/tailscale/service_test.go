@@ -24,7 +24,7 @@ func fakeCLI(t *testing.T, status, serve string) (string, string) {
 	}
 	script := `#!/bin/sh
 case "$*" in
-"status --json") cat "$FAKE_STATUS";;
+"status --json --peers=false") cat "$FAKE_STATUS";;
 "serve status --json") cat "$FAKE_SERVE";;
 *) echo "$@" >> "$FAKE_LOG";;
 esac
@@ -89,7 +89,7 @@ func TestApplyAndRemoveUseArgv(t *testing.T) {
 	if err := svc.Apply(context.Background(), "funnel", 8443, 7681); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Remove(context.Background(), 8443); err != nil {
+	if err := svc.Inspect(context.Background(), "linux").Remove(context.Background(), 8443); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(logPath)
@@ -116,7 +116,7 @@ func TestRemoveTreatsMissingHandlerAsSuccess(t *testing.T) {
 	cli := filepath.Join(dir, "tailscale")
 	script := `#!/bin/sh
 case "$*" in
-"status --json") echo '` + runningStatus + `';;
+"status --json --peers=false") echo '` + runningStatus + `';;
 "serve status --json") echo '` + emptyServe + `';;
 "serve --https=8443 off") echo "handler does not exist" >&2; exit 1;;
 *) exit 1;;
@@ -126,7 +126,7 @@ esac
 		t.Fatal(err)
 	}
 	svc := New(Options{Command: cli, Provider: "linux", IsWSL: func() bool { return false }})
-	if err := svc.Remove(context.Background(), 8443); err != nil {
+	if err := svc.Inspect(context.Background(), "linux").Remove(context.Background(), 8443); err != nil {
 		t.Fatalf("missing handler was not treated as success: %v", err)
 	}
 }
@@ -136,7 +136,7 @@ func TestRemovePropagatesCLIError(t *testing.T) {
 	cli := filepath.Join(dir, "tailscale")
 	script := `#!/bin/sh
 case "$*" in
-"status --json") echo '` + runningStatus + `';;
+"status --json --peers=false") echo '` + runningStatus + `';;
 "serve status --json") echo '` + emptyServe + `';;
 "serve --https=8443 off") echo "access denied" >&2; exit 1;;
 *) exit 1;;
@@ -146,7 +146,7 @@ esac
 		t.Fatal(err)
 	}
 	svc := New(Options{Command: cli, Provider: "linux", IsWSL: func() bool { return false }})
-	err := svc.Remove(context.Background(), 8443)
+	err := svc.Inspect(context.Background(), "linux").Remove(context.Background(), 8443)
 	var cliErr *CLIError
 	if !errors.As(err, &cliErr) {
 		t.Fatalf("error type = %T (%v), want *CLIError", err, err)

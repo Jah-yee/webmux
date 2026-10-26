@@ -31,7 +31,7 @@ interface TailscaleStatus {
 }
 ```
 
-检测只执行 `tailscale status --json`、`tailscale serve status --json` 及必要的 `funnel status --json`，短超时、无交互 stdin、缓存并合并并发请求；缺失字段按未知处理。响应永远不包含 WebMux token、其他 Serve 入口的代理 target 或原始 CLI 输出。
+检测只执行 `tailscale status --json --peers=false`、`tailscale serve status --json` 及必要的 `funnel status --json`，每个 CLI 每次检测最多读取一次节点状态，短超时、无交互 stdin、缓存并合并并发请求；缺失字段按未知处理。响应永远不包含 WebMux token、其他 Serve 入口的代理 target 或原始 CLI 输出。
 
 `state` 与命令回读一致：只有命令成功且回读确认 target、唯一 `/` handler 与 `AllowFunnel` 后才为 `ready`，失败时先撤销来源。托管入口记录在 `<state_dir>/tailscale.json`（0600、原子替换、独立锁）。
 

@@ -29,7 +29,7 @@
 - [x] 3.6 执行写命令前先持久化 `pending` 意图，再用 argv 执行 `tailscale serve --bg --https=<port> http://127.0.0.1:<port>`；不使用 shell，不传用户拼接字符串
 - [x] 3.7 应用到 Serve 后回读 `serve status --json`：要求目标 handler 指向当前 target 且 `AllowFunnel` 不为真；不满足则撤销并失败
 - [x] 3.8 实现精确移除：执行 `tailscale serve --https=<port> off`，同时清除 Funnel 标记；把重复移除的 `handler does not exist` 视为成功；绝不调用 `serve reset` 或 `funnel reset`
-- [x] 3.9 启动对账：`mode=off` 或模式/端口/target/provider 变化时在绑定监听前移除旧精确目标，失败则拒绝启动；移除前用 `serve status --json` 复核 provider、DNS/端口与 target，读取失败或 target 不符时失败关闭；匹配入口复用后绑定失败也要关闭并报告风险；`pending`/`active` 记录中的入口缺失则重建；记录匹配才复用；无记录或不匹配则失败关闭，禁止仅凭 target 相同接管入口
+- [x] 3.9 启动对账：`mode=off` 或模式/端口/target/provider 变化时在绑定监听前移除旧精确目标，失败则拒绝启动；移除前用 `serve status --json` 复核 provider、DNS/端口与 target，读取失败时失败关闭并在错误中给出状态文件路径；端口已无入口或指向其他 target 时判定记录过期，保持该入口不动并删除记录；匹配入口复用后绑定失败也要关闭并报告风险；`pending`/`active` 记录中的入口缺失则重建；记录匹配才复用；无记录或不匹配则失败关闭，禁止仅凭 target 相同接管入口
 - [x] 3.10 退出时在短超时内移除本次入口；成功后删除状态记录，CLI 不可用或超时保留 `pending`/`active` 记录供下次启动对账；不结束 tailscaled、不阻塞会话清理
 - [x] 3.11 就绪后打印 `WebMux tailscale: <url>`；Token 为本次生成时附 `#token=<Token>` 与二维码，配置 Token 只打印 URL；结构化日志不含 Token
 - [x] 3.12 测试写命令前落盘、命令成功后标记前崩溃、失败清理成功/失败、退出清理成功/失败的 `pending`/`active` 状态转换，以及 `mode=off`/端口变化/损坏状态/绑定失败下的启动前清理与拒绝启动
@@ -89,11 +89,12 @@
 - [x] 9.3 `pnpm --dir web check`、`pnpm --dir web test` 定向用例、`pnpm --dir web check:arch`、生产构建
 - [x] 9.4 按 AGENTS.md 运行格式检查与 `make test` 的适用子集；确认没有真实 Tailscale/cloudflared 网络依赖
 - [x] 9.5 `openspec validate add-tailscale-exposure --strict --no-interactive` 与 `make docs-check`
-- [ ] 9.6 实现 PR 附桌面/手机、亮/暗截图；说明未做真实 Windows 主机与真机验收的部分
+- [x] 9.6 实现 PR 附桌面/手机、亮/暗截图；说明未做真实 Windows 主机与真机验收的部分
 
 ## 实施记录（2026-10-26）
 
 - Go：`go test -race ./internal/tailscale ./internal/config ./internal/api ./internal/wire ./cmd/webmux`、`go test ./internal/archtest`、`go vet ./...` 通过。
 - 前端：`svelte-check`、Oxlint、`check:arch`、生产构建与新增 `test/browser/TailscaleSettings.test.ts` 通过；未运行完整浏览器/E2E 套件与截图采集。
 - 配置/接口：`openspec validate add-tailscale-exposure --strict --no-interactive` 与 `make format-check` 通过。
-- 未完成：8.5/8.6 的真实 Tailscale Serve/Funnel 与 WSL Windows 主机手工验收、9.6 的桌面/手机亮暗截图。CI 与单元/浏览器测试只使用 fake CLI，不连接真实 Tailscale。
+- 手工验收（WSL2 mirrored + 真实 Windows Tailscale，`provider = "windows"`，Serve）：显式 8444 与自动端口（443 已被用户入口占用时选 8443）就绪；经 tailnet 访问页面、未认证 401、同源 POST 201、无端口或 http Origin 403、WebSocket 同源可连且异源拒绝；正常退出只移除本实例端口并删除记录，用户 443 入口保持不变；SIGKILL 后 `mode = "off"` 重启在监听前移除残留；过期记录不动他人入口并删除记录；端口冲突 `failed` 不覆盖；无记录但入口指向本 target 时拒绝启动；`auto` 只检测 Windows 节点；CLI 缺失时拒绝启动并给出状态文件路径。
+- 未完成：8.5 的 Linux/macOS 与真实 Funnel（公网）验收、8.6 的 NAT 阻塞与权限不足真机验收。CI 与单元/浏览器测试只使用 fake CLI，不连接真实 Tailscale。

@@ -32,7 +32,6 @@ type Service struct {
 	cachedAt time.Time
 	inflight chan struct{}
 	cli      string
-	provider string
 }
 
 // New builds a detection service. Zero values select production defaults.
@@ -68,24 +67,30 @@ func (s *Service) Refresh() {
 	s.mu.Unlock()
 }
 
-// SetProvider overrides the configured provider for the next detection. The
-// ownership controller uses it to select the provider recorded for a previous
-// entry before reconciling.
-func (s *Service) SetProvider(provider string) {
-	s.mu.Lock()
-	s.provider = provider
-	s.cli = ""
-	s.cached, s.cachedAt = nil, time.Time{}
-	s.mu.Unlock()
+// Node is one uncached probe bound to the CLI it resolved. Removing through a
+// Node never consults or changes the configured provider, the cached
+// detection or the CLI used by Apply, so it is safe while the API serves
+// concurrent status requests.
+type Node struct {
+	Status   Status
+	Serve    ServeStatus
+	ServeErr error
+	cli      string
+	svc      *Service
 }
 
-func (s *Service) configuredProvider() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.provider != "" {
-		return s.provider
+// Inspect probes provider ("auto", "linux" or "windows") without the cache.
+func (s *Service) Inspect(ctx context.Context, provider string) Node {
+	status, cli, serve, serveErr := s.detect(ctx, provider)
+	return Node{Status: status, Serve: serve, ServeErr: serveErr, cli: cli, svc: s}
+}
+
+// Remove closes the exact HTTPS port through the CLI this probe resolved.
+func (n Node) Remove(ctx context.Context, httpsPort int) error {
+	if n.cli == "" {
+		return ErrNotFound
 	}
-	return s.opts.Provider
+	return n.svc.remove(ctx, n.cli, httpsPort)
 }
 
 // Detect returns a cached or freshly coalesced status.
@@ -114,15 +119,16 @@ func (s *Service) Detect(ctx context.Context) Status {
 		if err := ctx.Err(); err != nil {
 			reason = err.Error()
 		}
-		return Status{Provider: ProviderNone, ConfiguredProvider: s.configuredProvider(), BackendState: BackendUnknown, FunnelAvailable: FunnelUnknown, Error: reason}
+		return Status{Provider: ProviderNone, ConfiguredProvider: s.opts.Provider, BackendState: BackendUnknown, FunnelAvailable: FunnelUnknown, Error: reason}
 	}
 	wait := make(chan struct{})
 	s.inflight = wait
 	s.mu.Unlock()
 
-	status := s.detect(ctx)
+	status, cli, _, _ := s.detect(ctx, s.opts.Provider)
 
 	s.mu.Lock()
+	s.cli = cli
 	s.cached, s.cachedAt = &status, s.opts.Now()
 	s.inflight = nil
 	close(wait)
@@ -130,35 +136,51 @@ func (s *Service) Detect(ctx context.Context) Status {
 	return status
 }
 
-func (s *Service) detect(ctx context.Context) Status {
-	status := Status{ConfiguredProvider: s.configuredProvider(), FunnelAvailable: FunnelUnknown}
+type nodeResult struct {
+	node nodeStatus
+	err  error
+}
+
+// detect resolves provider and reads each CLI's node status at most once.
+// It returns the chosen CLI and its serve status; it never mutates s.
+func (s *Service) detect(ctx context.Context, provider string) (Status, string, ServeStatus, error) {
+	status := Status{ConfiguredProvider: provider, FunnelAvailable: FunnelUnknown}
+	nodes := make(map[string]nodeResult, 2)
+	read := func(cli string) (nodeStatus, error) {
+		if result, ok := nodes[cli]; ok {
+			return result.node, result.err
+		}
+		node, err := s.readNode(ctx, cli)
+		nodes[cli] = nodeResult{node, err}
+		return node, err
+	}
 	inWSL := s.opts.IsWSL()
-	var native, windows string
-	var nativeErr, windowsErr error
-	native, nativeErr = s.locateNative()
+	native, nativeErr := s.locateNative(provider)
+	windows, windowsErr := "", ErrNotFound
+	if inWSL {
+		windows, windowsErr = s.locateWindows(provider)
+	}
+	// Only automatic selection inside WSL needs to know whether the native
+	// node runs before choosing a CLI.
 	nativeRunning := false
-	if nativeErr == nil && native != "" {
-		if node, err := s.readNode(ctx, native); err == nil {
+	if provider == "auto" && inWSL && nativeErr == nil {
+		if node, err := read(native); err == nil {
 			nativeRunning = node.backend == BackendRunning
 		}
 	}
 	if inWSL {
-		windows, windowsErr = s.locateWindows()
-	}
-	if inWSL {
-		mode := s.opts.NetworkingMode(ctx)
-		status.WSL = &WSLStatus{NetworkingMode: mode}
+		status.WSL = &WSLStatus{NetworkingMode: s.opts.NetworkingMode(ctx)}
 		if windowsErr == nil {
 			status.WSL.WindowsDetected = true
-			if node, err := s.readNode(ctx, windows); err == nil {
+			if node, err := read(windows); err == nil {
 				status.WSL.WindowsRunning = node.backend == BackendRunning
 				status.WSL.WindowsDNSName = node.dns
 			}
 		}
 	}
 
-	provider, cli := s.choose(inWSL, native, nativeErr, nativeRunning, windows, windowsErr)
-	status.Provider = provider
+	chosen, cli := choose(provider, inWSL, native, nativeErr, nativeRunning, windows, windowsErr)
+	status.Provider = chosen
 	if cli == "" {
 		status.Provider = ProviderNone
 		status.BackendState = BackendUnavailable
@@ -166,28 +188,28 @@ func (s *Service) detect(ctx context.Context) Status {
 		if inWSL && windowsErr == nil && windows != "" {
 			status.Provider = ProviderWindows
 		}
-		return status
+		return status, "", ServeStatus{}, ErrNotFound
 	}
-	s.setCLI(cli)
 
-	node, err := s.readNode(ctx, cli)
+	node, err := read(cli)
 	if err != nil {
 		status.BackendState = BackendUnknown
 		status.Error = err.Error()
-		return status
+		return status, cli, ServeStatus{}, err
 	}
 	status.BackendState = node.backend
 	status.DNSName = node.dns
 	status.HTTPSReady = node.certs
 	status.FunnelAvailable = node.funnel
-	if serve, err := s.serveStatus(ctx, cli); err == nil {
+	serve, serveErr := s.serveStatus(ctx, cli)
+	if serveErr == nil {
 		status.Entries = serve.Entries
 	}
-	return status
+	return status, cli, serve, serveErr
 }
 
-func (s *Service) choose(inWSL bool, native string, nativeErr error, nativeRunning bool, windows string, windowsErr error) (string, string) {
-	switch s.configuredProvider() {
+func choose(provider string, inWSL bool, native string, nativeErr error, nativeRunning bool, windows string, windowsErr error) (string, string) {
+	switch provider {
 	case "windows":
 		if windowsErr != nil || windows == "" {
 			return ProviderWindows, ""
@@ -221,21 +243,15 @@ func (s *Service) choose(inWSL bool, native string, nativeErr error, nativeRunni
 	return ProviderNone, ""
 }
 
-func (s *Service) setCLI(path string) {
-	s.mu.Lock()
-	s.cli = path
-	s.mu.Unlock()
-}
-
 func (s *Service) command() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cli
 }
 
-func (s *Service) locateNative() (string, error) {
+func (s *Service) locateNative(provider string) (string, error) {
 	if s.opts.Command != "" {
-		if isWindowsCommand(s.opts.Command) && s.configuredProvider() != "windows" {
+		if isWindowsCommand(s.opts.Command) && provider != "windows" {
 			return "", ErrNotFound
 		}
 		return verifyExecutable(s.opts.Command)
@@ -247,9 +263,9 @@ func (s *Service) locateNative() (string, error) {
 	return verifyExecutable(path)
 }
 
-func (s *Service) locateWindows() (string, error) {
+func (s *Service) locateWindows(provider string) (string, error) {
 	if s.opts.Command != "" {
-		if s.configuredProvider() != "windows" {
+		if provider != "windows" {
 			return "", ErrNotFound
 		}
 		return verifyExecutable(s.opts.Command)
@@ -287,7 +303,7 @@ type nodeStatus struct {
 }
 
 func (s *Service) readNode(ctx context.Context, cli string) (nodeStatus, error) {
-	out, stderr, err := s.exec(ctx, cli, "status", "--json")
+	out, stderr, err := s.exec(ctx, cli, "status", "--json", "--peers=false")
 	if err != nil {
 		return nodeStatus{}, errors.New("Tailscale 状态读取失败: " + safeCLIReason(stderr, err))
 	}
@@ -395,15 +411,11 @@ func (s *Service) Apply(ctx context.Context, mode string, httpsPort, localPort i
 	return nil
 }
 
-// Remove closes only the exact HTTPS port owned by this instance. A single
+// remove closes only the exact HTTPS port owned by this instance. A single
 // `serve off` removes the handler and the Funnel flag; running `funnel off`
 // first would make the follow-up fail with "handler does not exist". A missing
 // handler means the entry is already gone, so retries succeed.
-func (s *Service) Remove(ctx context.Context, httpsPort int) error {
-	cli, err := s.requireCLI(ctx)
-	if err != nil {
-		return err
-	}
+func (s *Service) remove(ctx context.Context, cli string, httpsPort int) error {
 	port := strconv.Itoa(httpsPort)
 	if _, stderr, err := s.exec(ctx, cli, "serve", "--https="+port, "off"); err != nil {
 		if missingHandler(stderr) {
