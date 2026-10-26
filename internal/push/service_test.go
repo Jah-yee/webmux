@@ -104,9 +104,11 @@ func TestServicePushesNewQuestionOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Cover the service's request budget plus scheduling slack on race runners;
+	// closing the TLS fixture earlier can abort an otherwise valid delivery.
 	select {
 	case <-server.hits:
-	case <-time.After(5 * time.Second):
+	case <-time.After(sendTimeout + 5*time.Second):
 		t.Fatal("question was never pushed")
 	}
 	// The spinner keeps producing output and list updates; none may alert.
