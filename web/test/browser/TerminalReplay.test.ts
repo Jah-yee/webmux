@@ -289,11 +289,12 @@ test("a truncated empty reset discards old screen and parser state, then resumes
   expect(api.findResults).toBeNull();
   expect(api.findReplayed).toBe(true);
   expect(api.historyTruncated).toBe(true);
+  expect(api.error).toBe("");
 
   const live = "redrawn live screen\r\n";
   second.receive(0, live);
   await expectDomText("redrawn live screen");
-  await expect.poll(() => api.error, { timeout: 7000 }).toBe("");
+  expect(api.error).toBe("");
   expect(api.historyTruncated).toBe(true);
   expect(domText()).toContain("redrawn live screen");
   second.drop();
@@ -366,9 +367,7 @@ test.each([
     await expect.poll(domText).not.toContain(prompt);
     expect(domText()).not.toContain("unsafe raw suffix");
     expect(fetched).not.toHaveBeenCalled();
-    expect(api.error).toContain("已丢弃");
-    expect(api.error).toContain("进程已退出");
-    expect(api.error).not.toContain("已请求程序重绘");
+    expect(api.error).toBe("");
     expect(sockets).toHaveLength(2);
   },
 );
@@ -426,7 +425,6 @@ test("manual resync after exit clears unsafe history using the final safe replay
   expect(domText()).not.toContain(prompt);
   expect(domText()).not.toContain("unsafe HTTP suffix");
   expect(fetched).not.toHaveBeenCalled();
-  expect(api.error).toContain("已丢弃");
-  expect(api.error).toContain("进程已退出");
+  expect(api.error).toBe("");
   expect(sockets).toHaveLength(2);
 });

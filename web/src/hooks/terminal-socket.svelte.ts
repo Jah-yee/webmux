@@ -58,7 +58,6 @@ export function createTerminalSocket(id: string) {
   let exitCode = $state<number | null>(null);
   let error = $state("");
   let historyTruncated = $state(false);
-  let discardedHistory = $state(false);
   let control = $state<ControlState>();
   let terminal: Terminal | undefined;
   let socket: SocketConnection | undefined;
@@ -92,7 +91,6 @@ export function createTerminalSocket(id: string) {
     let exited = false;
     let restoreFrame = 0;
     let restoreVersion = 0;
-    let recoveryNoticeTimer: number | undefined;
     terminal = term;
     // Snapshots replay output whose OSC 52 copies already ran when it was
     // live. xterm parses writes and runs their callbacks in order, so the
@@ -227,13 +225,6 @@ export function createTerminalSocket(id: string) {
         } else if (frame[0] === 1) {
           const position = resetPosition;
           resetPosition = undefined;
-          if (position?.truncated) {
-            discardedHistory = true;
-            clearTimeout(recoveryNoticeTimer);
-            recoveryNoticeTimer = window.setTimeout(() => {
-              discardedHistory = false;
-            }, 5000);
-          }
           // A hidden page keeps its terminal and resume point unchanged.
           if (document.hidden) stale = true;
           else {
@@ -356,8 +347,6 @@ export function createTerminalSocket(id: string) {
       dispose() {
         disposed = true;
         cancelAnimationFrame(restoreFrame);
-        clearTimeout(recoveryNoticeTimer);
-        discardedHistory = false;
         document.removeEventListener("visibilitychange", visible);
         graphics?.dispose();
         resize.dispose();
@@ -386,13 +375,7 @@ export function createTerminalSocket(id: string) {
       return exitCode;
     },
     get error() {
-      const recovery = discardedHistory
-        ? "终端历史不完整，已丢弃无法安全恢复的历史。" +
-          (exitCode === null
-            ? "已请求程序重绘；若仍空白或显示异常，请使用程序自身的重绘操作（不保证恢复成功）。"
-            : "进程已退出，无法再请求程序重绘。")
-        : "";
-      return [error, recovery].filter(Boolean).join(" ");
+      return error;
     },
     get historyTruncated() {
       return historyTruncated;
