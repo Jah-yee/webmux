@@ -57,7 +57,7 @@
 | 前端代码质量基线、本地化条款与审查清单                                     | US-L09                                              |
 | URL token 片段消费与 WebSocket 子协议认证                                  | US-A06                                              |
 | 桌面代码独立窗口与收回                                                     | US-I13                                              |
-| run、显式环境、attach/observe、输入取消与等待、分离和控制交接              | US-M01–US-M04                                       |
+| run、显式环境、attach/observe、输入取消/等待与信号中断重试、分离和控制交接 | US-M01–US-M04                                       |
 | ls/open/status、版本化诊断、停止实例和 stdio bridge                        | US-M05–US-M08                                       |
 | Windows CLI、发行版优先级和路径/控制台适配                                 | US-M01–US-M06；US-O05                               |
 | Quick/Named Tunnel、token、二维码与依赖下载                                | US-N01–US-N04                                       |

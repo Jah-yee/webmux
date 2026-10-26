@@ -63,6 +63,9 @@ func readTerminal(ctx context.Context, fd int, p []byte) (int, error) {
 			return 0, err
 		}
 		n, err = unix.Read(fd, p)
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
 		if n == 0 && err == nil {
 			err = io.EOF
 		}
