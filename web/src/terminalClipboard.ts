@@ -10,7 +10,7 @@ export function osc52CopyText(data: string): string | undefined {
   const selection = data.slice(0, separator);
   const payload = data.slice(separator + 1);
   if (payload === "?") return;
-  const targets = selection ? [...selection] : ["c"];
+  const targets = selection ? Array.from(selection) : ["c"];
   if (!targets.some((target) => browserClipboardTargets.has(target))) return;
   try {
     return decodeOsc52Payload(payload);

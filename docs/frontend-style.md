@@ -49,16 +49,18 @@ Google 的指南自述部分条款受其内部环境约束，因此只采纳类�
 
 ## 检查映射
 
-| 规则                               | 执行方式                                                       | 现状   |
-| ---------------------------------- | -------------------------------------------------------------- | ------ |
-| 类型正确性与未检查索引             | `pnpm --dir web check`（含 `noUncheckedIndexedAccess`）        | 已启用 |
-| 格式化                             | `make format-check`（Oxfmt）                                   | 已启用 |
-| 通用 JS/TS 问题                    | `pnpm --dir web lint`（Oxlint）                                | 已启用 |
-| 组件复用、令牌、分层、重复与死代码 | `pnpm --dir web check:arch`                                    | 已启用 |
-| 异步 Promise 未处理                | 类型感知 lint（`no-floating-promises`、`no-misused-promises`） | 已启用 |
-| Svelte 模板规则                    | `svelte.configs.recommended`                                   | 已启用 |
-| 测试代码类型                       | `tsconfig.test.json` + `check:test`                            | 已启用 |
-| 前后端契约                         | `web/test/wire-contract.test.ts` 消费 Go wire 快照             | 已启用 |
+| 规则                               | 执行方式                                                | 现状   |
+| ---------------------------------- | ------------------------------------------------------- | ------ |
+| 类型正确性与未检查索引             | `pnpm --dir web check`（含 `noUncheckedIndexedAccess`） | 已启用 |
+| 格式化                             | `make format-check`（Oxfmt）                            | 已启用 |
+| 通用 JS/TS 问题                    | `pnpm --dir web lint`（Oxlint）                         | 已启用 |
+| 组件复用、令牌、分层、重复与死代码 | `pnpm --dir web check:arch`                             | 已启用 |
+| 异步 Promise 未处理                | `pnpm --dir web lint`（Oxlint 类型感知）                | 已启用 |
+| Svelte 模板规则                    | `svelte.configs.recommended`                            | 已启用 |
+| 测试代码类型                       | `tsconfig.test.json` + `check:test`                     | 已启用 |
+| 前后端契约                         | `web/test/wire-contract.test.ts` 消费 Go wire 快照      | 已启用 |
+
+`pnpm --dir web lint` 通过 `oxlint-tsgolint` 启用 Oxlint 类型感知，`typescript/no-floating-promises` 与 `typescript/no-misused-promises` 仅作用于 `src` 下的 `.ts` 与 `.svelte.ts`。Oxlint 只解析 Svelte 的 `<script>`，不提供模板规则，也不对 `.svelte` 脚本做类型感知检查；模板事件处理器中的异步 rejection 仍需按第 6 条人工审查，Svelte 模板规则由 `pnpm --dir web check:arch` 的 ESLint 执行。类型感知模式同时启用其余 correctness 规则（`await-thenable`、`no-array-delete`、`no-base-to-string`、`no-implied-eval`、`no-misused-spread` 与 `unbound-method`）；`codePopout.ts` 的属性描述符解构和 `terminal.svelte.ts` 的对象方法转交不依赖 `this`，在这两个文件关闭 `unbound-method`。
 
 `check`、`build`、`check:storybook` 与 `check:test` 都以 `--fail-on-warnings` 运行，警告不得静默累积。引入带存量违规的新规则时，先记录基线，再按 [前端架构守卫](frontend-architecture.md#基线与新规则) 的方式收紧。Markdown 预览唯一保留的 `{@html}` 必须先经过专用 DOMPurify 实例；嵌套控制器接口通过模板别名读取，`svelte/no-unused-props` 只放宽这类嵌套属性，顶层 props 仍受检查。
 

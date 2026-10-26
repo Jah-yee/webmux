@@ -8,7 +8,6 @@ import tsParser from "@typescript-eslint/parser";
 import { defineConfig } from "eslint/config";
 import svelte from "eslint-plugin-svelte";
 import svelteParser from "svelte-eslint-parser";
-import tseslint from "typescript-eslint";
 import svelteConfig from "./svelte.config.js";
 
 // Must match `aliases.ui` in components.json.
@@ -77,34 +76,13 @@ export default defineConfig([
     files: ["src/**/*.svelte", "src/**/*.svelte.ts"],
     languageOptions: {
       parser: svelteParser,
-      parserOptions: {
-        parser: tsParser,
-        projectService: true,
-        extraFileExtensions: [".svelte"],
-        svelteConfig,
-      },
+      parserOptions: { parser: tsParser, svelteConfig },
     },
   },
   {
     files: ["src/**/*.ts"],
     ignores: ["src/**/*.svelte.ts"],
-    languageOptions: {
-      parser: tsParser,
-      parserOptions: { projectService: true },
-    },
-  },
-  {
-    files: ["src/**/*.{ts,svelte}"],
-    plugins: { "@typescript-eslint": tseslint.plugin },
-    rules: {
-      "@typescript-eslint/no-floating-promises": "error",
-      "@typescript-eslint/no-misused-promises": "error",
-      // Nested controller interfaces are consumed through an alias in templates.
-      "svelte/no-unused-props": [
-        "error",
-        { allowUnusedNestedProperties: true },
-      ],
-    },
+    languageOptions: { parser: tsParser },
   },
   {
     files: ["src/**/*.{ts,svelte}"],
@@ -168,6 +146,11 @@ export default defineConfig([
   {
     files: ["src/**/*.svelte"],
     rules: {
+      // Nested controller interfaces are consumed through an alias in templates.
+      "svelte/no-unused-props": [
+        "error",
+        { allowUnusedNestedProperties: true },
+      ],
       "svelte/no-restricted-html-elements": [
         "error",
         ...Object.keys(RAW_TO_DS).map((element) => ({
