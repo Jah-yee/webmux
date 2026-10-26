@@ -6,6 +6,45 @@ import "time"
 // names, omitempty and nil-versus-empty behavior are part of the wire
 // contract and are pinned by internal/api/testdata/wire.
 
+// SessionStatus is the display state of a session.
+type SessionStatus string
+
+const (
+	SessionStatusRunning SessionStatus = "running"
+	SessionStatusWaiting SessionStatus = "waiting"
+	SessionStatusIdle    SessionStatus = "idle"
+	SessionStatusExited  SessionStatus = "exited"
+)
+
+// AttentionKind names the signal that a session needs the user.
+type AttentionKind string
+
+const (
+	AttentionKindQuestion   AttentionKind = "question"
+	AttentionKindPermission AttentionKind = "permission"
+	AttentionKindDone       AttentionKind = "done"
+	AttentionKindError      AttentionKind = "error"
+	AttentionKindNotify     AttentionKind = "notify"
+	AttentionKindBell       AttentionKind = "bell"
+)
+
+// Valid reports whether k is one of the named kinds.
+func (k AttentionKind) Valid() bool {
+	switch k {
+	case AttentionKindQuestion, AttentionKindPermission, AttentionKindError, AttentionKindDone, AttentionKindNotify, AttentionKindBell:
+		return true
+	}
+	return false
+}
+
+// AttentionSource identifies the component that raised an attention signal.
+type AttentionSource string
+
+const (
+	AttentionSourceAgent    AttentionSource = "agent"
+	AttentionSourceTerminal AttentionSource = "terminal"
+)
+
 // SessionInfo is one session in GET /api/sessions, POST /api/sessions,
 // /ws/sessions events and the 0x02 terminal frame.
 type SessionInfo struct {
@@ -14,7 +53,7 @@ type SessionInfo struct {
 	Title        string              `json:"title"`
 	Cwd          string              `json:"cwd"`
 	Cmd          []string            `json:"cmd"`
-	Status       string              `json:"status"`
+	Status       SessionStatus       `json:"status"`
 	ExitCode     *int                `json:"exitCode"`
 	Preview      string              `json:"preview"`
 	CreatedAt    time.Time           `json:"createdAt"`
@@ -39,9 +78,9 @@ type SessionWorkspace struct {
 
 // SessionAttention is a latched signal that the session needs the user.
 type SessionAttention struct {
-	Kind   string    `json:"kind"`
-	Source string    `json:"source"`
-	Since  time.Time `json:"since"`
+	Kind   AttentionKind   `json:"kind"`
+	Source AttentionSource `json:"source"`
+	Since  time.Time       `json:"since"`
 }
 
 // SessionReportedCwd is the directory a program reported through OSC 7.

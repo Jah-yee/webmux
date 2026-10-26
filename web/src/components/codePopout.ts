@@ -129,7 +129,7 @@ function copyStyles(from: Document, to: Document) {
     to.head.append(to.importNode(node, true));
 }
 function mirrorAttributes(from: Element, to: Element) {
-  while (to.attributes.length) to.removeAttribute(to.attributes[0].name);
+  while (to.attributes.length) to.removeAttribute(to.attributes[0]!.name);
   for (const { name, value } of from.attributes) to.setAttribute(name, value);
 }
 

@@ -46,7 +46,7 @@ describe("WebSocket upstream send budget", () => {
       Object.assign(new EventTarget(), { setTimeout: globalThis.setTimeout }),
     );
     connection = connect("/ws/s/test", vi.fn(), vi.fn(), vi.fn());
-    socket = MockWebSocket.instances[0];
+    socket = MockWebSocket.instances[0]!;
   });
 
   afterEach(() => {

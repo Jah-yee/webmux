@@ -42,7 +42,7 @@ beforeEach(() => {
     () => {},
     () => {},
   );
-  Socket.instances[0].onopen?.();
+  Socket.instances[0]!.onopen?.();
 });
 afterEach(() => {
   connection.close();
@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 it("backs off slow-client closes instead of replaying immediately", () => {
-  Socket.instances[0].fail();
+  Socket.instances[0]!.fail();
   vi.advanceTimersByTime(0);
   expect(Socket.instances).toHaveLength(1);
   vi.advanceTimersByTime(250);
@@ -60,16 +60,16 @@ it("backs off slow-client closes instead of replaying immediately", () => {
 });
 
 it("keeps failure history across short opens and resets after a stable connection", () => {
-  Socket.instances[0].fail();
+  Socket.instances[0]!.fail();
   vi.advanceTimersByTime(250);
-  const second = Socket.instances[1];
+  const second = Socket.instances[1]!;
   expect(second).toBeDefined();
   second.onopen?.();
   second.fail();
   vi.advanceTimersByTime(250);
   expect(Socket.instances).toHaveLength(2);
   vi.advanceTimersByTime(250);
-  const third = Socket.instances[2];
+  const third = Socket.instances[2]!;
   third.onopen?.();
   vi.advanceTimersByTime(10000);
   third.fail();
@@ -78,7 +78,7 @@ it("keeps failure history across short opens and resets after a stable connectio
 });
 
 it("does not reconnect after permanent close or disposal", () => {
-  Socket.instances[0].fail(4410);
+  Socket.instances[0]!.fail(4410);
   vi.advanceTimersByTime(60000);
   expect(Socket.instances).toHaveLength(1);
   connection.close();
@@ -88,14 +88,14 @@ it("does not reconnect after permanent close or disposal", () => {
     () => {},
     () => {},
   );
-  Socket.instances[1].fail();
+  Socket.instances[1]!.fail();
   connection.close();
   vi.advanceTimersByTime(60000);
   expect(Socket.instances).toHaveLength(2);
 });
 
 it("explicitly reopens an exited session for final replay without automatic retries", () => {
-  Socket.instances[0].fail(4410);
+  Socket.instances[0]!.fail(4410);
   document.dispatchEvent(new Event("visibilitychange"));
   window.dispatchEvent(new Event("online"));
   vi.advanceTimersByTime(60000);
@@ -103,14 +103,14 @@ it("explicitly reopens an exited session for final replay without automatic retr
 
   connection.reconnect();
   expect(Socket.instances).toHaveLength(2);
-  Socket.instances[1].onopen?.();
-  Socket.instances[1].fail(4410);
+  Socket.instances[1]!.onopen?.();
+  Socket.instances[1]!.fail(4410);
   vi.advanceTimersByTime(60000);
   expect(Socket.instances).toHaveLength(2);
 });
 
 it("does not explicitly reopen a missing session", () => {
-  Socket.instances[0].fail(4404);
+  Socket.instances[0]!.fail(4404);
   connection.reconnect();
   document.dispatchEvent(new Event("visibilitychange"));
   vi.advanceTimersByTime(60000);

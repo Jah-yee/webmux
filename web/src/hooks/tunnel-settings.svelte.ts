@@ -1,3 +1,4 @@
+import { errorMessage } from "../error";
 import { onMount } from "svelte";
 import { api, APIError } from "../api";
 import {
@@ -36,7 +37,7 @@ export function useTunnelSettings() {
       view = current;
     } catch (cause) {
       if (!disposed && version === requestVersion && !controller.signal.aborted)
-        error = (cause as Error).message;
+        error = errorMessage(cause);
     } finally {
       if (!disposed && version === requestVersion) loading = false;
     }
@@ -46,7 +47,7 @@ export function useTunnelSettings() {
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       if (!busy && !document.hidden) await refresh();
-      if (!disposed) timer = setTimeout(poll, 2000);
+      if (!disposed) timer = setTimeout(() => void poll(), 2000);
     }
     void poll();
     return () => {
@@ -84,7 +85,7 @@ export function useTunnelSettings() {
       return true;
     } catch (cause) {
       if (disposed) return false;
-      error = (cause as Error).message;
+      error = errorMessage(cause);
       if (cause instanceof APIError && cause.notPersisted)
         shutdownUnpersisted = true;
       // A failed disk write can still have safely stopped the tunnel. Read the

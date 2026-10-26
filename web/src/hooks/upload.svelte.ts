@@ -1,3 +1,4 @@
+import { errorMessage } from "../error";
 import { onMount } from "svelte";
 import { uploadFile } from "../api";
 import type { Connection } from "../ws";
@@ -147,7 +148,7 @@ export function useUpload(
           pendingPath = "";
         } catch (err) {
           throw new Error(
-            `文件已上传至 ${path}，但路径未插入：${(err as Error).message}`,
+            `文件已上传至 ${path}，但路径未插入：${errorMessage(err)}`,
           );
         }
       }
@@ -158,7 +159,7 @@ export function useUpload(
       )
         terminal.focus();
     } catch (err) {
-      if (mounted || pendingPath) setError((err as Error).message);
+      if (mounted || pendingPath) setError(errorMessage(err));
     } finally {
       controller = undefined;
       if (mounted) progress = null;

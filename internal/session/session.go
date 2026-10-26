@@ -14,15 +14,17 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+
+	"github.com/rainchan/webmux/internal/contract"
 )
 
-type Status string
+type Status = contract.SessionStatus
 
 const (
-	StatusRunning Status = "running"
-	StatusWaiting Status = "waiting"
-	StatusIdle    Status = "idle"
-	StatusExited  Status = "exited"
+	StatusRunning = contract.SessionStatusRunning
+	StatusWaiting = contract.SessionStatusWaiting
+	StatusIdle    = contract.SessionStatusIdle
+	StatusExited  = contract.SessionStatusExited
 )
 
 type Workspace struct {

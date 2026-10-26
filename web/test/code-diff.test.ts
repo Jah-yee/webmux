@@ -13,7 +13,7 @@ describe("browser text diff", () => {
     const diff = ready("same\nold\nend\n", "same\nnew\nextra\nend\n");
     expect(diff.deletionLines).toEqual(["same\n", "old\n", "end\n"]);
     expect(diff.additionLines).toEqual(["same\n", "new\n", "extra\n", "end\n"]);
-    expect(diff.hunks[0].hunkContent).toEqual([
+    expect(diff.hunks[0]!.hunkContent).toEqual([
       { type: "context", lines: 1, additionLineIndex: 0, deletionLineIndex: 0 },
       {
         type: "change",
@@ -80,7 +80,7 @@ describe("browser text diff", () => {
   });
   it("rejects invalid renderer metadata at the Worker boundary", () => {
     const fileDiff = ready("old\n", "new\n");
-    fileDiff.hunks[0].additionStart = -1;
+    fileDiff.hunks[0]!.additionStart = -1;
     expect(
       DiffReplySchema.safeParse({
         snapshotId: "s",

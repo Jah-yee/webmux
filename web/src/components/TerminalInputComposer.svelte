@@ -165,7 +165,8 @@
       Home: "\x1b[H",
       End: "\x1b[F",
     };
-    if (keys[event.key]) editKey(keys[event.key]);
+    const key = keys[event.key];
+    if (key) editKey(key);
     else if (Array.from(event.key).length === 1) editKey(event.key);
     else if (event.key === "Escape") controlNotice();
   }

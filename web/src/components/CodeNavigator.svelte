@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import type { z } from "zod";
   import CodeFileTree from "./CodeFileTree.svelte";
   import CodeChangesList from "./CodeChangesList.svelte";
@@ -112,7 +113,7 @@
       locateInput = "";
       locateOpen = false;
     } catch (err) {
-      locateError = (err as Error).message;
+      locateError = errorMessage(err);
     } finally {
       locating = false;
     }
@@ -143,7 +144,7 @@
     value={nav}
     onValueChange={(v) => {
       nav = v;
-      if (v === "changes" || query || !rootListing) load();
+      if (v === "changes" || query || !rootListing) void load();
     }}
   >
     <Tabs.List class="w-full"
@@ -168,7 +169,7 @@
           searchOpen = !searchOpen;
           if (!searchOpen && query) {
             query = "";
-            load();
+            void load();
           }
         }}><IconSearch aria-hidden="true" /></Button
       >
@@ -230,7 +231,7 @@
           query = "";
           searchInput = "";
           directory = "";
-          load();
+          void load();
         }}><IconFold aria-hidden="true" /></Button
       >
       <DropdownMenu.Root>
@@ -250,7 +251,7 @@
             disabled={!context?.ignoreAvailable}
             onCheckedChange={(checked) => {
               includeIgnored = checked;
-              load();
+              void load();
             }}>显示忽略项</DropdownMenu.CheckboxItem
           >
         </DropdownMenu.Content>
@@ -263,7 +264,7 @@
           event.preventDefault();
           query = searchInput;
           directory = "";
-          load();
+          void load();
         }}
       >
         <Input
@@ -308,7 +309,7 @@
               if (node.kind === "directory") {
                 directory = node.path;
                 query = "";
-                load();
+                void load();
               } else openFile(node.path, node.nodeId);
             }}
           >
@@ -354,7 +355,7 @@
           aria-label="修改来源"
           class="min-w-0 flex-1"
           bind:value={changeGroup}
-          onchange={() => load()}
+          onchange={() => void load()}
         >
           <NativeSelect.Option value="">全部来源</NativeSelect.Option
           ><NativeSelect.Option value="unstaged">未暂存</NativeSelect.Option
@@ -367,7 +368,7 @@
         onsubmit={(e) => {
           e.preventDefault();
           changeQuery = changeSearch;
-          load();
+          void load();
         }}
       >
         <Input

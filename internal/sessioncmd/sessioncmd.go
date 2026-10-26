@@ -242,7 +242,7 @@ func List(ctx context.Context, e Env, args []string) int {
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tNAME\tSTATUS\tCOMMAND\tCWD")
 	for _, s := range list {
-		status := s.Status
+		status := string(s.Status)
 		if s.ExitCode != nil {
 			status = fmt.Sprintf("%s (%d)", s.Status, *s.ExitCode)
 		}

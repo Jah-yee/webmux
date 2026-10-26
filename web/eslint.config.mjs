@@ -8,6 +8,8 @@ import tsParser from "@typescript-eslint/parser";
 import { defineConfig } from "eslint/config";
 import svelte from "eslint-plugin-svelte";
 import svelteParser from "svelte-eslint-parser";
+import tseslint from "typescript-eslint";
+import svelteConfig from "./svelte.config.js";
 
 // Must match `aliases.ui` in components.json.
 const UI_DIR = "src/lib/components/ui";
@@ -70,18 +72,39 @@ export default defineConfig([
       "src/lib/utils.ts",
     ],
   },
-  ...svelte.configs.base,
+  ...svelte.configs.recommended,
   {
     files: ["src/**/*.svelte", "src/**/*.svelte.ts"],
     languageOptions: {
       parser: svelteParser,
-      parserOptions: { parser: tsParser },
+      parserOptions: {
+        parser: tsParser,
+        projectService: true,
+        extraFileExtensions: [".svelte"],
+        svelteConfig,
+      },
     },
   },
   {
     files: ["src/**/*.ts"],
     ignores: ["src/**/*.svelte.ts"],
-    languageOptions: { parser: tsParser },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { projectService: true },
+    },
+  },
+  {
+    files: ["src/**/*.{ts,svelte}"],
+    plugins: { "@typescript-eslint": tseslint.plugin },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      // Nested controller interfaces are consumed through an alias in templates.
+      "svelte/no-unused-props": [
+        "error",
+        { allowUnusedNestedProperties: true },
+      ],
+    },
   },
   {
     files: ["src/**/*.{ts,svelte}"],
@@ -168,5 +191,19 @@ export default defineConfig([
   {
     files: [`${UI_DIR}/**/*.svelte`],
     rules: { "svelte/no-restricted-html-elements": "off" },
+  },
+  {
+    // The rule cannot see nested controller properties accessed through `t`.
+    files: [
+      "src/components/TerminalHeader.svelte",
+      "src/components/TerminalNotices.svelte",
+      "src/components/TerminalViewport.svelte",
+    ],
+    rules: { "svelte/no-unused-props": "off" },
+  },
+  {
+    // marked output is sanitized by the dedicated DOMPurify instance and hooks.
+    files: ["src/components/CodeMarkdownPreview.svelte"],
+    rules: { "svelte/no-at-html-tags": "off" },
   },
 ]);

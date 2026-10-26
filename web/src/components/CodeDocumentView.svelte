@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { untrack, onMount, type Snippet } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { api, APIError } from "../api";
   import {
     CodeFileSchema,
@@ -66,7 +68,7 @@
   let mode = $state<"file" | "diff">("file");
   let shownDiff = $derived(diff ?? (mode === "diff" ? comparison : undefined));
   let mounted = false;
-  const requests = new Set<AbortController>();
+  const requests = new SvelteSet<AbortController>();
   onMount(() => {
     mounted = true;
     menu = documentMenu;
@@ -329,7 +331,7 @@
       side = file.document.source === "head" ? "old" : "new";
       mode = "diff";
     } catch (e) {
-      if (mounted && !controller.signal.aborted) error = (e as Error).message;
+      if (mounted && !controller.signal.aborted) error = errorMessage(e);
     } finally {
       requests.delete(controller);
       busy = false;
@@ -425,7 +427,7 @@
     } catch (e) {
       if (mounted && !controller.signal.aborted) {
         if (e instanceof APIError && e.status === 410) onState("expired");
-        error = (e as Error).message;
+        error = errorMessage(e);
       }
     } finally {
       requests.delete(controller);
@@ -486,7 +488,7 @@
         }}
       >
         <DropdownMenu.GroupHeading>预览来源</DropdownMenu.GroupHeading>
-        {#each diffSides as which}
+        {#each diffSides as which (which)}
           <DropdownMenu.RadioItem
             value={which}
             closeOnSelect
@@ -511,7 +513,7 @@
 
 {#snippet fullItems()}
   {#if shownDiff}
-    {#each diffSides as which}
+    {#each diffSides as which (which)}
       {#if shownDiff[which].source !== "empty"}
         <DropdownMenu.Item onSelect={() => void full(which)}>
           {which === "old" ? "修改前的文件" : "修改后的文件"}

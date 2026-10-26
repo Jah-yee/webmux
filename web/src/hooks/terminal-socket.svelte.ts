@@ -1,3 +1,4 @@
+import { SvelteMap, SvelteURLSearchParams } from "svelte/reactivity";
 import type { Terminal } from "@xterm/xterm";
 import {
   ControlStateSchema,
@@ -73,7 +74,10 @@ export function createTerminalSocket(id: string) {
   const controlling = () =>
     !!control && control.controller?.clientId === identity.id;
   // Unconfirmed submissions, re-queried after every reconnect.
-  const submissions = new Map<string, (state: SubmissionProgress) => void>();
+  const submissions = new SvelteMap<
+    string,
+    (state: SubmissionProgress) => void
+  >();
   const accepting = () =>
     connection === "connected" && !restoring && exitCode === null;
   const submission = () => {
@@ -160,7 +164,7 @@ export function createTerminalSocket(id: string) {
     let schemeReports = false;
     const ws = connect(
       () => {
-        const query = new URLSearchParams({
+        const query = new SvelteURLSearchParams({
           client: identity.id,
           label: identity.label,
         });

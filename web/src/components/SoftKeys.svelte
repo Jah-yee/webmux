@@ -20,7 +20,7 @@
     trailing?: Snippet;
   } = $props();
   const symbols = ["/", "@"] as const;
-  const keys = [
+  const keys: Array<[string, string]> = [
     ["Esc", "\x1b"],
     ["Tab", "\t"],
     ["↑", "\x1b[A"],
@@ -32,7 +32,7 @@
     ["PgUp", "\x1b[5~"],
     ["PgDn", "\x1b[6~"],
   ];
-  const combinations = [
+  const combinations: Array<[string, string]> = [
     ["Ctrl+C", "\x03"],
     ["Ctrl+D", "\x04"],
     ["Ctrl+Z", "\x1a"],

@@ -35,6 +35,8 @@ jobs:
         run: make docs-check
       - name: Lint frontend
         run: pnpm --dir web lint
+      - name: Check frontend test types
+        run: pnpm --dir web check:test
       - name: Check frontend architecture
         run: pnpm --dir web check:arch
       - name: Check and build frontend

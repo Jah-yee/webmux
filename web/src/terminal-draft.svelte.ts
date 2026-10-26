@@ -1,3 +1,4 @@
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import {
   scratchEntriesLimit,
   scratchEntryLimit,
@@ -83,7 +84,7 @@ export function createTerminalDrafts(
 ): TerminalDrafts {
   const storage = options.storage ?? null;
   const now = options.now ?? Date.now;
-  const entries = new Map<string, TerminalDraft>();
+  const entries = new SvelteMap<string, TerminalDraft>();
   function persist(entry: TerminalDraft) {
     if (!storage || !valid(entry)) return;
     entry.persisted = storage.save({
@@ -287,7 +288,7 @@ export function createTerminalDrafts(
       if (index < 0 || target < 0 || target >= entry.scratch.length)
         return false;
       const [item] = entry.scratch.splice(index, 1);
-      entry.scratch.splice(target, 0, item);
+      entry.scratch.splice(target, 0, item!);
       persistScratch(entry);
       return true;
     },
@@ -315,6 +316,7 @@ export function createTerminalDrafts(
       const index = entry.scratch.findIndex((item) => item.id === id);
       if (index < 0) return "invalid";
       const target = entry.scratch[index];
+      if (!target) return "invalid";
       if (!target.text) return "empty";
       if (mode === "replace" && entry.text) {
         // Keep the displaced body as a note before replacing it.
@@ -366,7 +368,7 @@ export function createTerminalDrafts(
       forget(sessionId);
     },
     reconcile(sessionIds: Iterable<string>) {
-      const present = new Set(sessionIds);
+      const present = new SvelteSet(sessionIds);
       storage?.keep(present);
       for (const id of entries.keys()) if (!present.has(id)) this.remove(id);
     },

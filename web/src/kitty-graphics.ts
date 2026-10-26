@@ -1,3 +1,4 @@
+import { errorMessage } from "./error";
 const ESC = 0x1b;
 const APC = 0x5f;
 const GRAPHICS = 0x47;
@@ -320,10 +321,10 @@ async function decodeKittyImage({
     throw new KittyCommandError("EINVAL", "invalid pixel data length");
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let source = 0, target = 0; target < rgba.length;) {
-    rgba[target++] = bytes[source++];
-    rgba[target++] = bytes[source++];
-    rgba[target++] = bytes[source++];
-    rgba[target++] = channels === 3 ? 255 : bytes[source++];
+    rgba[target++] = bytes[source++]!;
+    rgba[target++] = bytes[source++]!;
+    rgba[target++] = bytes[source++]!;
+    rgba[target++] = channels === 3 ? 255 : bytes[source++]!;
   }
   const bitmap = await createImageBitmap(new ImageData(rgba, width, height));
   return {
@@ -516,10 +517,7 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
     const command =
       error instanceof KittyCommandError
         ? error
-        : new KittyCommandError(
-            "EINVAL",
-            error instanceof Error ? error.message : "graphics command failed",
-          );
+        : new KittyCommandError("EINVAL", errorMessage(error));
     respond(params, `${command.code}:${command.message}`);
   }
 
@@ -1173,7 +1171,7 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
     let last = -1;
     for (let index = 0; index < events.length; index++) {
       const event = events[index];
-      if (event.kind === "text" && event.data.length > 0) last = index;
+      if (event?.kind === "text" && event.data.length > 0) last = index;
     }
     if (last < 0) {
       parsed();
@@ -1181,7 +1179,7 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
     }
     for (let index = 0; index <= last; index++) {
       const event = events[index];
-      if (event.kind !== "text" || event.data.length === 0) continue;
+      if (event?.kind !== "text" || event.data.length === 0) continue;
       writeText(event.data, index === last ? parsed : undefined);
     }
   }
@@ -1218,7 +1216,9 @@ export function createKittyGraphics(options: KittyGraphicsOptions) {
           }
         }
       })
-      .catch(() => {})
+      .catch((error: unknown) => {
+        if (current(expected)) respondError({}, error);
+      })
       .finally(() => {
         if (id === chainId) chainBusy = false;
         parsed();

@@ -63,3 +63,28 @@ test("an invalid #token= link shows the token form", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveText("authentication required");
   expect(page.url()).toBe(`${server.baseURL}/`);
 });
+
+test("a mid-session 401 clears workspace state and allows signing in again", async ({
+  page,
+}) => {
+  await page.goto(`${server.baseURL}/#token=${encodeURIComponent(token)}`);
+  await expect(page.getByRole("searchbox", { name: "搜索会话" })).toBeVisible();
+  await page.getByRole("searchbox", { name: "搜索会话" }).fill("discard me");
+  await page.route("**/api/repositories", async (route) => {
+    await route.fulfill({ status: 401, json: { error: "token expired" } });
+  });
+  await page
+    .getByRole("button", { name: "刷新 Git 状态", exact: true })
+    .click();
+  await expect(page.getByLabel("共享 Token", { exact: true })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText("Token 无效或已更改");
+  await expect(page.getByRole("searchbox", { name: "搜索会话" })).toHaveCount(
+    0,
+  );
+  await page.unroute("**/api/repositories");
+  await page.getByLabel("共享 Token", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "连接 WebMux →" }).click();
+  const search = page.getByRole("searchbox", { name: "搜索会话" });
+  await expect(search).toBeVisible();
+  await expect(search).toHaveValue("");
+});

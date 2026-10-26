@@ -46,6 +46,7 @@ release: web
 	cd bin && sha256sum $(RELEASE_FILES) > SHA256SUMS
 
 check: web format-check docs-check
+	$(PNPM) --dir web check:test
 	$(PNPM) --dir web lint
 	$(PNPM) --dir web check:arch
 	$(GO) vet ./...

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { tick } from "svelte";
   import IconFolder from "~icons/tabler/folder";
   import IconArrowUp from "~icons/tabler/arrow-up";
@@ -76,7 +77,7 @@
           if (active) directories = result;
         })
         .catch((err) => {
-          if (active) error = (err as Error).message;
+          if (active) error = errorMessage(err);
         })
         .finally(() => {
           if (active) loading = false;
@@ -113,14 +114,17 @@
             aria-label="上一级目录"
             title="上一级目录（Alt+↑）"
             disabled={current === "/"}
-            onclick={parent}><IconArrowUp class="size-4" /></Button
+            onclick={parent}
+            ><IconArrowUp class="size-4" aria-hidden="true" /></Button
           >
           <Button
             type="button"
             variant="ghost"
             size="icon"
             aria-label="用户主目录"
-            onclick={() => enter("~")}><IconHome class="size-4" /></Button
+            title="用户主目录"
+            onclick={() => enter("~")}
+            ><IconHome class="size-4" aria-hidden="true" /></Button
           >
           <span
             class="min-w-0 flex-1 truncate font-mono text-xs"

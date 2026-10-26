@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { onMount } from "svelte";
   import { api, sessionStatusText } from "../api";
   import {
+    EmptyRequestSchema,
     NoContentSchema,
     RemovalPreviewSchema,
+    RemoveWorktreeRequestSchema,
     type RemovalPreview,
     type Worktree,
   } from "../schemas";
@@ -40,9 +43,11 @@
         RemovalPreviewSchema,
         "POST",
         {},
+        undefined,
+        EmptyRequestSchema,
       );
     } catch (err) {
-      error = (err as Error).message;
+      error = errorMessage(err);
     } finally {
       busy = false;
     }
@@ -55,14 +60,21 @@
     busy = true;
     error = "";
     try {
-      await api(route + "/remove", NoContentSchema, "POST", {
-        confirmationId: preview.confirmationId,
-        mode: force ? "force" : "safe",
-        ...(force ? { confirmPath, closeSessions } : {}),
-      });
+      await api(
+        route + "/remove",
+        NoContentSchema,
+        "POST",
+        {
+          confirmationId: preview.confirmationId,
+          mode: force ? "force" : "safe",
+          ...(force ? { confirmPath, closeSessions } : {}),
+        },
+        undefined,
+        RemoveWorktreeRequestSchema,
+      );
       onclose();
     } catch (err) {
-      error = `${(err as Error).message}。操作未完整完成；部分会话可能已关闭，请重新读取预览后确认。`;
+      error = `${errorMessage(err)}。操作未完整完成；部分会话可能已关闭，请重新读取预览后确认。`;
       preview = null;
       force = false;
     } finally {
@@ -109,7 +121,7 @@
         <div class="rounded-lg border border-destructive/30 p-3 text-sm">
           <p class="font-medium">安全删除被阻止</p>
           <ul class="mt-2 list-disc space-y-1 pl-5">
-            {#each preview.blockers as blocker}<li class="break-all">
+            {#each preview.blockers as blocker (blocker)}<li class="break-all">
                 {blocker}
               </li>{/each}
           </ul>

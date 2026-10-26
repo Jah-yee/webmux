@@ -13,6 +13,11 @@
       "$lib/*": ["./src/lib/*"]
     },
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,

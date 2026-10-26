@@ -47,6 +47,25 @@ export const SessionInfoSchema = z.object({
     .optional(),
 });
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
+export const WorkspaceReferenceSchema = z.object({
+  repositoryId: z.string(),
+  worktreeId: z.string(),
+});
+export const CreateSessionRequestSchema = z
+  .object({
+    cwd: z.string().optional(),
+    cmd: z.array(z.string()).optional(),
+    name: z.string().optional(),
+    workspace: WorkspaceReferenceSchema.optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    configId: z.string().optional(),
+  })
+  .refine(
+    (body) =>
+      !body.configId ||
+      (!body.cmd?.length && Object.keys(body.env ?? {}).length === 0),
+    { message: "configId 不能与 cmd 或 env 同时提供" },
+  );
 
 export const PreviewSettingsSchema = z.object({
   lines: z.number().int().min(1).max(50),
@@ -335,6 +354,13 @@ export const BranchesSchema = z.object({
   defaultBase: z.string().nullable(),
   defaultParent: z.string(),
 });
+export const CreateWorktreeRequestSchema = z.object({
+  path: z.string(),
+  mode: z.enum(["new", "existing"]),
+  branch: z.string(),
+  base: z.string().optional(),
+});
+
 export const RemovalPreviewSchema = z.object({
   confirmationId: z.string(),
   expiresAt: z.iso.datetime({ offset: true }),
@@ -344,6 +370,14 @@ export const RemovalPreviewSchema = z.object({
   forceAllowed: z.boolean(),
 });
 export type RemovalPreview = z.infer<typeof RemovalPreviewSchema>;
+export const EmptyRequestSchema = z.object({}).strict();
+export const RemoveWorktreeRequestSchema = z.object({
+  confirmationId: z.string(),
+  mode: z.enum(["safe", "force"]),
+  confirmPath: z.string().optional(),
+  closeSessions: z.boolean().optional(),
+});
+
 export const DirectoriesSchema = z.array(z.string());
 // `reason` accompanies push 409s; other errors omit it.
 export const ErrorSchema = z.object({
@@ -395,6 +429,12 @@ export const PushStatusSchema = z.object({
 });
 export type PushStatus = z.infer<typeof PushStatusSchema>;
 export const PushSubscriptionResultSchema = z.object({ id: z.string() });
+export const PushSubscriptionRequestSchema = z.object({
+  endpoint: z.string(),
+  expirationTime: z.number().nullable().optional(),
+  keys: z.object({ p256dh: z.string(), auth: z.string() }),
+});
+
 // A test notification goes to every device; failures name only the push
 // service host, and removed lists subscriptions the service reported expired.
 export const PushTestResultSchema = z.object({
@@ -440,7 +480,7 @@ export const CodeLocationSchema = z.object({
   kind: z.enum(["file", "directory"]),
 });
 export const CodeDocumentSchema = z.object({
-  nodeId: z.string().optional(),
+  nodeId: z.string(),
   path: z.string(),
   absolutePath: z.string(),
   source: CodeSourceSchema,
@@ -468,7 +508,7 @@ export const CodeFileSchema = z.object({
   checkedAt: z.string(),
 });
 export const CodeChangeSchema = z.object({
-  nodeId: z.string().optional(),
+  nodeId: z.string(),
   changeId: z.string(),
   group: z.enum(["unstaged", "staged", "untracked"]),
   oldPath: z.string(),

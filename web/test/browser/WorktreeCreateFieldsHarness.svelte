@@ -7,15 +7,16 @@
   let mode = $state<"new" | "existing">("new");
   let branch = $state("");
   let base = $state("");
-  let ready = $state(false);
+  let fields = $state<WorktreeCreateFields>();
+  const ready = $derived(fields?.isReady() ?? false);
 </script>
 
 <WorktreeCreateFields
+  bind:this={fields}
   {repository}
   bind:path
   bind:mode
   bind:branch
   bind:base
-  bind:ready
 />
 <output aria-label="表单就绪">{ready ? "ready" : "not-ready"}</output>

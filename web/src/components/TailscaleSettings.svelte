@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
@@ -26,7 +27,7 @@
         status = value;
       })
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted) error = (cause as Error).message;
+        if (!controller.signal.aborted) error = errorMessage(cause);
       });
     return () => controller.abort();
   });

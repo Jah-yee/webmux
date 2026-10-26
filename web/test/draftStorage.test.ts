@@ -196,7 +196,7 @@ describe("browser draft storage", () => {
     );
     const storage = createDraftStorage(memory, () => draftRetention + 1);
     expect([...memory.data.keys()].sort()).toEqual(["webmux.scratch.eeeeeeee"]);
-    expect(storage.loadScratch("eeeeeeee")?.entries[0].text).toBe("keep");
+    expect(storage.loadScratch("eeeeeeee")?.entries[0]!.text).toBe("keep");
   });
 
   test("keep, remove and clear cover scratch and current drafts", () => {
@@ -235,7 +235,7 @@ describe("browser draft storage", () => {
     ]);
     expect(storage.saveScratch(tooLong)).toBe(false);
     // A rejected write keeps the last successfully saved scratch record.
-    expect(storage.loadScratch("aaaaaaaa")?.entries[0].text).toBe("saved");
+    expect(storage.loadScratch("aaaaaaaa")?.entries[0]!.text).toBe("saved");
     expect(storage.load("aaaaaaaa")).not.toBeNull();
     const tooMany = scratch(
       "aaaaaaaa",
@@ -246,7 +246,7 @@ describe("browser draft storage", () => {
       })),
     );
     expect(storage.saveScratch(tooMany)).toBe(false);
-    expect(storage.loadScratch("aaaaaaaa")?.entries[0].text).toBe("saved");
+    expect(storage.loadScratch("aaaaaaaa")?.entries[0]!.text).toBe("saved");
     const tooMuch = scratch(
       "aaaaaaaa",
       1,
@@ -257,7 +257,7 @@ describe("browser draft storage", () => {
     );
     expect(scratchStorageLimit).toBeLessThan(6 * scratchEntryLimit);
     expect(storage.saveScratch(tooMuch)).toBe(false);
-    expect(storage.loadScratch("aaaaaaaa")?.entries[0].text).toBe("saved");
+    expect(storage.loadScratch("aaaaaaaa")?.entries[0]!.text).toBe("saved");
     const full = new MemoryStorage();
     full.setItem = () => {
       throw new DOMException("quota", "QuotaExceededError");

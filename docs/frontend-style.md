@@ -49,18 +49,18 @@ Google 的指南自述部分条款受其内部环境约束，因此只采纳类�
 
 ## 检查映射
 
-| 规则                               | 执行方式                                                       | 现状             |
-| ---------------------------------- | -------------------------------------------------------------- | ---------------- |
-| 类型正确性                         | `pnpm --dir web check`（`svelte-check`）                       | 已启用           |
-| 格式化                             | `make format-check`（Oxfmt）                                   | 已启用           |
-| 通用 JS/TS 问题                    | `pnpm --dir web lint`（Oxlint）                                | 已启用           |
-| 组件复用、令牌、分层、重复与死代码 | `pnpm --dir web check:arch`                                    | 已启用           |
-| 异步 Promise 未处理                | 类型感知 lint（`no-floating-promises`、`no-misused-promises`） | 计划，issue #149 |
-| Svelte 模板规则                    | `svelte.configs.recommended`                                   | 计划，issue #149 |
-| 测试代码类型                       | `tsconfig.test.json` + `check:test`                            | 计划，issue #149 |
-| 前后端契约                         | `web/test/wire-contract.test.ts` 消费 Go wire 快照             | 计划，issue #149 |
+| 规则                               | 执行方式                                                       | 现状   |
+| ---------------------------------- | -------------------------------------------------------------- | ------ |
+| 类型正确性与未检查索引             | `pnpm --dir web check`（含 `noUncheckedIndexedAccess`）        | 已启用 |
+| 格式化                             | `make format-check`（Oxfmt）                                   | 已启用 |
+| 通用 JS/TS 问题                    | `pnpm --dir web lint`（Oxlint）                                | 已启用 |
+| 组件复用、令牌、分层、重复与死代码 | `pnpm --dir web check:arch`                                    | 已启用 |
+| 异步 Promise 未处理                | 类型感知 lint（`no-floating-promises`、`no-misused-promises`） | 已启用 |
+| Svelte 模板规则                    | `svelte.configs.recommended`                                   | 已启用 |
+| 测试代码类型                       | `tsconfig.test.json` + `check:test`                            | 已启用 |
+| 前后端契约                         | `web/test/wire-contract.test.ts` 消费 Go wire 快照             | 已启用 |
 
-警告不得静默累积：`svelte-check` 最终以 `--fail-on-warnings` 运行；引入带存量违规的新规则时，先记录基线，再按 [前端架构守卫](frontend-architecture.md#基线与新规则) 的方式收紧。
+`check`、`build`、`check:storybook` 与 `check:test` 都以 `--fail-on-warnings` 运行，警告不得静默累积。引入带存量违规的新规则时，先记录基线，再按 [前端架构守卫](frontend-architecture.md#基线与新规则) 的方式收紧。Markdown 预览唯一保留的 `{@html}` 必须先经过专用 DOMPurify 实例；嵌套控制器接口通过模板别名读取，`svelte/no-unused-props` 只放宽这类嵌套属性，顶层 props 仍受检查。
 
 ## 测试分层
 

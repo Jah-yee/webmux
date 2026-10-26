@@ -55,6 +55,7 @@ function imageDiff(
     kind: "image",
     reason: "",
     change: {
+      nodeId: next.nodeId,
       changeId: "change",
       group: "unstaged",
       oldPath: old.path || next.path,

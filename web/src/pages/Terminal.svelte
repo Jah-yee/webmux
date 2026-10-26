@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { onMount, tick, untrack } from "svelte";
+  import { MediaQuery } from "svelte/reactivity";
   import { apiBuffer, navigate } from "../api";
   import { clipboardFiles } from "../clipboard";
   import { useTerminal } from "../hooks/terminal.svelte";
@@ -56,7 +58,8 @@
   let forceSoftKeys = $state(false);
   let mounted = false;
   let codeShown = $state(false);
-  let desktop = $state(matchMedia("(min-width:1024px)").matches);
+  const desktopMedia = new MediaQuery("(min-width: 1024px)");
+  const desktop = $derived(desktopMedia.current);
   let findOpen = $state(false);
   let findPanel = $state<TerminalFindBar>();
   let findReturnFocus: HTMLElement | null = null;
@@ -97,7 +100,7 @@
           if (mounted) CodePanel = m.default;
         })
         .catch((e) => {
-          error = (e as Error).message;
+          error = errorMessage(e);
         })
         .finally(() => (loadingCode = false));
     }
@@ -295,13 +298,7 @@
     // page went away; ask the server instead of guessing.
     if (draft.submission)
       t.track(draft.submission.id, reportDraft(draft.submission.id, true));
-    const media = matchMedia("(min-width:1024px)");
-    const layout = () => {
-      desktop = media.matches;
-    };
-    media.addEventListener("change", layout);
     return () => {
-      media.removeEventListener("change", layout);
       mounted = false;
     };
   });
@@ -326,7 +323,7 @@
     try {
       await copyToClipboard(new TextDecoder().decode(await apiBuffer(id)));
     } catch (err) {
-      error = (err as Error).message;
+      error = errorMessage(err);
     }
   }
 
@@ -395,7 +392,7 @@
   />
 {/snippet}
 
-<div
+<main
   class="terminal-page"
   class:force-soft-keys={forceSoftKeys}
   class:ios={isIOS()}
@@ -496,7 +493,7 @@
         />{/if}
     {/snippet}
   </TerminalWorkspace>
-</div>
+</main>
 
 <TerminalPasteDialog
   bind:open={pasteOpen}

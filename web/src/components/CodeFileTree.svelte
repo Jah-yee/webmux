@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { onDestroy, tick, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import type { CodeListing } from "../schemas";
@@ -49,8 +50,8 @@
   const branches = new SvelteMap<string, CodeListing>();
   const errors = new SvelteMap<string, string>();
   const loading = new SvelteSet<string>();
-  const requests = new Map<string, AbortController>();
-  const inflight = new Map<string, Promise<void>>();
+  const requests = new SvelteMap<string, AbortController>();
+  const inflight = new SvelteMap<string, Promise<void>>();
   let revealSequence = 0;
   function loadBranch(path: string, append = false): Promise<void> {
     const current = inflight.get(path);
@@ -86,7 +87,7 @@
             : result,
         );
     } catch (error) {
-      if (!request.signal.aborted) errors.set(path, (error as Error).message);
+      if (!request.signal.aborted) errors.set(path, errorMessage(error));
     } finally {
       if (requests.get(path) === request) {
         requests.delete(path);

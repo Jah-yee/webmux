@@ -223,3 +223,49 @@ test("branch search reveals a collapsed repository and preserves its layout", as
   await toggle.click();
   await expect(retained).toBeVisible();
 });
+
+test("a disconnected session list reconnects and restores the latest snapshot", async ({
+  page,
+  request,
+  workDir,
+}) => {
+  let blockReconnect = false;
+  let blockedReconnects = 0;
+  let disconnect: (() => Promise<void>) | undefined;
+  await page.routeWebSocket("**/ws/sessions", async (socket) => {
+    if (blockReconnect) {
+      blockedReconnects++;
+      await socket.close();
+      return;
+    }
+    socket.connectToServer();
+    disconnect = () => socket.close();
+  });
+  await page.goto("/");
+  await expect(page.getByRole("searchbox", { name: "搜索会话" })).toBeVisible();
+  blockReconnect = true;
+  await disconnect!();
+  await expect.poll(() => blockedReconnects).toBeGreaterThan(0);
+  await expect(
+    page.getByText("连接已断开，重连中…", { exact: true }),
+  ).toBeVisible();
+  const created = await request.post("/api/sessions", {
+    data: {
+      cwd: workDir,
+      cmd: ["/bin/sh", "-c", "sleep 60"],
+      name: "Recovered snapshot",
+    },
+  });
+  expect(created.status()).toBe(201);
+  await expect(
+    page.getByRole("link", { name: "Recovered snapshot" }),
+  ).toHaveCount(0);
+  blockReconnect = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(
+    page.getByRole("link", { name: "Recovered snapshot" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("连接已断开，重连中…", { exact: true }),
+  ).toBeHidden();
+});

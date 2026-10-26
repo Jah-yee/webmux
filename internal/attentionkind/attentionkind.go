@@ -2,22 +2,15 @@
 // Sessions raise them and the push configuration selects among them.
 package attentionkind
 
-type Kind string
+import "github.com/rainchan/webmux/internal/contract"
+
+type Kind = contract.AttentionKind
 
 const (
-	Question   Kind = "question"
-	Permission Kind = "permission"
-	Done       Kind = "done"
-	Error      Kind = "error"
-	Notify     Kind = "notify"
-	Bell       Kind = "bell"
+	Question   = contract.AttentionKindQuestion
+	Permission = contract.AttentionKindPermission
+	Done       = contract.AttentionKindDone
+	Error      = contract.AttentionKindError
+	Notify     = contract.AttentionKindNotify
+	Bell       = contract.AttentionKindBell
 )
-
-// Valid reports whether k is one of the named kinds.
-func (k Kind) Valid() bool {
-	switch k {
-	case Question, Permission, Error, Done, Notify, Bell:
-		return true
-	}
-	return false
-}

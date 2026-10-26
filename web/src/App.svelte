@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { errorMessage } from "./error";
+  import { onMount, tick } from "svelte";
   import { api, consumeTokenFragment, store, stored } from "./api";
   import { HealthSchema } from "./schemas";
   import { sync as syncPush } from "./push";
@@ -21,6 +22,7 @@
   let token = $state(stored("token"));
   let error = $state("");
   const match = $derived(path.match(/^\/s\/([a-z2-7]{8})$/));
+  const sessionId = $derived(match?.[1]);
 
   async function check() {
     checking = true;
@@ -32,15 +34,31 @@
       // rebuilt its store; without one it touches nothing.
       void syncPush().catch(() => undefined);
     } catch (err) {
-      error = (err as Error).message;
+      error = errorMessage(err);
     } finally {
       checking = false;
     }
   }
 
   onMount(() => {
+    let focusRoute = false;
+    const focusMain = () => {
+      if (!focusRoute) return;
+      const main = document.querySelector("main");
+      if (!main) return;
+      focusRoute = false;
+      main.tabIndex = -1;
+      main.focus({ preventScroll: true });
+    };
+    const routes = new MutationObserver(focusMain);
+    routes.observe(document.getElementById("app")!, {
+      childList: true,
+      subtree: true,
+    });
     const change = () => {
       path = location.pathname;
+      focusRoute = true;
+      void tick().then(focusMain);
     };
     const auth = () => {
       drafts.clearAll();
@@ -54,6 +72,7 @@
     if (consumeTokenFragment()) token = stored("token");
     void check();
     return () => {
+      routes.disconnect();
       drafts.clearAll();
       window.removeEventListener("popstate", change);
       window.removeEventListener("webmux:auth", auth);
@@ -100,12 +119,12 @@
       </Card.Content>
     </Card.Root>
   </main>
-{:else if match}
+{:else if sessionId}
   {#await import("./pages/Terminal.svelte")}
     <p role="status" class="p-6 text-muted-foreground">正在加载终端…</p>
   {:then page}
-    {#key match[1]}<page.default
-        id={match[1]}
+    {#key sessionId}<page.default
+        id={sessionId}
         {drafts}
         onUploadNotice={(message) => {
           if (ready) uploadNotice = message;

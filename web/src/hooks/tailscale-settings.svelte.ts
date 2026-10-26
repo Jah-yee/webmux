@@ -1,3 +1,4 @@
+import { errorMessage } from "../error";
 import { onMount } from "svelte";
 import { api } from "../api";
 import {
@@ -62,7 +63,7 @@ export function useTailscaleSettings() {
       return next;
     } catch (cause) {
       if (!disposed && ticket === latest && !controller.signal.aborted)
-        state.error = (cause as Error).message;
+        state.error = errorMessage(cause);
       throw cause;
     } finally {
       if (!disposed && ticket === latest) {

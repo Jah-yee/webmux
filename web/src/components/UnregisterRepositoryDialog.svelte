@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { Button } from "$lib/components/ui/button";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { api } from "../api";
@@ -31,7 +32,7 @@
       open = false;
       await onchange();
     } catch (err) {
-      error = (err as Error).message;
+      error = errorMessage(err);
     } finally {
       busy = false;
     }

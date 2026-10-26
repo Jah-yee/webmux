@@ -36,7 +36,7 @@ export async function clipboardFiles(
     const extension =
       type === "image/jpeg"
         ? "jpg"
-        : type.split("/")[1].replace(/[^a-z0-9]/gi, "") || "bin";
+        : (type.split("/")[1] ?? "").replace(/[^a-z0-9]/gi, "") || "bin";
     files.push(
       new File([blob], `clipboard-${Date.now()}-${index}.${extension}`, {
         type,

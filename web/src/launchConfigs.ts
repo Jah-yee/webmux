@@ -1,3 +1,4 @@
+import { errorMessage } from "./error";
 import { joinArgs, parseArgs } from "./api";
 import type { LaunchConfigSummary, PreviewSettings } from "./schemas";
 
@@ -148,7 +149,7 @@ export function validateLaunchDraft(
         errors.command = `单个参数不能超过 ${LAUNCH_VALUE_BYTES} 字节`;
     }
   } catch (err) {
-    errors.command = (err as Error).message;
+    errors.command = errorMessage(err);
   }
 
   const env: Record<string, string> = {};
