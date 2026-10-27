@@ -41,7 +41,11 @@ const cases: {
   {
     name: "quick tunnel",
     status: { available: false, reason: "quick_tunnel", publicKey: undefined },
-    shows: ["Quick Tunnel 无法持续接收推送", "查看公网访问配置"],
+    shows: [
+      "Quick Tunnel 无法持续接收推送",
+      "旧订阅点开即失效",
+      "查看公网访问配置",
+    ],
     toggle: false,
   },
   {
@@ -86,6 +90,9 @@ for (const row of cases) {
       await expect
         .element(page.getByText(text, { exact: false }).first())
         .toBeVisible();
+    await expect
+      .element(page.getByText("推送是尽力送达", { exact: true }))
+      .toBeVisible();
     await expect
       .element(
         page.getByText("会话列表中的状态仍是唯一准确来源", { exact: false }),

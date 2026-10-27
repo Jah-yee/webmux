@@ -166,7 +166,7 @@ test("program status reports drive attention and status", async ({
   expect(await info()).toMatchObject({ status: "running", attention: null });
 
   await writeFile(join(workDir, "step2"), "");
-  await expect(row).toContainText("已完成");
+  await expect(row).toContainText("本轮完成");
   await expect(row).toHaveAttribute("data-status", "waiting");
   const reported = await (await request.get(`/api/sessions/${id}`)).text();
   expect(reported).not.toContain("c2VjcmV0");

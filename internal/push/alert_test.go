@@ -2,6 +2,8 @@ package push
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -126,7 +128,7 @@ func TestPayload(t *testing.T) {
 		t.Fatalf("payload %s: %v", raw, err)
 	}
 	n := got.Notification
-	if got.WebPush != 8030 || n.Title != "deploy" || n.Body != "等待授权" || n.Navigate != "https://term.example.com/s/abcdefgh" || n.Tag != "webmux-abcdefgh" {
+	if got.WebPush != 8030 || n.Title != "deploy" || n.Body != "等待授权 · Agent 请求执行工具操作" || n.Navigate != "https://term.example.com/s/abcdefgh" || n.Tag != "webmux-abcdefgh" {
 		t.Fatalf("notification %+v", got)
 	}
 	if got.WebMux.V != 1 || got.WebMux.SessionID != "abcdefgh" || got.WebMux.Kind != "permission" || got.WebMux.Source != "agent" || !got.WebMux.Since.Equal(since) {
@@ -174,6 +176,61 @@ func TestPayloadOmitsTerminalContent(t *testing.T) {
 	for _, secret := range []string{"secret", "make deploy", "构建失败"} {
 		if strings.Contains(string(raw), secret) {
 			t.Fatalf("payload leaks %q: %s", secret, raw)
+		}
+	}
+}
+
+func TestKindBodiesAreActionable(t *testing.T) {
+	for _, kind := range []attentionkind.Kind{
+		attentionkind.Question,
+		attentionkind.Permission,
+		attentionkind.Error,
+		attentionkind.Done,
+		attentionkind.Notify,
+		attentionkind.Bell,
+	} {
+		body, ok := kindBodies[kind]
+		if !ok {
+			t.Errorf("%s: missing body", kind)
+			continue
+		}
+		label, _, found := strings.Cut(body, " · ")
+		if !found || label == "" || strings.TrimSpace(label) != label {
+			t.Errorf("%s: body %q must start with a short label and “ · ”", kind, body)
+		}
+	}
+}
+
+func TestTestPayload(t *testing.T) {
+	raw, err := testPayload("https://term.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Notification struct{ Title, Body, Tag string }
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Notification.Title != testTitle || got.Notification.Body != testBody || got.Notification.Tag != "webmux-test" {
+		t.Fatalf("test notification %+v", got.Notification)
+	}
+}
+
+// The service worker cannot import Go constants, so its unparseable-payload
+// fallback duplicates the server's. Fail here when the two drift apart.
+func TestServiceWorkerFallback(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "web", "public", "sw.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(raw)
+	for _, want := range []string{
+		`title: "` + fallbackTitle + `"`,
+		`body: "` + fallbackBody + `"`,
+	} {
+		if !strings.Contains(source, want) {
+			t.Errorf("web/public/sw.js does not contain %s", want)
 		}
 	}
 }

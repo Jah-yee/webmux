@@ -134,7 +134,7 @@ func TestServicePushesNewQuestionOnce(t *testing.T) {
 	}
 	id := created.Info().ID
 	if message.WebMux.SessionID != id || message.WebMux.Kind != "question" || message.Notification.Title != "deploy" ||
-		message.Notification.Body != "需要回答" || message.Notification.Navigate != "https://term.example.com/s/"+id {
+		message.Notification.Body != "需要回答 · Agent 正在等待你的输入" || message.Notification.Navigate != "https://term.example.com/s/"+id {
 		t.Fatalf("message %+v", message)
 	}
 }

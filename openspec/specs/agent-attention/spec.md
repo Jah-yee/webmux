@@ -174,7 +174,7 @@
 
 ### Requirement: 前端展示关注种类
 
-前端 SHALL 用 Zod 校验 `attention` 字段（可空对象，`kind` 与 `source` 为上述枚举，`since` 为带偏移的时间），校验失败按既有会话数据校验失败处理。会话列表行与终端页状态处 SHALL 在存在关注时按种类显示文案：`question` 为“需要回答”，`permission` 为“等待授权”，`done` 为“已完成”，`error` 为“出错停止”，`notify` 为“有通知”，`bell` 为“响铃提醒”；不存在关注时 SHALL 沿用既有状态文案（`waiting` 仍为“可能在等你”）。状态圆点颜色与列表计数 SHALL 继续由 `status` 决定。
+前端 SHALL 用 Zod 校验 `attention` 字段（可空对象，`kind` 与 `source` 为上述枚举，`since` 为带偏移的时间），校验失败按既有会话数据校验失败处理。会话列表行与终端页状态处 SHALL 在存在关注时按种类显示文案：`question` 为“需要回答”，`permission` 为“等待授权”，`done` 为“本轮完成”，`error` 为“出错停止”，`notify` 为“有通知”，`bell` 为“响铃提醒”；不存在关注时 SHALL 沿用既有状态文案（`waiting` 仍为“可能在等你”）。状态圆点颜色与列表计数 SHALL 继续由 `status` 决定。
 
 #### Scenario: 列表显示等待授权
 

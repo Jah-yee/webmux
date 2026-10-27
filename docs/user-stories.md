@@ -64,6 +64,8 @@
 
 本次追加实施（2026-10-26）：#146 与 #119 更新 US-C07、US-C09、US-D08、US-G01–US-G04、US-H04、US-I05、US-J03、US-K03、US-K08、US-K10、US-L10、US-P06。统一 JSON 存储、磁盘/活进程配置诊断和完整偏好同步已接线；旧浏览器偏好不迁移。已通过新增双客户端/重启/损坏文件 E2E 与配置只读脱敏测试；147 个故事 ID 唯一，215 个本地链接目标存在；主分支已占用 US-L09，本分支未合入的持久化故事分配 US-L10。完整回归结果以 PR 验证记录为准，不代表重验全部历史故事。
 
+本次局部核对（2026-10-27）：推送与站内关注文案统一并补充下一步提示，对应新增 US-C12 并更新 US-C06。推送正文改为“短标签 · 下一步”，`done` 在列表与推送中统一为“本轮完成”；服务 worker 兜底文案由 Go 用例锁定同步。`internal/push`、`internal/api`、`internal/wire` Go race、`go vet`、Vitest Service Worker 与推送卡片用例、`attention.spec.ts` / `push.spec.ts` 桌面与 Pixel 7 E2E、`svelte-check`、Oxlint、前端架构守卫、格式检查与文档守卫通过；未重新核对其余功能组。
+
 ## 阅读约定与产品边界
 
 - **使用者**：通过桌面、手机或平板浏览器使用服务器上的 Shell、CLI agent 和其他终端程序的人。

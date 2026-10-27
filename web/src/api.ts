@@ -187,7 +187,7 @@ const statusText = {
 const attentionText = {
   question: "需要回答",
   permission: "等待授权",
-  done: "已完成",
+  done: "本轮完成",
   error: "出错停止",
   notify: "有通知",
   bell: "响铃提醒",

@@ -20,13 +20,24 @@ type Alert struct {
 	Title     string
 }
 
+// Notification text shared with the service worker fallback in
+// web/public/sw.js. TestServiceWorkerFallback keeps both copies in sync.
+const (
+	fallbackTitle = "WebMux"
+	fallbackBody  = "有会话需要关注"
+	testTitle     = "WebMux 测试通知"
+	testBody      = "若看到此消息，说明推送已生效"
+)
+
+// kindBodies is the second line of a notification: the short label the session
+// list also shows, then what the user can do about it.
 var kindBodies = map[attentionkind.Kind]string{
-	attentionkind.Question:   "需要回答",
-	attentionkind.Permission: "等待授权",
-	attentionkind.Error:      "出错停止",
-	attentionkind.Done:       "回合结束",
-	attentionkind.Notify:     "有新通知",
-	attentionkind.Bell:       "响铃提醒",
+	attentionkind.Question:   "需要回答 · Agent 正在等待你的输入",
+	attentionkind.Permission: "等待授权 · Agent 请求执行工具操作",
+	attentionkind.Error:      "出错停止 · 点击查看错误原因",
+	attentionkind.Done:       "本轮完成 · 等待你的下一步",
+	attentionkind.Notify:     "有通知 · 程序发来了提醒",
+	attentionkind.Bell:       "响铃提醒 · 点击查看终端",
 }
 
 // urgency asks push services to wake a sleeping device only for signals that
@@ -85,11 +96,11 @@ func payload(a Alert, origin string, includeTitle bool) ([]byte, error) {
 		title = cleanTitle(a.Title)
 	}
 	if title == "" {
-		title = "WebMux"
+		title = fallbackTitle
 	}
 	body, ok := kindBodies[a.Kind]
 	if !ok {
-		body = "有会话需要关注"
+		body = fallbackBody
 	}
 	return json.Marshal(notificationPayload{
 		WebPush: 8030,
@@ -106,7 +117,7 @@ func payload(a Alert, origin string, includeTitle bool) ([]byte, error) {
 func testPayload(origin string) ([]byte, error) {
 	return json.Marshal(notificationPayload{
 		WebPush:      8030,
-		Notification: notification{Title: "WebMux", Body: "测试通知", Navigate: origin + "/", Tag: "webmux-test"},
+		Notification: notification{Title: testTitle, Body: testBody, Navigate: origin + "/", Tag: "webmux-test"},
 		WebMux:       map[string]any{"v": 1, "test": true},
 	})
 }
