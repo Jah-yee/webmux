@@ -1,7 +1,7 @@
 // Package attach connects a native terminal to a WebMux session over
 // /ws/s/{id}: raw input and output, control and resize, a detach key and
-// the session's exit code. It depends only on localclient and the standard
-// library; terminals are adapted in term_unix.go and term_windows.go.
+// the session's exit code. OS terminal adapters live in term_unix.go and
+// term_windows.go.
 package attach
 
 import (
@@ -70,8 +70,10 @@ var ErrNotFound = errors.New("session not found")
 
 // Terminal is a native terminal in raw mode.
 type Terminal interface {
-	io.Reader
 	io.Writer
+	// ReadContext must return when ctx ends, without closing the terminal.
+	// Run owns input until it returns; no other reader may consume it.
+	ReadContext(ctx context.Context, p []byte) (int, error)
 	// Size reports columns and rows.
 	Size() (cols, rows int, err error)
 }
@@ -113,11 +115,16 @@ func Run(ctx context.Context, client *localclient.Client, id string, term Termin
 	// the native terminal reporting keys, mouse, focus or pastes in its own
 	// encodings, which the shell behind it cannot read.
 	defer func() { _, _ = term.Write([]byte(inputModeReset)) }()
-	defer func() { _ = conn.CloseNow() }()
 	conn.SetReadLimit(64 << 20)
 	a := &attachment{conn: conn, term: term, observe: o.Observe, client: o.Client}
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		// Cancel the terminal read and socket operations before joining.
+		_ = conn.CloseNow()
+		workers.Wait()
+	}()
 	if !o.Observe {
 		// Until the server confirms this claim, control frames from the
 		// replay describe the previous controller.
@@ -126,12 +133,12 @@ func Run(ctx context.Context, client *localclient.Client, id string, term Termin
 			return Result{}, err
 		}
 		a.resize(ctx, true)
-		go a.watchSize(ctx)
+		workers.Go(func() { a.watchSize(ctx) })
 	}
 	detached := make(chan error, 1)
-	go func() { detached <- a.pumpInput(ctx) }()
+	workers.Go(func() { detached <- a.pumpInput(ctx) })
 	output := make(chan readResult, 1)
-	go func() { output <- a.pumpOutput(ctx) }()
+	workers.Go(func() { output <- a.pumpOutput(ctx) })
 	select {
 	case err := <-detached:
 		if err != nil {
@@ -219,7 +226,7 @@ func (a *attachment) watchSize(ctx context.Context) {
 func (a *attachment) pumpInput(ctx context.Context) error {
 	buf := make([]byte, 32*1024)
 	for {
-		n, err := a.term.Read(buf)
+		n, err := a.term.ReadContext(ctx, buf)
 		if n > 0 {
 			chunk, report := a.takeBackground(buf[:n])
 			if report != nil {
@@ -245,6 +252,9 @@ func (a *attachment) pumpInput(ctx context.Context) error {
 			if at >= 0 {
 				return nil
 			}
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 		if err != nil {
 			// The terminal closed: behave as a detach, the session continues.

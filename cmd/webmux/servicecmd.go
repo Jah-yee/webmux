@@ -25,7 +25,7 @@ func serviceCommand(args []string, out, stderr io.Writer) int {
 	switch action {
 	case "install", "uninstall", "start", "stop", "restart", "status", "logs":
 	default:
-		fmt.Fprintf(stderr, "webmux service: unknown command %q\n", action)
+		_, _ = fmt.Fprintf(stderr, "webmux service: unknown command %q\n", action)
 		return contract.ExitUsage
 	}
 	flags := flag.NewFlagSet("webmux service "+action, flag.ContinueOnError)
@@ -48,20 +48,20 @@ func serviceCommand(args []string, out, stderr io.Writer) int {
 		return contract.ExitUsage
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "webmux service: unexpected argument %q\n", flags.Arg(0))
+		_, _ = fmt.Fprintf(stderr, "webmux service: unexpected argument %q\n", flags.Arg(0))
 		return contract.ExitUsage
 	}
 	if action == "install" {
 		expanded, err := pathutil.Expand(path)
 		if err != nil {
-			fmt.Fprintln(stderr, "webmux service:", err)
+			_, _ = fmt.Fprintln(stderr, "webmux service:", err)
 			return contract.ExitUsage
 		}
 		path = expanded
 	}
 	manager, err := service.New(out, stderr, initializeServiceConfig)
 	if err != nil {
-		fmt.Fprintln(stderr, "webmux service:", err)
+		_, _ = fmt.Fprintln(stderr, "webmux service:", err)
 		return contract.ExitError
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -74,7 +74,7 @@ func serviceCommand(args []string, out, stderr io.Writer) int {
 		err = manager.Control(ctx, action, follow)
 	}
 	if err != nil {
-		fmt.Fprintln(stderr, "webmux service:", err)
+		_, _ = fmt.Fprintln(stderr, "webmux service:", err)
 		return contract.ExitError
 	}
 	return contract.ExitOK

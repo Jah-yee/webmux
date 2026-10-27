@@ -27,7 +27,8 @@ func (b *binding) scanChanges(ctx context.Context, visit func(Change) error) (st
 		}
 		c.NodeID = nodeID(c.NewPath)
 		c.ID = version(c)
-		io.WriteString(hash, c.ID+"\x00")
+		// hash.Hash writes never fail.
+		_, _ = io.WriteString(hash, c.ID+"\x00")
 		if visit != nil {
 			return visit(c)
 		}

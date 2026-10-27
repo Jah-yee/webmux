@@ -2,8 +2,8 @@
 // internal/contract. It belongs to the controller layer: services never see
 // the wire shapes, and the controller and hub never encode service types.
 //
-// Conversions keep nil slices and maps nil and empty ones empty, because
-// null and []/{} differ on the wire.
+// Required response arrays and objects encode as [] and {}, even if nil.
+// Nullable pointers keep null; request conversions preserve omissions.
 package wire
 
 import (
@@ -16,11 +16,8 @@ import (
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
-// each maps a slice, keeping nil nil.
+// each maps a required response array, normalizing nil to an empty slice.
 func each[S, D any](in []S, f func(S) D) []D {
-	if in == nil {
-		return nil
-	}
 	out := make([]D, len(in))
 	for i, v := range in {
 		out[i] = f(v)
@@ -28,11 +25,27 @@ func each[S, D any](in []S, f func(S) D) []D {
 	return out
 }
 
+// required normalizes scalar response slices without copying populated arrays.
+func required[T any](in []T) []T {
+	if in == nil {
+		return []T{}
+	}
+	return in
+}
+
+// requiredMap normalizes required response objects without changing requests.
+func requiredMap[V any](in map[string]V) map[string]V {
+	if in == nil {
+		return map[string]V{}
+	}
+	return in
+}
+
 // Session converts one session snapshot.
 func Session(i session.Info) contract.SessionInfo {
 	out := contract.SessionInfo{
 		ID: i.ID, Generation: i.Generation, Title: i.Title, Cwd: i.Cwd,
-		Cmd: i.Cmd, Status: string(i.Status), ExitCode: i.ExitCode, Preview: i.Preview,
+		Cmd: required(i.Cmd), Status: string(i.Status), ExitCode: i.ExitCode, Preview: i.Preview,
 		CreatedAt: i.CreatedAt, LastActiveAt: i.LastActiveAt, Cols: i.Cols, Rows: i.Rows, Clients: i.Clients,
 		ConfigID: i.ConfigID,
 	}
@@ -80,7 +93,11 @@ func Repositories(in []workspace.Repository) []contract.Repository { return each
 
 func Branches(b workspace.Branches) contract.Branches {
 	return contract.Branches{
-		Branches:      each(b.Branches, func(v workspace.Branch) contract.Branch { return contract.Branch(v) }),
+		Branches: each(b.Branches, func(v workspace.Branch) contract.Branch {
+			b := contract.Branch(v)
+			b.WorktreePaths = required(v.WorktreePaths)
+			return b
+		}),
 		Bases:         each(b.Bases, func(v workspace.Base) contract.BranchBase { return contract.BranchBase(v) }),
 		DefaultBase:   b.DefaultBase,
 		DefaultParent: b.DefaultParent,
@@ -90,7 +107,7 @@ func Branches(b workspace.Branches) contract.Branches {
 func Preview(p workspace.Preview) contract.RemovalPreview {
 	return contract.RemovalPreview{
 		ConfirmationID: p.ConfirmationID, ExpiresAt: p.ExpiresAt, Worktree: Worktree(p.Worktree),
-		Sessions: Sessions(p.Sessions), Blockers: p.Blockers, ForceAllowed: p.ForceAllowed,
+		Sessions: Sessions(p.Sessions), Blockers: required(p.Blockers), ForceAllowed: p.ForceAllowed,
 	}
 }
 
@@ -118,7 +135,7 @@ func launchPreview(p *contract.PreviewSettings) *launch.PreviewSettings {
 
 func LaunchConfig(c launch.Config) contract.LaunchConfig {
 	return contract.LaunchConfig{
-		ID: c.ID, Name: c.Name, Icon: c.Icon, Cmd: c.Cmd, Env: c.Env, Preview: previewSettings(c.Preview),
+		ID: c.ID, Name: c.Name, Icon: c.Icon, Cmd: required(c.Cmd), Env: requiredMap(c.Env), Preview: previewSettings(c.Preview),
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
 }
@@ -126,7 +143,7 @@ func LaunchConfig(c launch.Config) contract.LaunchConfig {
 func LaunchSummaries(in []launch.Summary) []contract.LaunchConfigSummary {
 	return each(in, func(s launch.Summary) contract.LaunchConfigSummary {
 		return contract.LaunchConfigSummary{
-			ID: s.ID, Name: s.Name, Icon: s.Icon, Cmd: s.Cmd, EnvNames: s.EnvNames, Preview: previewSettings(s.Preview),
+			ID: s.ID, Name: s.Name, Icon: s.Icon, Cmd: required(s.Cmd), EnvNames: required(s.EnvNames), Preview: previewSettings(s.Preview),
 			CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 		}
 	})
@@ -136,7 +153,11 @@ func LaunchInput(r contract.LaunchConfigInput) launch.Input {
 	return launch.Input{Name: r.Name, Icon: r.Icon, Cmd: r.Cmd, Env: r.Env, Preview: launchPreview(r.Preview)}
 }
 
-func PushTestReport(r push.TestReport) contract.PushTestReport { return contract.PushTestReport(r) }
+func PushTestReport(r push.TestReport) contract.PushTestReport {
+	out := contract.PushTestReport(r)
+	out.Removed, out.Errors = required(r.Removed), required(r.Errors)
+	return out
+}
 
 func CodeContext(c codeview.Context) contract.CodeContext { return contract.CodeContext(c) }
 
@@ -173,7 +194,11 @@ func CodeDiff(d codeview.Diff) contract.CodeDiff {
 	}
 }
 
-func CodeCheck(c codeview.Check) contract.CodeCheck { return contract.CodeCheck(c) }
+func CodeCheck(c codeview.Check) contract.CodeCheck {
+	out := contract.CodeCheck(c)
+	out.Snapshots, out.Directories = requiredMap(c.Snapshots), requiredMap(c.Directories)
+	return out
+}
 
 func CodeCheckRequest(r contract.CodeCheckRequest) codeview.CheckRequest {
 	return codeview.CheckRequest(r)
@@ -209,9 +234,6 @@ func TailscaleStatus(s tailscale.Status) contract.TailscaleStatus {
 			NetworkingMode: s.WSL.NetworkingMode, WindowsDetected: s.WSL.WindowsDetected,
 			WindowsRunning: s.WSL.WindowsRunning, WindowsDNSName: s.WSL.WindowsDNSName,
 		}
-	}
-	if out.Entries == nil {
-		out.Entries = []contract.TailscaleEntry{}
 	}
 	return out
 }

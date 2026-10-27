@@ -90,7 +90,7 @@ func (f *fixture) request(method, path string, body any, want int) []byte {
 	r.Header.Set("Content-Type", "application/json")
 	resp, err := f.client.Do(r)
 	must(err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(resp.Body)
 	must(err)
 	check(resp.StatusCode == want, "%s %s: got %d want %d: %s", method, path, resp.StatusCode, want, data)

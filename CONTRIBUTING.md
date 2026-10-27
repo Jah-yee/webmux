@@ -128,6 +128,10 @@ DeepSeek 直连的 `DEEPSEEK_API_KEY`。
 4. 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/)，例如 `feat(web): ...`、`fix: ...`。
 5. 在 PR 描述中说明动机、改动内容和验证方式。
 
+## Go 代码规范
+
+Go 代码以 [Go 质量基线](docs/go-style.md) 为准：采纳 Uber Go Style Guide，仓库架构约定优先，例外集中登记。提交前运行 `make check`；本机与 CI 固定使用 golangci-lint v2.15.0，安装方法与 review checklist 见该文档。新增代码不得增加告警，测试 errcheck 的存量豁免只能收紧。
+
 ## OpenSpec 工作流（可选）
 
 较大的功能可以使用 [OpenSpec](https://openspec.dev) 先撰写提案、设计与任务清单：

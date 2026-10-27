@@ -17,6 +17,9 @@ import (
 	"github.com/rainchan/webmux/internal/pathutil"
 )
 
+// Absorb list event bursts; slow subscribers disconnect rather than blocking sessions.
+const sessionListQueueCapacity = 256
+
 type Options struct {
 	ScrollbackBytes int
 	DefaultCwd      string
@@ -185,7 +188,7 @@ func (m *Manager) Remove(id string) error {
 func (m *Manager) Subscribe() *ListSubscriber {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	sub := &ListSubscriber{Out: make(chan Event, 256), Slow: make(chan struct{})}
+	sub := &ListSubscriber{Out: make(chan Event, sessionListQueueCapacity), Slow: make(chan struct{})}
 	sub.Out <- Event{Type: "snapshot", Sessions: m.listLocked()}
 	m.subs[sub] = struct{}{}
 	return sub

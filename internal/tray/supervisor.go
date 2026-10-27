@@ -167,6 +167,9 @@ func (s Snapshot) Actions() Actions {
 	return Actions{Start: true}
 }
 
+// Absorb short tray/service event bursts while the supervisor serializes state changes.
+const supervisorEventQueueCapacity = 64
+
 // Supervisor runs a single event loop; Service calls run in goroutines and
 // report back as events so the loop never blocks on wsl.exe.
 type Supervisor struct {
@@ -279,7 +282,7 @@ func NewSupervisor(o Options) *Supervisor {
 	if o.Publish == nil {
 		o.Publish = func(Snapshot) {}
 	}
-	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, tray: BuildInfo{Version: o.Version, Contract: slices.Max(SupportedContracts)}, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, 64), done: make(chan struct{})}
+	s := &Supervisor{service: o.Service, reach: o.Reach, clock: o.Clock, tray: BuildInfo{Version: o.Version, Contract: slices.Max(SupportedContracts)}, publish: o.Publish, notify: o.Notify, logf: o.Logf, events: make(chan any, supervisorEventQueueCapacity), done: make(chan struct{})}
 	go s.loop(o.Settings)
 	return s
 }

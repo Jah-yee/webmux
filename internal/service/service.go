@@ -110,8 +110,8 @@ func (m *Manager) Install(ctx context.Context, path string, createConfig, force,
 		return err
 	}
 	if dryRun {
-		fmt.Fprintf(m.out, "# Service definition: %s\n# Executable must remain at: %s\n%s", m.definitionPath(), m.executable, body)
-		return nil
+		_, err := fmt.Fprintf(m.out, "# Service definition: %s\n# Executable must remain at: %s\n%s", m.definitionPath(), m.executable, body)
+		return err
 	}
 	tool := "systemctl"
 	if m.platform == "darwin" {
@@ -130,8 +130,9 @@ func (m *Manager) Install(ctx context.Context, path string, createConfig, force,
 		if err != nil {
 			return err
 		}
+		// Progress messages are best-effort; service/configuration errors take priority.
 		if created {
-			fmt.Fprintf(m.out, "Created %s (0600). Read its token to sign in.\n", abs)
+			_, _ = fmt.Fprintf(m.out, "Created %s (0600). Read its token to sign in.\n", abs)
 		}
 		// The first load saw in-memory defaults when the file was absent, and
 		// another process may have won the creation race. Reload the published
@@ -161,7 +162,7 @@ func (m *Manager) Install(ctx context.Context, path string, createConfig, force,
 	}
 	// Keep the definition on manager failure: it is useful for diagnosis and
 	// can be retried with --force after fixing the user-manager environment.
-	fmt.Fprintf(m.out, "Installed %s\nExecutable: %s (keep this path available)\n", m.definitionPath(), m.executable)
+	_, _ = fmt.Fprintf(m.out, "Installed %s\nExecutable: %s (keep this path available)\n", m.definitionPath(), m.executable)
 	if m.platform == "linux" {
 		if err := m.command(ctx, "systemctl", "--user", "daemon-reload"); err != nil {
 			return err
@@ -258,7 +259,7 @@ func (m *Manager) Control(ctx context.Context, action string, follow bool) error
 	if err := os.Remove(m.definitionPath()); err != nil {
 		return err
 	}
-	fmt.Fprintln(m.out, "Removed user service. Configuration, logs and state were kept.")
+	_, _ = fmt.Fprintln(m.out, "Removed user service. Configuration, logs and state were kept.")
 	if m.platform == "linux" {
 		return m.command(ctx, "systemctl", "--user", "daemon-reload")
 	}

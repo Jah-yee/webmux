@@ -101,3 +101,7 @@ func procPath(pid int) string {
 	}
 	return cString(buf[:n])
 }
+
+func cString(b []byte) string {
+	return cutCString(string(b))
+}

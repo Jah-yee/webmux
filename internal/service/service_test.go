@@ -347,3 +347,19 @@ func TestDefinitionPublicationIsExclusive(t *testing.T) {
 		t.Fatal("forced publication failed or permissions changed")
 	}
 }
+
+type failingWriter struct{ err error }
+
+func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestDryRunReportsOutputFailure(t *testing.T) {
+	f := newFixture(t, "linux")
+	want := errors.New("broken output")
+	f.m.out = failingWriter{err: want}
+	if err := f.m.Install(context.Background(), filepath.Join(f.m.home, "config.toml"), true, false, true); !errors.Is(err, want) {
+		t.Fatalf("dry-run: %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Fatal("dry-run called service manager")
+	}
+}

@@ -10,13 +10,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/session"
 )
 
 func streamTestGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.com")
-	out, err := cmd.CombinedOutput()
+	// Test fixture commands share the process with session cleanup. Register
+	// ownership so the adopted-child reaper cannot collect their exit status.
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	err := session.RunCommand(cmd)
+	out := output.Bytes()
 	if err != nil {
 		t.Fatalf("git %v: %s %v", args, out, err)
 	}

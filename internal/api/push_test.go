@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdh"
 	"crypto/rand"
@@ -10,10 +11,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
 )
@@ -196,6 +200,68 @@ func TestPushAPIWhenDisabled(t *testing.T) {
 		}
 		if row.path == "/api/push" && (out["enabled"] != false || out["available"] != false) {
 			t.Errorf("disabled status %v", out)
+		}
+	}
+}
+
+func TestPushStorageFailuresAreLoggedWithoutSubscriptionSecrets(t *testing.T) {
+	// No parallelism: the API intentionally uses the process-wide slog logger.
+	var logs bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(original)
+	m := session.NewManager(session.Options{})
+	defer m.Shutdown(context.Background())
+	dir := t.TempDir()
+	cfg := config.PushConfig{Enabled: true, Subject: config.DefaultPushSubject, Kinds: config.DefaultPushKinds()}
+	pushes := push.New(cfg, dir, m, slog.Default(), nil)
+	defer pushes.Close()
+	if err := pushes.Unavailable(); err != nil {
+		t.Fatal(err)
+	}
+	const endpoint = "https://push.example.invalid/PRIVATE-ENDPOINT"
+	body := browserSubscription(t, endpoint)
+	var subscription contract.PushSubscriptionRequest
+	if err := json.Unmarshal([]byte(body), &subscription); err != nil {
+		t.Fatal(err)
+	}
+	id, err := pushes.Register(endpoint, subscription.Keys.P256dh, subscription.Keys.Auth, "http://localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Replacing the destination file with a directory deterministically makes
+	// atomic rename fail, even when tests run with elevated filesystem access.
+	path := filepath.Join(dir, "push.json")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(testDeps(t, Deps{Config: config.Config{Token: "secret"}, Manager: m, Push: pushes}))
+	for _, row := range []struct{ method, path, body, message, response string }{
+		{"POST", "/api/push/subscriptions", body, "save push subscription", "推送订阅保存失败，请查看服务日志"},
+		{"DELETE", "/api/push/subscriptions/" + id, "", "delete push subscription", "推送订阅删除失败，请查看服务日志"},
+	} {
+		logs.Reset()
+		r := httptest.NewRequest(row.method, "http://localhost"+row.path, strings.NewReader(row.body))
+		r.Header.Set("Authorization", "Bearer secret")
+		r.Header.Set("Origin", "http://localhost")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), row.response) {
+			t.Fatalf("response: %d %s", w.Code, w.Body.String())
+		}
+		if !strings.Contains(logs.String(), row.message) || !strings.Contains(logs.String(), "push.json") {
+			t.Fatalf("missing diagnostic: %s", logs.String())
+		}
+		for _, secret := range []string{endpoint, subscription.Keys.Auth, subscription.Keys.P256dh} {
+			if strings.Contains(logs.String()+w.Body.String(), secret) {
+				t.Fatal("subscription secret leaked")
+			}
+		}
+		if strings.Contains(w.Body.String(), dir) {
+			t.Fatal("internal storage path leaked to response")
 		}
 	}
 }

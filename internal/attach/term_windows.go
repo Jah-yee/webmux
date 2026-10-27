@@ -3,8 +3,11 @@
 package attach
 
 import (
+	"context"
 	"os"
+	"runtime"
 	"sync"
+	"time"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/term"
@@ -12,6 +15,7 @@ import (
 
 var (
 	kernel32                  = windows.NewLazySystemDLL("kernel32.dll")
+	procCancelSynchronousIo   = kernel32.NewProc("CancelSynchronousIo")
 	procGetConsoleOutputCP    = kernel32.NewProc("GetConsoleOutputCP")
 	procSetConsoleCtrlHandler = kernel32.NewProc("SetConsoleCtrlHandler")
 )
@@ -34,6 +38,8 @@ type Console struct {
 	restored  bool
 	handler   uintptr
 }
+
+var _ Terminal = (*Console)(nil)
 
 // OpenConsole enters raw VT mode and installs a console control handler
 // that restores the console on Ctrl+Break and window close.
@@ -65,7 +71,55 @@ func OpenConsole() (*Console, error) {
 	return c, nil
 }
 
-func (c *Console) Read(p []byte) (int, error) { return os.Stdin.Read(p) }
+// ReadContext pins the synchronous console read to a thread so cancellation
+// interrupts only this read, leaving stdin open for the shell or next attach.
+func (c *Console) ReadContext(ctx context.Context, p []byte) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	var thread windows.Handle
+	process := windows.CurrentProcess()
+	if err := windows.DuplicateHandle(process, windows.CurrentThread(), process,
+		&thread, 0, false, windows.DUPLICATE_SAME_ACCESS); err != nil {
+		return 0, err
+	}
+	defer func() { _ = windows.CloseHandle(thread) }()
+	finished := make(chan struct{})
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		select {
+		case <-finished:
+			return
+		case <-ctx.Done():
+		}
+		// Cancellation can race just before ReadFile enters the kernel.
+		// Retry ERROR_NOT_FOUND until the read has actually returned.
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			_, _, _ = procCancelSynchronousIo.Call(uintptr(thread))
+			select {
+			case <-finished:
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	var n uint32
+	err := windows.ReadFile(c.in, p, &n, nil)
+	close(finished)
+	<-joined
+	if ctx.Err() != nil {
+		return int(n), ctx.Err()
+	}
+	return int(n), err
+}
 
 // Write passes UTF-8 bytes straight to the console, which uses code page
 // 65001 while attached.

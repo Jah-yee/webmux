@@ -104,6 +104,8 @@ type SessionEvent struct {
 	ID       string        `json:"id,omitempty"`
 }
 
+var _ json.Marshaler = SessionEvent{}
+
 // MarshalJSON always writes the sessions of a snapshot, even none.
 func (e SessionEvent) MarshalJSON() ([]byte, error) {
 	if e.Type == "snapshot" {

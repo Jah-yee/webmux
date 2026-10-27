@@ -7,6 +7,7 @@ package forward
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -82,6 +83,8 @@ type Forwarder struct {
 	listener *limitListener
 	done     chan struct{}
 }
+
+var _ io.Closer = (*Forwarder)(nil)
 
 // ErrAddress rejects wildcard, loopback and non-literal listen addresses.
 var ErrAddress = errors.New("forwarding needs a specific non-loopback IP address")

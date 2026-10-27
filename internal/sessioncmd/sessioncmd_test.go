@@ -146,10 +146,10 @@ func TestListAndOpen(t *testing.T) {
 // fakeConsole is a terminal whose input is already closed.
 type fakeConsole struct{ restored bool }
 
-func (c *fakeConsole) Read([]byte) (int, error)    { return 0, io.EOF }
-func (c *fakeConsole) Write(p []byte) (int, error) { return len(p), nil }
-func (c *fakeConsole) Size() (int, int, error)     { return 80, 24, nil }
-func (c *fakeConsole) Restore() error              { c.restored = true; return nil }
+func (c *fakeConsole) ReadContext(context.Context, []byte) (int, error) { return 0, io.EOF }
+func (c *fakeConsole) Write(p []byte) (int, error)                      { return len(p), nil }
+func (c *fakeConsole) Size() (int, int, error)                          { return 80, 24, nil }
+func (c *fakeConsole) Restore() error                                   { c.restored = true; return nil }
 
 func TestAttachedRunAnnouncesSessionAndNeedsTerminal(t *testing.T) {
 	f := &fakeServer{}

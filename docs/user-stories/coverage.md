@@ -48,16 +48,16 @@
 | 所有 TOML 配置项：访问、会话、提醒、存储                                   | US-A03；US-K03–US-K04；US-K08–US-K09；US-N01–US-N04 |
 | service install/--dry-run/--force/start/stop/restart/status/logs/uninstall | US-K05–US-K07                                       |
 | version/version --json/help、VPN/HTTPS 代理与升级                          | US-K09                                              |
-| 本地开发、构建/安装、测试、格式/静态检查                                   | US-L01–US-L02                                       |
+| 本地开发、构建/安装、测试、格式/静态检查与 Go 规范门禁                     | US-L01–US-L02                                       |
 | 文档与 spec 行数、体积、目录树治理                                         | US-L08                                              |
 | Storybook、截图、baseline、CI 与 release                                   | US-L03–US-L04                                       |
-| 分层架构测试、线上 JSON 快照与重新录制                                     | US-L05                                              |
+| 分层架构测试、线上 JSON 快照、必填数组 Zod 契约与重新录制                  | US-L05                                              |
 | 前端架构守卫：设计系统 lint、分层、重复代码、未使用代码与基线              | US-L06                                              |
 | Pullfrog 指定订阅模型与 GitHub Actions 密钥                                | US-L07                                              |
 | 前端代码质量基线、本地化条款与审查清单                                     | US-L09                                              |
 | URL token 片段消费与 WebSocket 子协议认证                                  | US-A06                                              |
 | 桌面代码独立窗口与收回                                                     | US-I13                                              |
-| run、显式环境、attach/observe、分离和控制交接                              | US-M01–US-M04                                       |
+| run、显式环境、attach/observe、输入取消/等待与信号中断重试、分离和控制交接 | US-M01–US-M04                                       |
 | ls/open/status、版本化诊断、停止实例和 stdio bridge                        | US-M05–US-M08                                       |
 | Windows CLI、发行版优先级和路径/控制台适配                                 | US-M01–US-M06；US-O05                               |
 | Quick/Named Tunnel、token、二维码与依赖下载                                | US-N01–US-N04                                       |

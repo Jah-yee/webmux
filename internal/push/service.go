@@ -19,6 +19,7 @@ import (
 )
 
 const (
+	// Buffer attention bursts while two workers perform slow network sends.
 	queueSize   = 64
 	workers     = 2
 	sendTimeout = 10 * time.Second

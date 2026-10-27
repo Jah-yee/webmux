@@ -39,6 +39,12 @@ jobs:
         run: pnpm --dir web check:arch
       - name: Check and build frontend
         run: pnpm --dir web build
+      - name: Lint Go
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          args: --timeout=5m
+          only-new-issues: false
       - name: Build shared E2E runtime
         run: |
           node .github/scripts/package-e2e-runtime.mjs "$RUNNER_TEMP/webmux-e2e"
@@ -77,6 +83,8 @@ jobs:
           go: "true"
       - name: Build embedded frontend
         run: pnpm --dir web exec vite build
+      - name: Vet Go
+        run: go vet ./...
       - name: Run Go race tests
         run: go test -race -parallel=4 ./...
       # No Windows runner: hosted runners lack a usable WSL 2, so the Windows

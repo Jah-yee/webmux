@@ -48,8 +48,15 @@ type Service struct {
 	once      sync.Once
 }
 
+// Limit concurrent Git/blob materialization to two jobs and raw downloads to
+// four transfers, bounding CPU, open descriptors and per-request memory.
+const (
+	materializationConcurrency = 2
+	transferConcurrency        = 4
+)
+
 func New(m *session.Manager) *Service {
-	s := &Service{manager: m, roots: map[string]*binding{}, snapshots: map[string]*snapshot{}, slots: make(chan struct{}, 2), transfers: make(chan struct{}, 4), done: make(chan struct{})}
+	s := &Service{manager: m, roots: map[string]*binding{}, snapshots: map[string]*snapshot{}, slots: make(chan struct{}, materializationConcurrency), transfers: make(chan struct{}, transferConcurrency), done: make(chan struct{})}
 	go s.sweep()
 	return s
 }
@@ -308,7 +315,7 @@ func (b *binding) open(p string) (*os.File, error) {
 	f := os.NewFile(uintptr(fd), b.Root)
 	stat, err := f.Stat()
 	if err != nil || !os.SameFile(stat, b.identity) {
-		f.Close()
+		_ = f.Close()
 		return nil, problem(ErrConflict, "浏览根已替换")
 	}
 	if p == "" {
@@ -318,7 +325,7 @@ func (b *binding) open(p string) (*os.File, error) {
 	for i, part := range parts {
 		if i > 0 {
 			if boundary(int(f.Fd())) {
-				f.Close()
+				_ = f.Close()
 				return nil, problem(ErrInvalid, "嵌套仓库边界不可遍历")
 			}
 		}
@@ -327,7 +334,7 @@ func (b *binding) open(p string) (*os.File, error) {
 			flags |= unix.O_DIRECTORY
 		}
 		next, e := unix.Openat(int(f.Fd()), part, flags, 0)
-		f.Close()
+		_ = f.Close()
 		if e != nil {
 			if os.IsNotExist(e) {
 				return nil, os.ErrNotExist
@@ -338,17 +345,17 @@ func (b *binding) open(p string) (*os.File, error) {
 	}
 	stat, err = f.Stat()
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	if stat.IsDir() && p != "" {
 		if boundary(int(f.Fd())) {
-			f.Close()
+			_ = f.Close()
 			return nil, problem(ErrInvalid, "嵌套仓库边界不可遍历")
 		}
 	}
 	if !stat.IsDir() && !stat.Mode().IsRegular() {
-		f.Close()
+		_ = f.Close()
 		return nil, problem(ErrInvalid, "不支持读取特殊文件或链接")
 	}
 	return f, nil
@@ -398,7 +405,8 @@ func (b *binding) read(p string) (Document, error) {
 	if err != nil {
 		return Document{}, err
 	}
-	defer f.Close()
+	// Read-only descriptor cleanup cannot affect the captured contents.
+	defer func() { _ = f.Close() }()
 	before, err := f.Stat()
 	if err != nil {
 		return Document{}, err
@@ -423,7 +431,7 @@ func (b *binding) read(p string) (Document, error) {
 	if e != nil {
 		return Document{}, problem(ErrConflict, "读取期间文件已替换")
 	}
-	defer current.Close()
+	defer func() { _ = current.Close() }()
 	now, e := current.Stat()
 	if e != nil || !os.SameFile(before, now) || before.Size() != after.Size() || before.ModTime() != after.ModTime() {
 		return Document{}, problem(ErrConflict, "读取期间文件发生变化，请刷新")
