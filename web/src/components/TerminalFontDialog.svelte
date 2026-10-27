@@ -20,7 +20,7 @@
   <Dialog.Content {onCloseAutoFocus}>
     <Dialog.Header
       ><Dialog.Title>字体大小</Dialog.Title><Dialog.Description
-        >设置保存在此设备上，也可以用双指捏合调整。</Dialog.Description
+        >字号保存到服务端并跨设备同步，也可以用双指捏合调整。</Dialog.Description
       ></Dialog.Header
     >
     <Label for="terminal-font">{fontSize}px</Label>

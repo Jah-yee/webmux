@@ -4,15 +4,10 @@
 package tailscalesettings
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -44,7 +39,7 @@ type storedFile struct {
 type Service struct {
 	mu                sync.Mutex
 	dir, path         string
-	lock              *os.File
+	store             *statefile.Handle[storedFile]
 	defaults, current config.TailscaleConfig
 	web               bool
 	broken            error
@@ -68,47 +63,25 @@ func Open(stateDir string, defaults config.TailscaleConfig) *Service {
 	return s
 }
 
+func decodeStored(f storedFile, defaults config.TailscaleConfig) (config.TailscaleConfig, error) {
+	if f.V != 1 || f.Mode == nil || f.Port == nil || f.Provider == nil {
+		return config.TailscaleConfig{}, errors.New("incomplete tailscale settings")
+	}
+	return config.ValidateTailscaleSettings(defaults, *f.Mode, *f.Port, *f.Provider)
+}
 func (s *Service) load() error {
-	if err := os.MkdirAll(s.dir, 0700); err != nil {
-		return errors.New("cannot create state directory")
-	}
-	lock, err := os.OpenFile(filepath.Join(s.dir, "tailscale-settings.lock"), os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return errors.New("cannot open tailscale settings lock")
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = lock.Close()
-		return errors.New("tailscale settings are locked by another instance")
-	}
-	s.lock = lock
-	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		// A dangling symlink is not a confirmed missing settings file.
-		if _, statErr := os.Lstat(s.path); errors.Is(statErr, os.ErrNotExist) {
-			return nil
-		}
+	var f storedFile
+	var err error
+	s.store, f, err = statefile.Open[storedFile](s.dir, statefile.TailscaleSettings, func(f storedFile) error { _, err := decodeStored(f, s.defaults); return err })
+	if statefile.IsKind(err, statefile.Missing) {
+		return nil
 	}
 	if err != nil {
-		return errors.New("cannot read tailscale settings file")
+		return err
 	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	var stored storedFile
-	if err := d.Decode(&stored); err != nil {
-		return errors.New("tailscale settings file is corrupt")
-	}
-	if err := d.Decode(new(any)); err != io.EOF || stored.V != 1 || stored.Mode == nil || stored.Port == nil || stored.Provider == nil {
-		return errors.New("tailscale settings file is corrupt or has an unsupported version")
-	}
-	next, err := config.ValidateTailscaleSettings(s.defaults, *stored.Mode, *stored.Port, *stored.Provider)
-	if err != nil {
-		return errors.New("tailscale settings file contains invalid fields")
-	}
-	if err := os.Chmod(s.path, 0600); err != nil {
-		return errors.New("cannot secure tailscale settings file")
-	}
-	s.current, s.web = next, true
-	return nil
+	s.current, err = decodeStored(f, s.defaults)
+	s.web = err == nil
+	return err
 }
 
 // Effective returns the current settings and whether they came from the web.
@@ -130,7 +103,7 @@ func Prepare(current config.TailscaleConfig, mode string, port int, provider str
 
 func (s *Service) unavailableLocked() error {
 	if s.broken != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, s.broken)
+		return fmt.Errorf("%w: %w", ErrUnavailable, s.broken)
 	}
 	return nil
 }
@@ -161,8 +134,8 @@ func (s *Service) Save(next config.TailscaleConfig) error {
 		return err
 	}
 	stored := storedFile{V: 1, Mode: &normalized.Mode, Port: &normalized.Port, Provider: &normalized.Provider}
-	if err := statefile.WriteJSON(s.path, stored, statefile.Options{TempPattern: ".tailscale-settings-*", RequireDirSync: true}); err != nil {
-		s.broken = errors.New("cannot persist tailscale settings")
+	if err := s.store.Commit(stored); err != nil {
+		s.broken = err
 		return s.unavailableLocked()
 	}
 	s.current, s.web = normalized, true
@@ -179,19 +152,9 @@ func (s *Service) Reset() (config.TailscaleConfig, error) {
 	if err := s.unavailableLocked(); err != nil {
 		return config.TailscaleConfig{}, err
 	}
-	err := os.Remove(s.path)
-	if err == nil {
-		var dir *os.File
-		dir, err = os.Open(s.dir)
-		if err == nil {
-			err = dir.Sync()
-			_ = dir.Close()
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		err = nil
-	}
+	err := s.store.Remove()
 	if err != nil {
-		s.broken = errors.New("cannot remove tailscale settings")
+		s.broken = err
 		return config.TailscaleConfig{}, s.unavailableLocked()
 	}
 	s.current, s.web = s.defaults, false
@@ -205,10 +168,6 @@ func (s *Service) Close() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.lock != nil {
-		_ = syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
-		_ = s.lock.Close()
-		s.lock = nil
-	}
+	s.store.Close()
 	s.broken = errors.New("tailscale settings service is closed")
 }

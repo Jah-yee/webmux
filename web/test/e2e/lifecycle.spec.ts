@@ -298,12 +298,16 @@ test("replay and the header action return to latest output without typing", asyn
   // A controlled visibility transition exercises the real reattached WebSocket,
   // which resumes from the rendered offset instead of replaying a snapshot;
   // it is not a real-device suspend/resume test.
-  const replay = page.waitForEvent("websocket").then((socket) =>
-    socket.waitForEvent("framereceived", {
-      predicate: ({ payload }) =>
-        typeof payload !== "string" && payload[0] === 4,
-    }),
-  );
+  const replay = page
+    .waitForEvent("websocket", {
+      predicate: (socket) => new URL(socket.url()).pathname === `/ws/s/${id}`,
+    })
+    .then((socket) =>
+      socket.waitForEvent("framereceived", {
+        predicate: ({ payload }) =>
+          typeof payload !== "string" && payload[0] === 4,
+      }),
+    );
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", {
       configurable: true,

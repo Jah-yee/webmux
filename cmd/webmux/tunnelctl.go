@@ -20,14 +20,15 @@ import (
 // worker joins its predecessor before launching: even rapid updates cannot
 // leave two connectors running or let stale events authorize an origin.
 type tunnelController struct {
-	cfg          config.TunnelConfig
-	store        *tunnelsettings.Service
-	web          bool
-	local, token string
-	public       *api.PublicOrigins
-	locate       func(context.Context) (string, error)
-	out          io.Writer
-	logger       *slog.Logger
+	cfg                                 config.TunnelConfig
+	store                               *tunnelsettings.Service
+	web                                 bool
+	enabledSource, defaultEnabledSource string
+	local, token                        string
+	public                              *api.PublicOrigins
+	locate                              func(context.Context) (string, error)
+	out                                 io.Writer
+	logger                              *slog.Logger
 
 	mu                 sync.Mutex
 	state, url, reason string
@@ -71,6 +72,7 @@ func (tc *tunnelController) SetEnabled(enabled bool) (contract.TunnelStatus, err
 	}
 	if err == nil {
 		tc.web = true
+		tc.enabledSource = "web"
 	}
 	wasEnabled := tc.cfg.Enabled
 	tc.cfg = next
@@ -126,6 +128,7 @@ func (tc *tunnelController) UpdateSettings(in contract.TunnelSettingsUpdate) (co
 	}
 	changed := tc.cfg.Token != next.Token || tc.cfg.Hostname != next.Hostname
 	tc.cfg, tc.web = next, true
+	tc.enabledSource = "web"
 	if next.Enabled && changed {
 		tc.applyLocked("", tc.announcePlain)
 	}
@@ -146,6 +149,7 @@ func (tc *tunnelController) ResetSettings() (contract.TunnelSettings, error) {
 	// next startup. The returned view reports current process intent.
 	next.Enabled = false
 	tc.cfg, tc.web = next, false
+	tc.enabledSource = tc.defaultEnabledSource
 	tc.applyLocked("", tc.announcePlain)
 	return tc.settingsLocked(), nil
 }

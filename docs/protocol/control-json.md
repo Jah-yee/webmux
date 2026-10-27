@@ -64,4 +64,4 @@
 
 `stop`：`{"v": 1, "result": "stopped" | "killed" | "not-running" | "refused" | "error", "message": "..."}`。
 
-`config show`：`{"v", "path", "exists", "listen", "tokenConfigured", "defaultCwd", "stateDir", "allowedOrigins"}`，不含 Token。`config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。
+`config show`：`{"v", "path", "exists", "listen", "tokenConfigured", "defaultCwd", "stateDir", "allowedOrigins", "view", "observedAt", "fields", "stores", "instance?"}`。默认 view 为 configured，`--live` 为 effective 并包含 PID/进程身份/启动时间；不可达报错。fields 为字段名到 `{value, source}` 的映射，stores 包含 `{id, path, status, phase?, observedAt, lock}`；敏感凭据仅为布尔，不返回正文。`config path`：`{"v", "path", "exists"}`。`config validate`：`{"v", "ok", "errors": [...]}`。

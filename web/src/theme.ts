@@ -1,13 +1,8 @@
-import { stored, store } from "./api";
-import { ThemeSchema, type Theme } from "./schemas";
+import { settings, changeSettings, observeSettings } from "./settings.svelte";
+import { type Theme } from "./schemas";
 
 const system = matchMedia("(prefers-color-scheme: light)");
 let choice: Theme | undefined;
-
-function savedTheme(): Theme | undefined {
-  const result = ThemeSchema.safeParse(stored("theme"));
-  return result.success ? result.data : undefined;
-}
 
 function applyTheme() {
   const dark = choice ? choice === "dark" : !system.matches;
@@ -23,23 +18,18 @@ function applyTheme() {
 }
 
 export function initializeTheme() {
-  choice = savedTheme();
-  applyTheme();
+  observeSettings(() => {
+    choice = settings.values.theme ?? undefined;
+    applyTheme();
+  });
   system.addEventListener("change", () => {
     if (!choice) applyTheme();
-  });
-  window.addEventListener("storage", (event) => {
-    if (event.key === "webmux.theme" || event.key === null) {
-      choice = savedTheme();
-      applyTheme();
-    }
   });
 }
 
 export function toggleTheme() {
-  choice = document.documentElement.classList.contains("dark")
+  const next = document.documentElement.classList.contains("dark")
     ? "light"
     : "dark";
-  store("theme", choice);
-  applyTheme();
+  changeSettings({ theme: next });
 }

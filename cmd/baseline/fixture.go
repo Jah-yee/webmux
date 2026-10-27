@@ -26,6 +26,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/workspace"
 )
 
@@ -40,6 +41,7 @@ type fixture struct {
 	manager     *session.Manager
 	workspace   *workspace.Service
 	code        *codeview.Service
+	preferences *settings.Service
 	server      *httptest.Server
 	client      *http.Client
 }
@@ -61,7 +63,8 @@ func newFixture() *fixture {
 	f.manager = session.NewManager(assemble.SessionOptions(c))
 	f.workspace = workspace.New(c.StateDir, f.manager, nil, root)
 	f.code = codeview.New(f.manager)
-	f.server = httptest.NewServer(api.New(api.Deps{Config: c, Manager: f.manager, Workspace: f.workspace, Code: f.code, Files: files.New(c.DefaultCwd)}))
+	f.preferences = settings.Open(c.StateDir)
+	f.server = httptest.NewServer(api.New(api.Deps{Settings: f.preferences, Config: c, Manager: f.manager, Workspace: f.workspace, Code: f.code, Files: files.New(c.DefaultCwd)}))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	f.stopSignals = stop
 	go func() { <-ctx.Done(); f.close() }()
@@ -77,6 +80,7 @@ func (f *fixture) close() {
 		f.client.CloseIdleConnections()
 		f.workspace.Close()
 		f.code.Close()
+		f.preferences.Close()
 		f.restoreEnv()
 		_ = os.RemoveAll(f.root)
 	})

@@ -195,30 +195,20 @@ func TestPreviewSettingsPersist(t *testing.T) {
 	}
 }
 
-func TestVersion1FileLoadsWithoutPreview(t *testing.T) {
+func TestVersion1FilePreservedAndRejected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, fileName)
-	content := `{"v":1,"configs":[{"id":"abcdefgh","name":"a","icon":"codex","cmd":["a"],"env":{},"createdAt":"2026-10-23T12:00:00Z","updatedAt":"2026-10-23T12:00:00Z"}]}`
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	content := []byte(`{"v":1,"configs":[]}`)
+	if err := os.WriteFile(path, content, 0600); err != nil {
 		t.Fatal(err)
 	}
 	s := open(t, dir)
-	got, err := s.Get("abcdefgh")
-	if err != nil || got.Preview != nil || got.Name != "a" || got.Icon != "codex" {
-		t.Fatalf("version 1 load %+v %v", got, err)
+	if !errors.Is(s.Unavailable(), ErrUnavailable) {
+		t.Fatal("old version accepted")
 	}
-	if _, err := s.Update("abcdefgh", Input{Name: "a", Icon: "codex", Cmd: []string{"a"}, Preview: &PreviewSettings{Lines: 5, Skip: 0}}); err != nil {
-		t.Fatal(err)
-	}
-	data, _ := os.ReadFile(path)
-	if !strings.Contains(string(data), `"v": 2`) || !strings.Contains(string(data), `"preview": {`) || !strings.Contains(string(data), `"icon": "codex"`) {
-		t.Fatalf("upgrade did not write version 2: %s", data)
-	}
-	s.Close()
-	s = open(t, dir)
-	got, err = s.Get("abcdefgh")
-	if err != nil || got.Icon != "codex" || got.Preview == nil || *got.Preview != (PreviewSettings{Lines: 5, Skip: 0}) {
-		t.Fatalf("version 2 reload %+v %v", got, err)
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(content) {
+		t.Fatalf("old file changed: %q %v", got, err)
 	}
 }
 
@@ -275,7 +265,7 @@ func TestSecondInstanceUnavailable(t *testing.T) {
 	}
 	second := open(t, dir)
 	err = second.Unavailable()
-	if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "另一实例") || !strings.Contains(err.Error(), filepath.Join(dir, fileName)) {
+	if !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "locked") || !strings.Contains(err.Error(), filepath.Join(dir, fileName)) {
 		t.Fatalf("second instance: %v", err)
 	}
 	if _, err := second.List(); !errors.Is(err, ErrUnavailable) {

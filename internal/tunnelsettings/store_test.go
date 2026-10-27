@@ -73,7 +73,7 @@ func TestStoreAtomicPermissionsPrecedenceAndReset(t *testing.T) {
 	if web || got.Token != defaults.Token || !got.Enabled {
 		t.Fatal("missing file did not use TOML")
 	}
-	path := filepath.Join(dir, "tunnel.json")
+	path := filepath.Join(dir, "tunnel-settings.json")
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("opening created settings file")
 	}
@@ -100,7 +100,7 @@ func TestStoreAtomicPermissionsPrecedenceAndReset(t *testing.T) {
 	if strings.Contains(string(before), next.Token) || !strings.Contains(string(after), next.Token) {
 		t.Fatal("settings were not atomically replaced")
 	}
-	for name, perm := range map[string]os.FileMode{dir: 0700, path: 0600, filepath.Join(dir, "tunnel-config.lock"): 0600} {
+	for name, perm := range map[string]os.FileMode{dir: 0700, path: 0600, filepath.Join(dir, "tunnel-settings.json.lock"): 0600} {
 		info, err := os.Stat(name)
 		if err != nil || info.Mode().Perm() != perm {
 			t.Fatalf("incorrect permissions on %s: %v", name, err)
@@ -126,7 +126,7 @@ func TestFaultsFailClosedWithoutOverwriting(t *testing.T) {
 	for _, fault := range []string{"corrupt", "unsupported", "unreadable", "dangling", "locked"} {
 		t.Run(fault, func(t *testing.T) {
 			dir := t.TempDir()
-			path := filepath.Join(dir, "tunnel.json")
+			path := filepath.Join(dir, "tunnel-settings.json")
 			data := []byte(`{"v":1,"enabled":false,"mode":"quick","hostname":"","sensitive-secret":"value"}`)
 			switch fault {
 			case "corrupt":
@@ -187,10 +187,10 @@ func TestConcurrentSaveAndFailedWrite(t *testing.T) {
 	}
 	wg.Wait()
 	before, _ := s.Effective()
-	if err := os.Remove(filepath.Join(dir, "tunnel.json")); err != nil {
+	if err := os.Remove(filepath.Join(dir, "tunnel-settings.json")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(filepath.Join(dir, "tunnel.json"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(dir, "tunnel-settings.json"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Save(config.TunnelConfig{Enabled: !before.Enabled}); !errors.Is(err, ErrUnavailable) {

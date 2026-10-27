@@ -1,0 +1,458 @@
+{
+  "stores": [
+    {
+      "id": "bootstrap",
+      "path": "config.toml",
+      "lock": "none",
+      "owner": "internal/config + cmd/webmux",
+      "failure": "配置错误阻止启动",
+      "web": "否",
+      "source": "cmd/webmux/configcmd.go"
+    },
+    {
+      "id": "launch",
+      "path": "launch-configs.json",
+      "lock": "launch-configs.json.lock",
+      "owner": "internal/launch",
+      "failure": "unavailable",
+      "web": "是",
+      "source": "internal/launch/store.go"
+    },
+    {
+      "id": "repositories",
+      "path": "repositories.json",
+      "lock": "repositories.json.lock",
+      "owner": "internal/workspace",
+      "failure": "unavailable",
+      "web": "是",
+      "source": "internal/workspace/registry.go"
+    },
+    {
+      "id": "tunnel",
+      "path": "tunnel-settings.json",
+      "lock": "tunnel-settings.json.lock",
+      "owner": "internal/tunnelsettings",
+      "failure": "fail_closed",
+      "web": "是",
+      "source": "internal/tunnelsettings/store.go"
+    },
+    {
+      "id": "tailscale-settings",
+      "path": "tailscale-settings.json",
+      "lock": "tailscale-settings.json.lock",
+      "owner": "internal/tailscalesettings",
+      "failure": "fail_closed",
+      "web": "是",
+      "source": "internal/tailscalesettings/store.go"
+    },
+    {
+      "id": "tailscale-ownership",
+      "path": "tailscale-ownership.json",
+      "lock": "tailscale-ownership.json.lock",
+      "owner": "cmd/webmux",
+      "failure": "block_start",
+      "web": "否",
+      "source": "cmd/webmux/tailscalectl.go"
+    },
+    {
+      "id": "push",
+      "path": "push.json",
+      "lock": "push.json.lock",
+      "owner": "internal/push",
+      "failure": "unavailable",
+      "web": "是",
+      "source": "internal/push/store.go"
+    },
+    {
+      "id": "runtime",
+      "path": "run/server.json",
+      "lock": "run/server.json.lock",
+      "owner": "internal/runtime",
+      "failure": "local_api_unavailable",
+      "web": "否",
+      "source": "internal/runtime/record.go"
+    },
+    {
+      "id": "settings",
+      "path": "settings.json",
+      "lock": "settings.json.lock",
+      "owner": "internal/settings",
+      "failure": "unavailable",
+      "web": "是",
+      "source": "internal/settings/service.go"
+    }
+  ],
+  "exceptions": {
+    "atomic-publisher": "统一原子写实现自身必须创建临时文件并发布；并非额外领域存储。",
+    "benchmark": "cmd/baseline 的隔离实验数据、门闩与结果 JSON，不属于服务端状态目录。",
+    "tray-local": "Windows 托盘 tray.json、keepalive.json 与临时日志属于设备本地状态；不纳入服务器偏好同步。",
+    "download-cache": "下载与解压 cloudflared 可执行缓存；不属于用户设置或所有权 JSON。",
+    "user-files": "用户上传文件及失败后的临时目录清理；目标为用户工作区而非服务端状态。",
+    "service-definition": "systemd/launchd 服务定义与日志；由显式服务管理命令写入。",
+    "fresh-log": "createFresh 生成本机控制/日志输出文件；不是新的 JSON 存储。",
+    "read-only-codeview": "通过 Open/Openat(O_RDONLY/O_PATH/O_NOFOLLOW) 与 NewFile 进行代码只读访问；登记以防新写入入口被漏过。",
+    "pty-descriptor": "将已有 PTY 描述符包装为可轮询文件；不是磁盘持久化。"
+  },
+  "references": {
+    "cmd/baseline/fixture.go|*fixture.close|os.RemoveAll": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/baseline/main.go|main|os.WriteFile": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/baseline/main.go|path|baseline/results/latest.json": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/baseline/scenarios.go|*fixture.continuity|os.WriteFile": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/baseline/scenarios.go|*fixture.reconnect|os.WriteFile": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/baseline/scenarios.go|*fixture.replay|os.WriteFile": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/baseline/scenarios.go|*fixture.streaming|os.WriteFile": {
+      "count": 1,
+      "owner": "benchmark"
+    },
+    "cmd/webmux-tray/main_windows.go|path|keepalive.json": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "cmd/webmux-tray/main_windows.go|path|tray.json": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "cmd/webmux/configcmd.go|publishConfig|github.com/rainchan/webmux/internal/statefile.Write": {
+      "count": 1,
+      "owner": "bootstrap"
+    },
+    "cmd/webmux/configcmd.go|publishConfig|os.Rename": {
+      "count": 1,
+      "owner": "bootstrap"
+    },
+    "cmd/webmux/configview.go|configuredView|github.com/rainchan/webmux/internal/statefile.ReadRuntime": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "cmd/webmux/configview.go|configuredView|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "cmd/webmux/freshfile.go|createFresh|os.OpenFile": {
+      "count": 1,
+      "owner": "fresh-log"
+    },
+    "cmd/webmux/freshfile.go|createFresh|os.Rename": {
+      "count": 1,
+      "owner": "fresh-log"
+    },
+    "cmd/webmux/tailscalectl.go|*tailscaleController.loadState|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
+    "cmd/webmux/tailscalectl.go|*tailscaleController.openLock|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
+    "cmd/webmux/tailscalectl.go|path|tailscale-ownership.json": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
+    "cmd/webmux/tailscalectl.go|path|tailscale-ownership.json.lock": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
+    "internal/codeview/navigation.go|*binding.directory|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/service.go|*binding.open|golang.org/x/sys/unix.Open": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/service.go|*binding.open|golang.org/x/sys/unix.Openat": {
+      "count": 1,
+      "owner": "read-only-codeview"
+    },
+    "internal/codeview/service.go|*binding.open|os.NewFile": {
+      "count": 2,
+      "owner": "read-only-codeview"
+    },
+    "internal/fetch/fetch.go|Downloader.fetch|os.CreateTemp": {
+      "count": 1,
+      "owner": "download-cache"
+    },
+    "internal/fetch/fetch.go|Downloader.fetch|os.Remove": {
+      "count": 2,
+      "owner": "download-cache"
+    },
+    "internal/fetch/fetch.go|Downloader.fetch|os.Rename": {
+      "count": 1,
+      "owner": "download-cache"
+    },
+    "internal/files/files.go|*Service.StoreUpload|os.OpenFile": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/files/files.go|*Upload.Discard|os.RemoveAll": {
+      "count": 1,
+      "owner": "user-files"
+    },
+    "internal/launch/inspect.go|Inspect|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "launch"
+    },
+    "internal/launch/store.go|*Service.load|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "launch"
+    },
+    "internal/launch/store.go|path|launch-configs.json": {
+      "count": 1,
+      "owner": "launch"
+    },
+    "internal/launch/store.go|path|launch-configs.json.lock": {
+      "count": 1,
+      "owner": "launch"
+    },
+    "internal/push/inspect.go|Inspect|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "push"
+    },
+    "internal/push/store.go|OpenStore|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "push"
+    },
+    "internal/push/store.go|path|push.json": {
+      "count": 1,
+      "owner": "push"
+    },
+    "internal/runtime/lock_unix.go|AcquireLock|github.com/rainchan/webmux/internal/statefile.OpenRuntime": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/runtime/lock_unix.go|ListenSocket|os.Remove": {
+      "count": 2,
+      "owner": "runtime"
+    },
+    "internal/runtime/record.go|Read|github.com/rainchan/webmux/internal/statefile.ReadRuntime": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/runtime/record.go|Remove|github.com/rainchan/webmux/internal/statefile.OpenRuntime": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/runtime/record.go|Write|github.com/rainchan/webmux/internal/statefile.OpenRuntime": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/runtime/record.go|path|server.json": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/runtime/record.go|path|server.json.lock": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/service/service.go|*Manager.Control|os.Remove": {
+      "count": 1,
+      "owner": "service-definition"
+    },
+    "internal/service/service.go|*Manager.Install|os.OpenFile": {
+      "count": 1,
+      "owner": "service-definition"
+    },
+    "internal/service/service.go|writeDefinition|github.com/rainchan/webmux/internal/statefile.Write": {
+      "count": 1,
+      "owner": "service-definition"
+    },
+    "internal/session/io.go|pollablePTY|os.NewFile": {
+      "count": 1,
+      "owner": "pty-descriptor"
+    },
+    "internal/settings/service.go|Inspect|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "settings"
+    },
+    "internal/settings/service.go|Open|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "settings"
+    },
+    "internal/statefile/catalog.go|path|.lock": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/catalog.go|path|launch-configs.json": {
+      "count": 1,
+      "owner": "launch"
+    },
+    "internal/statefile/catalog.go|path|push.json": {
+      "count": 1,
+      "owner": "push"
+    },
+    "internal/statefile/catalog.go|path|repositories.json": {
+      "count": 1,
+      "owner": "repositories"
+    },
+    "internal/statefile/catalog.go|path|run/server.json": {
+      "count": 1,
+      "owner": "runtime"
+    },
+    "internal/statefile/catalog.go|path|settings.json": {
+      "count": 1,
+      "owner": "settings"
+    },
+    "internal/statefile/catalog.go|path|tailscale-ownership.json": {
+      "count": 1,
+      "owner": "tailscale-ownership"
+    },
+    "internal/statefile/catalog.go|path|tailscale-settings.json": {
+      "count": 1,
+      "owner": "tailscale-settings"
+    },
+    "internal/statefile/catalog.go|path|tailscale.json": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/catalog.go|path|tunnel-settings.json": {
+      "count": 1,
+      "owner": "tunnel"
+    },
+    "internal/statefile/catalog.go|path|tunnel.json": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/lock_unix.go|lockFile|syscall.Flock": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/lock_unix.go|openPrivate|os.NewFile": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/lock_unix.go|openPrivate|syscall.Open": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/lock_unix.go|unlockFile|syscall.Flock": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/statefile.go|Write|os.CreateTemp": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/statefile.go|Write|os.Link": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/statefile.go|Write|os.Remove": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/statefile.go|Write|os.Rename": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/store.go|openStore|os.Remove": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/statefile/store.go|path|.lock": {
+      "count": 1,
+      "owner": "atomic-publisher"
+    },
+    "internal/tailscalesettings/inspect.go|Inspect|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "tailscale-settings"
+    },
+    "internal/tailscalesettings/store.go|*Service.load|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "tailscale-settings"
+    },
+    "internal/tailscalesettings/store.go|path|tailscale-settings.json": {
+      "count": 1,
+      "owner": "tailscale-settings"
+    },
+    "internal/tray/log.go|*Log.Write|os.Remove": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/log.go|*Log.Write|os.Rename": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/log.go|*Log.open|os.OpenFile": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/service.go|*Keepalive.Ensure|os.WriteFile": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/service.go|*Keepalive.Stop|os.Remove": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/settings.go|SaveSettings|github.com/rainchan/webmux/internal/statefile.Write": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/settings.go|path|.tray-*.json": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/winui/files.go|*App.openJournal|os.CreateTemp": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tray/winui/files.go|*App.openJournal|os.Remove": {
+      "count": 2,
+      "owner": "tray-local"
+    },
+    "internal/tray/winui/lifecycle.go|*App.shutdown|os.Remove": {
+      "count": 1,
+      "owner": "tray-local"
+    },
+    "internal/tunnel/locate.go|extract|os.CreateTemp": {
+      "count": 1,
+      "owner": "download-cache"
+    },
+    "internal/tunnel/locate.go|extract|os.Remove": {
+      "count": 1,
+      "owner": "download-cache"
+    },
+    "internal/tunnelsettings/inspect.go|Inspect|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "tunnel"
+    },
+    "internal/tunnelsettings/store.go|*Service.load|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "tunnel"
+    },
+    "internal/tunnelsettings/store.go|path|tunnel-settings.json": {
+      "count": 1,
+      "owner": "tunnel"
+    },
+    "internal/workspace/inspect.go|Inspect|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+      "count": 1,
+      "owner": "repositories"
+    },
+    "internal/workspace/registry.go|*Service.load|github.com/rainchan/webmux/internal/statefile.Open": {
+      "count": 1,
+      "owner": "repositories"
+    },
+    "internal/wslclient/target.go|path|tray.json": {
+      "count": 1,
+      "owner": "tray-local"
+    }
+  }
+}

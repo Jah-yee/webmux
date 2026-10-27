@@ -75,11 +75,12 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 		record.Socket = path
 		rt.server = &http.Server{
 			Handler: api.NewLocal(deps, api.Local{
-				Status:    func() contract.StatusV1 { return localStatus(record, c, m, tunnels, pushes) },
-				Launcher:  record.Launcher,
-				Shutdown:  shutdown,
-				InSession: m.ContainsProcess,
-				Tunnel:    tunnels.SetEnabled,
+				Configuration: func() contract.Configuration { return effectiveView(c, record, deps) },
+				Status:        func() contract.StatusV1 { return localStatus(record, c, m, tunnels, pushes) },
+				Launcher:      record.Launcher,
+				Shutdown:      shutdown,
+				InSession:     m.ContainsProcess,
+				Tunnel:        tunnels.SetEnabled,
 			}),
 			ReadHeaderTimeout: 10 * time.Second,
 			IdleTimeout:       60 * time.Second,
@@ -87,7 +88,7 @@ func startRuntime(ctx context.Context, c serverRun, addr net.Addr, deps api.Deps
 			ConnContext:       api.LocalConnContext,
 		}
 	}
-	if err := runtime.Write(rt.dir, record); err != nil {
+	if err := rt.lock.Write(record); err != nil {
 		slog.Warn("runtime record not written", "error", err)
 	} else {
 		rt.written = true
@@ -136,7 +137,9 @@ func (rt *localRuntime) close(ctx context.Context) {
 		_ = rt.listener.Close()
 	}
 	if rt.written {
-		runtime.Remove(rt.dir, os.Getpid())
+		if err := rt.lock.Remove(os.Getpid()); err != nil {
+			slog.Warn("runtime record removal failed", "error", err)
+		}
 	}
 	if rt.lock != nil {
 		rt.lock.Release()

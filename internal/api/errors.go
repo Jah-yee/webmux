@@ -11,6 +11,7 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/files"
 	"github.com/rainchan/webmux/internal/launch"
+	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnelsettings"
 	"github.com/rainchan/webmux/internal/workspace"
@@ -172,5 +173,18 @@ func tailscaleStatus(err error) int {
 		return http.StatusServiceUnavailable
 	default:
 		return http.StatusConflict
+	}
+}
+
+func settingsStatus(err error) int {
+	switch {
+	case errors.Is(err, settings.ErrInvalid):
+		return 400
+	case errors.Is(err, settings.ErrConflict):
+		return 409
+	case errors.Is(err, settings.ErrUnavailable):
+		return 503
+	default:
+		return 500
 	}
 }

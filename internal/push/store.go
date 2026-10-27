@@ -8,12 +8,9 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -50,10 +47,11 @@ type storedFile struct {
 // Store keeps the VAPID key and subscriptions in <state_dir>/push.json. The
 // file is small and written rarely, so every change rewrites it under mu.
 type Store struct {
-	mu   sync.Mutex
-	dir  string
-	key  *ecdsa.PrivateKey
-	subs []Subscription
+	mu    sync.Mutex
+	dir   string
+	store *statefile.Handle[storedFile]
+	key   *ecdsa.PrivateKey
+	subs  []Subscription
 }
 
 var b64 = base64.RawURLEncoding
@@ -62,49 +60,43 @@ var b64 = base64.RawURLEncoding
 // replaced by a fresh key with no subscriptions; an inaccessible directory or
 // file is an error, which disables push without affecting sessions.
 func OpenStore(dir string, log *slog.Logger) (*Store, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
-	if err := os.Chmod(dir, 0700); err != nil {
-		return nil, err
-	}
 	s := &Store{dir: dir}
-	path := filepath.Join(dir, storeFile)
-	data, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-	case err != nil:
-		return nil, err
-	default:
-		parseErr := s.parse(data)
-		if parseErr == nil {
-			if err := os.Chmod(path, 0600); err != nil {
-				return nil, err
-			}
+	var f storedFile
+	var err error
+	s.store, f, err = statefile.Open[storedFile](dir, statefile.Push, func(f storedFile) error { return new(Store).loadValue(f) })
+	if err == nil {
+		err = s.loadValue(f)
+		if err == nil {
 			return s, nil
 		}
-		aside := fmt.Sprintf("%s.corrupt-%d", path, time.Now().Unix())
-		if err := os.Rename(path, aside); err != nil {
-			return nil, err
-		}
-		log.Warn("push store unreadable; kept aside and recreated, devices must enable push again", "file", aside, "error", parseErr)
 	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
+	if !statefile.IsKind(err, statefile.Missing) {
+		s.store.Close()
 		return nil, err
 	}
-	s.key, s.subs = key, nil
-	if err := s.saveLocked(); err != nil {
+	s.key, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err == nil {
+		err = s.saveLocked()
+	}
+	if err != nil {
+		s.store.Close()
 		return nil, err
 	}
 	return s, nil
 }
-
-func (s *Store) parse(data []byte) error {
-	var f storedFile
-	if err := json.Unmarshal(data, &f); err != nil {
-		return err
+func (s *Store) Close() {
+	if s != nil {
+		s.store.Close()
 	}
+}
+func (s *Store) Unavailable() error {
+	if s == nil {
+		return ErrStorage
+	}
+	return s.store.Err()
+}
+
+func (s *Store) loadValue(f storedFile) error {
 	if f.V != 1 {
 		return fmt.Errorf("unsupported version %d", f.V)
 	}
@@ -241,7 +233,7 @@ func (s *Store) saveLocked() error {
 	if f.Subscriptions == nil {
 		f.Subscriptions = []Subscription{}
 	}
-	return statefile.WriteJSON(filepath.Join(s.dir, storeFile), f, statefile.Options{TempPattern: ".push-*"})
+	return s.store.Commit(f)
 }
 
 func newID() string {

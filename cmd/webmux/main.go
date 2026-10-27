@@ -26,6 +26,7 @@ import (
 	"github.com/rainchan/webmux/internal/pathutil"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/tailscale"
 	"github.com/rainchan/webmux/internal/tailscalesettings"
 	"github.com/rainchan/webmux/internal/tunnel"
@@ -201,9 +202,11 @@ func loadConfig(args []string) (serverRun, error) {
 	}
 	if explicit["listen"] {
 		c.Listen = *listen
+		c.SetSource("listen", "cli")
 	}
 	if explicit["token"] {
 		c.Token = *token
+		c.SetSource("token", "cli")
 	}
 	if c.StateDir == "" {
 		c.StateDir = config.DefaultStateDir()
@@ -213,6 +216,7 @@ func loadConfig(args []string) (serverRun, error) {
 	c.Tunnel, webManaged = run.TunnelSettings.Effective()
 	if explicit["tunnel"] && run.TunnelSettings.Unavailable() == nil {
 		c.Tunnel.Enabled = *tunnelFlag
+		c.SetSource("tunnel.enabled", "cli")
 	}
 	run.TunnelWebManaged = webManaged && !explicit["tunnel"]
 	closeSettings := func() {
@@ -256,6 +260,7 @@ func ensureToken(c *config.Config) error {
 	if c.Token == "" {
 		if c.Tunnel.Enabled || c.Tailscale.Enabled() || !loopbackListen(c.Listen) {
 			c.Token = generateToken()
+			c.SetSource("token", "generated")
 		}
 		return nil
 	}
@@ -355,11 +360,18 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	codes := codeview.New(m)
 	defer codes.Close()
 	pushes := push.New(c.Push, c.StateDir, m, slog.Default(), nil)
+	preferences := settings.Open(c.StateDir)
+	defer preferences.Close()
 	local := localOrigin(listener.Addr())
 	tunnels := newTunnelController(c.Tunnel, c.TunnelSettings, local, c.Token, public, locator.Find, out, slog.Default())
+	tunnels.defaultEnabledSource = c.BaseSource("tunnel.enabled")
+	tunnels.enabledSource = c.Source("tunnel.enabled")
+	if c.TunnelWebManaged {
+		tunnels.enabledSource = "web"
+	}
 	deps := api.Deps{
 		Config: c.Config, Manager: m, Workspace: workspaces, Code: codes,
-		Files: files.New(c.DefaultCwd), Push: pushes, Launch: launches,
+		Files: files.New(c.DefaultCwd), Push: pushes, Launch: launches, Settings: preferences,
 	}
 	deps.Public, deps.Tunnel, deps.TunnelSettings = public, tunnels.Status, tunnels
 	deps.Tailscale = tsCtl

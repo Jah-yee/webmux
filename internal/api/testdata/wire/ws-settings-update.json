@@ -1,0 +1,11 @@
+{
+  "body": {
+    "changes": {
+      "quickCommands": [],
+      "theme": "dark"
+    },
+    "revision": 1,
+    "type": "settings.update",
+    "updatedAt": "<time>"
+  }
+}

@@ -66,7 +66,7 @@ func TestPrepareRemovesExplicitPortBeforeAutomaticSelection(t *testing.T) {
 		`{"Web":{"node.tailnet.ts.net:9000":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7681"}}}},"AllowFunnel":{}}`)
 	dir := t.TempDir()
 	record := tailscaleState{V: 1, Provider: "linux", DNSName: "node.tailnet.ts.net", Mode: "serve", Port: 9000, Target: "http://127.0.0.1:7681", Status: "active"}
-	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
+	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale-ownership.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "serve", Port: 0, Provider: "auto"})
@@ -81,7 +81,7 @@ func TestPrepareRemovesExplicitPortBeforeAutomaticSelection(t *testing.T) {
 	if !strings.Contains(string(data), "serve --https=9000 off") {
 		t.Fatalf("old explicit entry was not removed: %q", data)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "tailscale-ownership.json")); !os.IsNotExist(err) {
 		t.Fatalf("state record survived removal: %v", err)
 	}
 }
@@ -111,7 +111,7 @@ func TestStartAppliesServeAndCloseRemovesIt(t *testing.T) {
 		t.Fatalf("status = %+v", status)
 	}
 	var record tailscaleState
-	data, err := os.ReadFile(filepath.Join(dir, "tailscale.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "tailscale-ownership.json"))
 	if err != nil || json.Unmarshal(data, &record) != nil || record.Status != "active" || record.Port != 8443 || record.Target != target {
 		t.Fatalf("record = %s (%v)", data, err)
 	}
@@ -124,7 +124,7 @@ func TestStartAppliesServeAndCloseRemovesIt(t *testing.T) {
 	if string(calls) != want {
 		t.Fatalf("calls = %q, want %q", calls, want)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "tailscale-ownership.json")); !os.IsNotExist(err) {
 		t.Fatalf("state record survived Close: %v", err)
 	}
 }
@@ -214,7 +214,7 @@ func TestUpdateSettingsReplacesEntryAtRuntime(t *testing.T) {
 	if string(calls) != want {
 		t.Fatalf("calls = %q, want %q", calls, want)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "tailscale-ownership.json")); !os.IsNotExist(err) {
 		t.Fatalf("ownership record survived reset: %v", err)
 	}
 }
@@ -246,7 +246,7 @@ func TestPrepareDropsStaleRecordKeepingForeignTarget(t *testing.T) {
 		`{"Web":{"node.tailnet.ts.net:9000":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:9999"}}}},"AllowFunnel":{}}`)
 	dir := t.TempDir()
 	record := tailscaleState{V: 1, Provider: "linux", DNSName: "node.tailnet.ts.net", Mode: "serve", Port: 9000, Target: "http://127.0.0.1:7681", Status: "active"}
-	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
+	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale-ownership.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
@@ -257,7 +257,7 @@ func TestPrepareDropsStaleRecordKeepingForeignTarget(t *testing.T) {
 	if data, err := os.ReadFile(logPath); err == nil && strings.Contains(string(data), "off") {
 		t.Fatalf("foreign entry was removed: %q", data)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "tailscale-ownership.json")); !os.IsNotExist(err) {
 		t.Fatalf("stale record survived: %v", err)
 	}
 }
@@ -266,12 +266,12 @@ func TestPrepareFailsClosedWhenServeStatusUnreadable(t *testing.T) {
 	cli, logPath := fakeTailscale(t, tailscaleRunning, "not json")
 	dir := t.TempDir()
 	record := tailscaleState{V: 1, Provider: "linux", DNSName: "node.tailnet.ts.net", Mode: "serve", Port: 9000, Target: "http://127.0.0.1:7681", Status: "active"}
-	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
+	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale-ownership.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
 		t.Fatal(err)
 	}
 	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
 	err := ctl.Prepare(context.Background(), "127.0.0.1:7681")
-	if err == nil || !strings.Contains(err.Error(), filepath.Join(dir, "tailscale.json")) {
+	if err == nil || !strings.Contains(err.Error(), filepath.Join(dir, "tailscale-ownership.json")) {
 		t.Fatalf("Prepare = %v; want a refusal naming the state file", err)
 	}
 	ctl.Close()
@@ -286,7 +286,7 @@ func TestPrepareRemovesEntryBeforeProviderChange(t *testing.T) {
 		`{"Web":{"node.tailnet.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7681"}}}},"AllowFunnel":{}}`)
 	dir := t.TempDir()
 	record := tailscaleState{V: 1, Provider: "windows", DNSName: "node.tailnet.ts.net", Mode: "serve", Port: 443, Target: "http://127.0.0.1:7681", Status: "active"}
-	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
+	if err := statefile.WriteJSON(filepath.Join(dir, "tailscale-ownership.json"), record, statefile.Options{TempPattern: ".ts-*"}); err != nil {
 		t.Fatal(err)
 	}
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "linux", IsWSL: func() bool { return true }})
@@ -304,7 +304,7 @@ func TestPrepareRemovesEntryBeforeProviderChange(t *testing.T) {
 	if !strings.Contains(string(data), "serve --https=443 off") {
 		t.Fatalf("old provider entry was not removed: %q", data)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "tailscale.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "tailscale-ownership.json")); !os.IsNotExist(err) {
 		t.Fatalf("state record survived provider change: %v", err)
 	}
 }
@@ -327,7 +327,7 @@ func TestPrepareRefusesCorruptStatePointingAtTarget(t *testing.T) {
 		tailscaleRunning,
 		`{"Web":{"node.tailnet.ts.net:443":{"Handlers":{"/":{"Proxy":"http://127.0.0.1:7681"}}}},"AllowFunnel":{}}`)
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "tailscale.json"), []byte("{not json"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "tailscale-ownership.json"), []byte("{not json"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
@@ -403,3 +403,33 @@ func TestClassifyTailscaleError(t *testing.T) {
 type errText string
 
 func (e errText) Error() string { return string(e) }
+
+func TestLegacyOwnershipBlocksBeforeAnyExternalMutation(t *testing.T) {
+	for _, both := range []bool{false, true} {
+		t.Run(fmt.Sprint(both), func(t *testing.T) {
+			cli, logPath := fakeTailscale(t, tailscaleRunning, `{}`)
+			dir := t.TempDir()
+			legacy := filepath.Join(dir, "tailscale.json")
+			if err := os.WriteFile(legacy, []byte("broken legacy record"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if both {
+				record := tailscaleState{V: 1, Provider: "linux", DNSName: "node.tailnet.ts.net", Mode: "serve", Port: 443, Target: "http://127.0.0.1:7681", Status: "active"}
+				if err := statefile.WriteJSON(filepath.Join(dir, "tailscale-ownership.json"), record, statefile.Options{}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctl := testTailscaleController(t, cli, dir, config.TailscaleConfig{Mode: "off", Provider: "auto"})
+			defer ctl.Close()
+			if err := ctl.Prepare(context.Background(), "127.0.0.1:7681"); !statefile.IsKind(err, statefile.LegacyLayout) {
+				t.Fatalf("legacy not blocked: %v", err)
+			}
+			if calls, _ := os.ReadFile(logPath); len(calls) != 0 {
+				t.Fatalf("external mutation before ownership check: %s", calls)
+			}
+			if data, _ := os.ReadFile(legacy); string(data) != "broken legacy record" {
+				t.Fatal("legacy record altered")
+			}
+		})
+	}
+}

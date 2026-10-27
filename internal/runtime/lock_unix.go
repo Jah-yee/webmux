@@ -7,37 +7,42 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/rainchan/webmux/internal/statefile"
 	"net"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // ErrLocked means another live instance owns the runtime directory.
 var ErrLocked = errors.New("状态目录已被另一实例使用")
 
 // Lock is the exclusive server.lock held for a server's whole lifetime.
-type Lock struct{ f *os.File }
+type Lock struct{ store *statefile.Handle[Record] }
 
 // AcquireLock never blocks; a held lock yields ErrLocked.
 func AcquireLock(dir string) (*Lock, error) {
-	f, err := os.OpenFile(filepath.Join(dir, lockName), os.O_CREATE|os.O_RDWR|syscall.O_CLOEXEC, 0600)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
+	h, _, err := statefile.OpenRuntime[Record](dir, validateRecord)
+	if err != nil && !statefile.IsKind(err, statefile.Missing) {
+		h.Close()
+		if statefile.IsKind(err, statefile.Locked) {
 			return nil, ErrLocked
 		}
 		return nil, err
 	}
-	return &Lock{f: f}, nil
+	return &Lock{store: h}, nil
 }
-
 func (l *Lock) Release() {
-	_ = syscall.Flock(int(l.f.Fd()), syscall.LOCK_UN)
-	_ = l.f.Close()
+	if l != nil {
+		l.store.Close()
+	}
+}
+func (l *Lock) Write(r Record) error { r.V = RecordVersion; return l.store.Commit(r) }
+func (l *Lock) Remove(pid int) error {
+	r, err := Read(filepath.Dir(l.store.Path()))
+	if err == nil && r.PID != pid {
+		return nil
+	}
+	return l.store.Remove()
 }
 
 // ErrNoSocketPath means neither the default nor the fallback path fits.

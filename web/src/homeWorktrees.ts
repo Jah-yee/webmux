@@ -50,7 +50,7 @@ export function homeLayout(
   repo: Repository,
   sessions: readonly SessionInfo[],
 ): HomeLayout {
-  const pinned = pinnedIds(home, repo);
+  const pinned = pinnedIds(pruneHomeWorktrees(home, [repo]), repo);
   const active = new Set(
     sessions
       .filter((s) => s.workspace?.repositoryId === repo.id)

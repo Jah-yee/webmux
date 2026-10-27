@@ -100,7 +100,7 @@ func TestTunnelFailedPersistenceStopsButOtherUpdatesDoNotApply(t *testing.T) {
 	if !tc.ready(generation, "https://old.example.com") {
 		t.Fatal("could not authorize test origin")
 	}
-	path := filepath.Join(dir, "tunnel.json")
+	path := filepath.Join(dir, "tunnel-settings.json")
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestTunnelStartupWebPrecedenceFlagsAndShortToken(t *testing.T) {
 				t.Fatal(err)
 			}
 			store.Close()
-			before, _ := os.ReadFile(filepath.Join(state, "tunnel.json"))
+			before, _ := os.ReadFile(filepath.Join(state, "tunnel-settings.json"))
 			args := []string{"--config", writeTunnelStartupConfig(t, state, row.toml, row.token)}
 			if row.flag != "" {
 				args = append(args, row.flag)
@@ -215,7 +215,7 @@ func TestTunnelStartupWebPrecedenceFlagsAndShortToken(t *testing.T) {
 				}
 				tc.Close()
 			}
-			after, _ := os.ReadFile(filepath.Join(state, "tunnel.json"))
+			after, _ := os.ReadFile(filepath.Join(state, "tunnel-settings.json"))
 			if string(before) != string(after) {
 				t.Fatal("startup changed persisted settings")
 			}
@@ -251,7 +251,7 @@ func TestTunnelStorageFaultStartupKeepsHTTPAndExposureOff(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = os.RemoveAll(state) })
-			path := filepath.Join(state, "tunnel.json")
+			path := filepath.Join(state, "tunnel-settings.json")
 			switch fault {
 			case "corrupt":
 				if err := os.WriteFile(path, []byte("broken-secret"), 0600); err != nil {
@@ -346,5 +346,22 @@ func TestWebManagedStartupFailureKeepsHTTP(t *testing.T) {
 				t.Fatal("soft failure stopped HTTP")
 			}
 		})
+	}
+}
+
+func TestTunnelSourceTracksWebSaveAndReset(t *testing.T) {
+	tc, _ := settingsController(t, config.TunnelConfig{}, func(context.Context) (string, error) { return "", errors.New("not used") })
+	tc.enabledSource, tc.defaultEnabledSource = "cli", "toml"
+	if _, err := tc.SetEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if tc.enabledSource != "web" {
+		t.Fatal("persisted Web change retained CLI source")
+	}
+	if _, err := tc.ResetSettings(); err != nil {
+		t.Fatal(err)
+	}
+	if tc.enabledSource != "toml" || tc.web {
+		t.Fatal("reset retained Web or CLI source")
 	}
 }

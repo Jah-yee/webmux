@@ -14,8 +14,8 @@
     type MatchCursor,
     type SearchSpec,
   } from "../code-search";
-  import { z } from "zod";
-  import { store, stored } from "../api";
+  import { settings, changeSettings } from "../settings.svelte";
+  import { defaultCodeReader } from "../settings-intent";
   import { acquireDiffHighlighter } from "../code-diff-highlighter";
   import { Button } from "$lib/components/ui/button";
   import CodeSearchPanel from "./CodeSearchPanel.svelte";
@@ -42,9 +42,8 @@
     hint?: string;
   } = $props();
 
-  const OverflowSchema = z.enum(["scroll", "wrap"]);
-  let overflow = $state(
-    OverflowSchema.catch("scroll").parse(stored("codeDiffOverflow", "scroll")),
+  const overflow = $derived(
+    (settings.values.codeReader ?? defaultCodeReader).diffOverflow,
   );
   let width = $state(0);
   let dark = $state(false);
@@ -415,8 +414,12 @@
       title="自动换行"
       aria-pressed={overflow === "wrap"}
       onclick={() => {
-        overflow = overflow === "wrap" ? "scroll" : "wrap";
-        store("codeDiffOverflow", overflow);
+        changeSettings({
+          codeReader: {
+            ...(settings.values.codeReader ?? defaultCodeReader),
+            diffOverflow: overflow === "wrap" ? "scroll" : "wrap",
+          },
+        });
       }}><IconTextWrap aria-hidden="true" /></Button
     >
   </div>

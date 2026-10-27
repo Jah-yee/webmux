@@ -1,3 +1,5 @@
+import { reloadSettings, stopSettings } from "../../src/settings.svelte";
+import { emptySettings } from "../../src/settings-intent";
 import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
@@ -18,6 +20,12 @@ function serve(list: () => Response) {
     "fetch",
     vi.fn<typeof fetch>(async (input, init) => {
       const path = new URL(String(input), location.href).pathname;
+      if (path === "/api/settings")
+        return Response.json({
+          revision: 0,
+          updatedAt: "",
+          values: emptySettings,
+        });
       const method = init?.method ?? "GET";
       requests.push(`${method} ${path}`);
       if (path === "/api/launch-configs" && method === "GET") return list();
@@ -53,6 +61,8 @@ test("an unavailable store disables writes but keeps the rest of the page", asyn
       { status: 503 },
     ),
   );
+  stopSettings();
+  await reloadSettings();
   render(Settings);
   await expect
     .element(card().getByRole("alert"))
@@ -70,6 +80,8 @@ test("an unavailable store disables writes but keeps the rest of the page", asyn
 test("lists configs without env values and confirms deletion", async () => {
   let configs = [config];
   const requests = serve(() => Response.json(configs));
+  stopSettings();
+  await reloadSettings();
   render(Settings);
   const item = card().getByRole("button", { name: "编辑 Claude 恢复" });
   await expect.element(item).toMatchTextContent(/claude --resume 'a b'/);
@@ -98,6 +110,8 @@ test("the new button is disabled at the 100 config limit", async () => {
       })),
     ),
   );
+  stopSettings();
+  await reloadSettings();
   render(Settings);
   await expect
     .element(card().getByRole("button", { name: /新建启动配置/ }))

@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "body": {
+    "revision": 2,
+    "updatedAt": "<time>",
+    "values": {
+      "codeReader": null,
+      "fontSize": null,
+      "forceSoftKeys": null,
+      "homeWorktrees": null,
+      "preview": null,
+      "quickCommands": [],
+      "theme": null
+    }
+  }
+}

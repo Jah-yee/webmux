@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { startSettings, stopSettings } from "./settings.svelte";
   import { errorMessage } from "./error";
   import { onMount, tick } from "svelte";
   import { api, consumeTokenFragment, store, stored } from "./api";
@@ -29,6 +30,7 @@
     try {
       await api("/health", HealthSchema);
       ready = true;
+      startSettings();
       error = "";
       // Re-registers an existing push subscription, e.g. after the server
       // rebuilt its store; without one it touches nothing.
@@ -61,6 +63,7 @@
       void tick().then(focusMain);
     };
     const auth = () => {
+      stopSettings();
       drafts.clearAll();
       uploadNotice = "";
       ready = false;
@@ -72,6 +75,7 @@
     if (consumeTokenFragment()) token = stored("token");
     void check();
     return () => {
+      stopSettings();
       routes.disconnect();
       drafts.clearAll();
       window.removeEventListener("popstate", change);

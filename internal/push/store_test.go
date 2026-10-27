@@ -54,10 +54,12 @@ func TestStorePersistsKeyAndSubscriptions(t *testing.T) {
 	if err != nil || again != id {
 		t.Fatalf("re-registration id %q, %v; want %q", again, err, id)
 	}
+	s.Close()
 	reopened, err := OpenStore(dir, discard())
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer reopened.Close()
 	if reopened.PublicKey() != s.PublicKey() || len(reopened.PublicKey()) != 87 {
 		t.Fatalf("public key changed across restart: %q vs %q", reopened.PublicKey(), s.PublicKey())
 	}
@@ -91,29 +93,28 @@ func TestStoreLimitsSubscriptions(t *testing.T) {
 	}
 }
 
-func TestStoreRebuildsCorruptFile(t *testing.T) {
+func TestStorePreservesCorruptFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, storeFile)
-	if err := os.WriteFile(path, []byte("{not json"), 0600); err != nil {
+	content := "{not json"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
 	var logs bytes.Buffer
 	s, err := OpenStore(dir, slog.New(slog.NewTextHandler(&logs, nil)))
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || s != nil {
+		t.Fatal("corrupt push store was accepted")
 	}
-	if s.Count() != 0 || s.PublicKey() == "" {
-		t.Fatalf("rebuilt store: %d subscriptions, key %q", s.Count(), s.PublicKey())
+	got, _ := os.ReadFile(path)
+	if string(got) != content {
+		t.Fatalf("original changed: %q", got)
 	}
 	aside, _ := filepath.Glob(path + ".corrupt-*")
-	if len(aside) != 1 {
-		t.Fatalf("corrupt file not kept aside: %v", aside)
+	if len(aside) != 0 {
+		t.Fatal("original moved")
 	}
-	if kept, _ := os.ReadFile(aside[0]); string(kept) != "{not json" {
-		t.Fatalf("kept content %q", kept)
-	}
-	if !strings.Contains(logs.String(), "level=WARN") {
-		t.Fatalf("no warning logged: %s", logs.String())
+	if strings.Contains(err.Error()+logs.String(), content) {
+		t.Fatal("error leaked document")
 	}
 }
 

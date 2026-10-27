@@ -85,6 +85,25 @@ export const test = base.extend<
       await cleanSessions(request);
       await cleanRepositories(request);
       await cleanLaunchConfigs(request);
+      const prefs = await (await request.get("/api/settings")).json();
+      expect(
+        (
+          await request.patch("/api/settings", {
+            data: {
+              baseRevision: prefs.revision,
+              changes: {
+                theme: null,
+                fontSize: null,
+                preview: null,
+                codeReader: null,
+                quickCommands: null,
+                homeWorktrees: null,
+                forceSoftKeys: null,
+              },
+            },
+          })
+        ).ok(),
+      ).toBeTruthy();
       const browserLogs: string[] = [];
       page.on("console", (message) =>
         browserLogs.push(`[${message.type()}] ${message.text()}`),
@@ -129,6 +148,25 @@ export const test = base.extend<
           await cleanSessions(request);
           await cleanRepositories(request);
           await cleanLaunchConfigs(request);
+          const prefs = await (await request.get("/api/settings")).json();
+          expect(
+            (
+              await request.patch("/api/settings", {
+                data: {
+                  baseRevision: prefs.revision,
+                  changes: {
+                    theme: null,
+                    fontSize: null,
+                    preview: null,
+                    codeReader: null,
+                    quickCommands: null,
+                    homeWorktrees: null,
+                    forceSoftKeys: null,
+                  },
+                },
+              })
+            ).ok(),
+          ).toBeTruthy();
         }
       }
     },

@@ -6,7 +6,6 @@ package runtime
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -22,7 +21,7 @@ const RecordVersion = 1
 
 const (
 	recordName = "server.json"
-	lockName   = "server.lock"
+	lockName   = "server.json.lock"
 	socketName = "webmux.sock"
 )
 
@@ -75,51 +74,42 @@ func EnsureDir(dir string) error {
 }
 
 // Write atomically replaces the record with a 0600 file.
+// Write is a fixture/standalone publisher. A running server writes through its Lock.
 func Write(dir string, r Record) error {
-	r.V = RecordVersion
-	data, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
+	h, _, err := statefile.OpenRuntime[Record](dir, validateRecord)
+	defer func() { h.Close() }()
+	if err != nil && !statefile.IsKind(err, statefile.Missing) {
 		return err
 	}
-	return statefile.Write(RecordPath(dir), append(data, '\n'), statefile.Options{TempPattern: ".server-*.json"})
+	r.V = RecordVersion
+	return h.Commit(r)
 }
-
-// Read returns ErrNoRecord, ErrUnsupportedVersion or ErrCorrupt for records
-// it cannot use.
+func validateRecord(r Record) error {
+	if r.PID <= 0 || r.Identity.Start == "" || r.Listen == "" {
+		return ErrCorrupt
+	}
+	return nil
+}
 func Read(dir string) (Record, error) {
-	data, err := os.ReadFile(RecordPath(dir))
-	if errors.Is(err, os.ErrNotExist) {
+	r, err := statefile.ReadRuntime[Record](dir, validateRecord)
+	if statefile.IsKind(err, statefile.Missing) {
 		return Record{}, ErrNoRecord
 	}
+	if statefile.IsKind(err, statefile.UnsupportedVersion) {
+		return Record{}, ErrUnsupportedVersion
+	}
 	if err != nil {
-		return Record{}, err
-	}
-	var version struct {
-		V int `json:"v"`
-	}
-	if err := json.Unmarshal(data, &version); err != nil {
 		return Record{}, fmt.Errorf("%w: %v", ErrCorrupt, err)
-	}
-	if version.V != RecordVersion {
-		return Record{}, fmt.Errorf("%w %d", ErrUnsupportedVersion, version.V)
-	}
-	var r Record
-	if err := json.Unmarshal(data, &r); err != nil {
-		return Record{}, fmt.Errorf("%w: %v", ErrCorrupt, err)
-	}
-	if r.PID <= 0 || r.Identity.Start == "" || r.Listen == "" {
-		return Record{}, fmt.Errorf("%w: missing pid, identity or listen address", ErrCorrupt)
 	}
 	return r, nil
 }
-
-// Remove deletes the record only when it still describes pid, so a stopping
-// instance never deletes a successor's record.
 func Remove(dir string, pid int) {
-	if r, err := Read(dir); err == nil && r.PID != pid {
+	h, r, err := statefile.OpenRuntime[Record](dir, validateRecord)
+	defer func() { h.Close() }()
+	if err != nil || r.PID != pid {
 		return
 	}
-	_ = os.Remove(RecordPath(dir))
+	_ = h.Remove()
 }
 
 // TokenFingerprint is a truncated one-way digest used only for drift checks.

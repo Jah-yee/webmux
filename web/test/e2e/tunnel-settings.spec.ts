@@ -72,7 +72,7 @@ test("configure, switch and stop tunnels without ending the PTY session", async 
   ).toBeVisible();
   const read = await request.get(server.apiURL + "/api/tunnel");
   expect(await read.text()).not.toContain(secret);
-  const stateFile = join(server.stateDir, "tunnel.json");
+  const stateFile = join(server.stateDir, "tunnel-settings.json");
   expect((await stat(stateFile)).mode & 0o777).toBe(0o600);
   expect(JSON.parse(await readFile(stateFile, "utf8")).token).toBe(secret);
   await page.getByLabel("公共主机名", { exact: true }).fill("new.example.com");
@@ -150,7 +150,10 @@ test("saved shutdown survives restart and corrupt storage cannot restore TOML ex
   await request.put(server.apiURL + "/api/tunnel/enabled", {
     data: { enabled: false },
   });
-  await writeFile(join(server.stateDir, "tunnel.json"), "{invalid JSON");
+  await writeFile(
+    join(server.stateDir, "tunnel-settings.json"),
+    "{invalid JSON",
+  );
   await server.restart();
   const current = await (
     await request.get(server.apiURL + "/api/tunnel")
@@ -158,9 +161,9 @@ test("saved shutdown survives restart and corrupt storage cannot restore TOML ex
   expect(current).toMatchObject({ enabled: false, storageAvailable: false });
   expect(current.state).not.toBe("ready");
   expect((await request.get(server.apiURL + "/api/health")).status()).toBe(200);
-  expect(await readFile(join(server.stateDir, "tunnel.json"), "utf8")).toBe(
-    "{invalid JSON",
-  );
+  expect(
+    await readFile(join(server.stateDir, "tunnel-settings.json"), "utf8"),
+  ).toBe("{invalid JSON");
 });
 
 test("disk write failure still closes public access from the webpage", async ({
@@ -177,7 +180,7 @@ test("disk write failure still closes public access from the webpage", async ({
         (await (await request.get(server.apiURL + "/api/tunnel")).json()).state,
     )
     .toBe("ready");
-  const stateFile = join(server.stateDir, "tunnel.json");
+  const stateFile = join(server.stateDir, "tunnel-settings.json");
   await rename(stateFile, stateFile + ".saved");
   await mkdir(stateFile);
   await page.goto(server.baseURL + `/settings/tunnel#token=${token}`);

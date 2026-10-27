@@ -13,7 +13,7 @@ TRAY_LDFLAGS ?=
 RELEASE_FILES = webmux-linux-amd64 webmux-linux-arm64 webmux-darwin-amd64 webmux-darwin-arm64 \
 	webmux-windows-amd64.exe webmux-windows-arm64.exe webmux-tray-windows-amd64.exe webmux-tray-windows-arm64.exe
 
-.PHONY: web build tray release check docs-check go-lint test test-unit test-browser test-e2e test-browsers-install format format-check install baseline
+.PHONY: web build tray release check docs-check persistence-check go-lint test test-unit test-browser test-e2e test-browsers-install format format-check install baseline
 web:
 	$(PNPM) --dir web install --frozen-lockfile
 	$(PNPM) --dir web build
@@ -45,7 +45,7 @@ release: web
 	done
 	cd bin && sha256sum $(RELEASE_FILES) > SHA256SUMS
 
-check: web format-check docs-check
+check: web format-check docs-check persistence-check
 	$(PNPM) --dir web check:test
 	$(PNPM) --dir web lint
 	$(PNPM) --dir web check:arch
@@ -76,6 +76,9 @@ test-e2e:
 
 test-browsers-install:
 	$(PNPM) --dir web exec playwright install --with-deps chromium
+
+persistence-check:
+	$(GO) test -count=1 ./internal/archtest -run '^TestPersistence'
 
 docs-check:
 	$(GO) test -count=1 ./internal/docguard

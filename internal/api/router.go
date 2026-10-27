@@ -15,6 +15,7 @@ import (
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/wire"
 	"github.com/rainchan/webmux/internal/workspace"
 	"io"
@@ -28,6 +29,7 @@ import (
 // Deps are the services the handlers call. cmd/ constructs every service;
 // the controller never builds one itself.
 type Deps struct {
+	Settings  *settings.Service
 	Config    config.Config
 	Manager   *session.Manager
 	Workspace *workspace.Service
@@ -98,6 +100,7 @@ func (s *Server) routes() *http.ServeMux {
 	s.workspaceRoutes(mux)
 	s.pushRoutes(mux)
 	s.launchRoutes(mux)
+	s.settingsRoutes(mux)
 	s.tunnelRoutes(mux)
 	s.tailscaleRoutes(mux)
 	mux.HandleFunc("GET /ws/sessions", s.listWS)

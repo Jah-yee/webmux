@@ -1,3 +1,5 @@
+import { reloadSettings, stopSettings } from "../../src/settings.svelte";
+import { emptySettings } from "../../src/settings-intent";
 import { afterEach, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { cleanup, render } from "vitest-browser-svelte/pure";
@@ -21,12 +23,22 @@ for (const width of [1280, 393]) {
       "fetch",
       vi.fn<typeof fetch>(async (input) => {
         const path = new URL(String(input), location.href).pathname;
+        if (path === "/api/settings")
+          return Response.json({
+            revision: 0,
+            updatedAt: "",
+            values: emptySettings,
+          });
         if (path === "/api/launch-configs") return Response.json([]);
         if (path === "/api/config")
           return Response.json({ defaultCwd: "/tmp" });
         return Response.json({ error: "unavailable" }, { status: 503 });
       }),
     );
+    stopSettings();
+    await reloadSettings();
+    stopSettings();
+    await reloadSettings();
     render(Settings);
     const nav = page.getByRole("navigation", { name: "设置分区" });
     const current = () =>

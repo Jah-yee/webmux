@@ -1,3 +1,4 @@
+import { seedSettings } from "./settings-fixture";
 // Shared harness for the Terminal*.test.ts browser suites.
 import type { ComponentProps } from "svelte";
 import { afterEach, beforeEach, expect, vi } from "vitest";
@@ -519,6 +520,7 @@ export function syntheticPointerCapture(target: HTMLElement) {
 // observer and resolution listener was released. Call once per test file.
 export function installTerminalFixture() {
   beforeEach(async () => {
+    await seedSettings({ fontSize: 14 });
     sockets = [];
     previousDark = document.documentElement.classList.contains("dark");
     previousFont = localStorage.getItem("webmux.fontSize");

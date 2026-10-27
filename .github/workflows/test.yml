@@ -33,6 +33,8 @@ jobs:
         run: make format-check
       - name: Check documentation governance
         run: make docs-check
+      - name: Check persistence inventory
+        run: make persistence-check
       - name: Lint frontend
         run: pnpm --dir web lint
       - name: Check frontend test types

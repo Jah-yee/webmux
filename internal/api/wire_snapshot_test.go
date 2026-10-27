@@ -29,6 +29,7 @@ import (
 	"github.com/rainchan/webmux/internal/launch"
 	"github.com/rainchan/webmux/internal/push"
 	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/settings"
 )
 
 // The wire snapshots pin the JSON the browser's Zod contract
@@ -69,6 +70,8 @@ func wireSchema(name string) wireRules {
 		add(prefix, "path", "absolutePath")
 	}
 	switch name {
+	case "settings-patch", "settings-reset", "ws-settings-update":
+		add("", "time", "updatedAt")
 	case "session-create", "session-create-exiting", "session-create-from-config", "session-create-workspace", "session-get",
 		"ws-terminal-state", "ws-terminal-state-exited":
 		sessionFields("")
@@ -423,12 +426,14 @@ func newWireFixture(t *testing.T, rec *wireRecorder) *wireFixture {
 	m := session.NewManager(testSessionOptions(c))
 	pushes := push.New(c.Push, t.TempDir(), m, slog.New(slog.NewTextHandler(io.Discard, nil)), pushService.Client().Transport)
 	launches := launch.Open(t.TempDir())
+	prefs := settings.Open(t.TempDir())
+	t.Cleanup(prefs.Close)
 	codes := codeview.New(m)
 	public := &PublicOrigins{}
 	if err := public.Set("cloudflare", "https://abc.trycloudflare.com"); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes})))
+	server := httptest.NewServer(New(testDeps(t, Deps{Config: c, Manager: m, Public: public, Push: pushes, Launch: launches, Code: codes, Settings: prefs})))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(func() {
 		cancel()
@@ -599,6 +604,7 @@ func TestWireSnapshots(t *testing.T) {
 		{"workspace", wireWorkspace},
 		{"codeview", wireCodeview},
 		{"push", wirePush},
+		{"settings", wireSettings},
 	} {
 		t.Run(group.name, func(t *testing.T) {
 			rec := &wireRecorder{t: t, norm: newWireNormalizer(), seen: map[string]bool{}}
@@ -856,4 +862,14 @@ func TestWireSnapshotsUnavailableServices(t *testing.T) {
 		}
 		rec.record(row.name, w.Code, w.Body.Bytes())
 	}
+}
+
+func wireSettings(f *wireFixture) {
+	c := f.dial("/ws/settings")
+	f.event(c, "ws-settings-snapshot", func(e map[string]any) bool { return e["type"] == "settings" })
+	f.call("settings-get", "GET", "/api/settings", nil, 200)
+	f.call("settings-patch", "PATCH", "/api/settings", map[string]any{"baseRevision": 0, "changes": map[string]any{"theme": "dark", "quickCommands": []any{}}}, 200)
+	f.event(c, "ws-settings-update", func(e map[string]any) bool { return e["type"] == "settings.update" })
+	f.call("settings-conflict", "PATCH", "/api/settings", map[string]any{"baseRevision": 0, "changes": map[string]any{"theme": nil}}, 409)
+	f.call("settings-reset", "PATCH", "/api/settings", map[string]any{"baseRevision": 1, "changes": map[string]any{"theme": nil}}, 200)
 }

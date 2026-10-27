@@ -335,7 +335,7 @@ export const RepositorySchema = z.object({
 });
 export type Repository = z.infer<typeof RepositorySchema>;
 export const RepositoriesSchema = z.array(RepositorySchema);
-// Browser-local choice of worktrees shown on the home page, keyed by
+// Server-synchronized choice of worktrees shown on the home page, keyed by
 // repository ID. A repository without an entry was never curated.
 export const HomeWorktreesSchema = z.record(
   z.string().min(1),
@@ -553,3 +553,51 @@ export type CodeFile = z.infer<typeof CodeFileSchema>;
 export type CodeDiff = z.infer<typeof CodeDiffSchema>;
 export type CodeChange = z.infer<typeof CodeChangeSchema>;
 export type CodeListing = z.infer<typeof CodeListingSchema>;
+
+// User preferences shared by every authenticated client of this server.
+export const SettingsValuesSchema = z.strictObject({
+  theme: ThemeSchema.nullable(),
+  fontSize: z.number().int().min(8).max(20).nullable(),
+  preview: PreviewSettingsSchema.nullable(),
+  codeReader: z
+    .strictObject({
+      lineNumbers: z.enum(["show", "hide"]),
+      diffOverflow: z.enum(["scroll", "wrap"]),
+    })
+    .nullable(),
+  quickCommands: QuickCommandsSchema.nullable(),
+  homeWorktrees: HomeWorktreesSchema.refine((value) => {
+    const entries = Object.entries(value);
+    return (
+      entries.length <= 200 &&
+      entries.reduce((n, [, ids]) => n + ids.length, 0) <= 2000 &&
+      entries.every(
+        ([id, ids]) =>
+          id.length <= 128 &&
+          ids.every((x) => x.length <= 128) &&
+          new Set(ids).size === ids.length,
+      )
+    );
+  }).nullable(),
+  forceSoftKeys: z.boolean().nullable(),
+});
+export type SettingsValues = z.infer<typeof SettingsValuesSchema>;
+export const SettingsSnapshotSchema = z.strictObject({
+  revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  updatedAt: z.union([z.literal(""), z.iso.datetime({ offset: true })]),
+  values: SettingsValuesSchema,
+});
+export type SettingsSnapshot = z.infer<typeof SettingsSnapshotSchema>;
+export const SettingsChangesSchema = SettingsValuesSchema.partial();
+export const SettingsEventSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("settings"),
+    settings: SettingsSnapshotSchema,
+  }),
+  z.strictObject({
+    type: z.literal("settings.update"),
+    revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    updatedAt: z.iso.datetime({ offset: true }),
+    changes: SettingsChangesSchema,
+  }),
+]);

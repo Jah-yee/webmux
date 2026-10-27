@@ -44,7 +44,7 @@ func TestRecordRoundTripPermissionsAndAtomicReplace(t *testing.T) {
 		t.Fatalf("read %+v %v", got, err)
 	}
 	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
+	if len(entries) != 2 {
 		t.Fatalf("temporary files left behind: %v", entries)
 	}
 	Remove(dir, 10) // Not ours: kept.

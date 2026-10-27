@@ -259,33 +259,39 @@ test("settings reorder, edit, confirm deletion and keep an emptied list empty", 
   await backToTerminal(page, id);
 });
 
-test("corrupt stored commands degrade to an empty list", async ({ page }) => {
+test("corrupt legacy commands do not override server presets", async ({
+  page,
+}) => {
   await page.goto("/settings");
   await page.evaluate(() =>
     localStorage.setItem("webmux.quickCommands", "{broken"),
   );
   await page.reload();
-  await expect(card(page).getByText("还没有快捷指令")).toBeVisible();
+  await expect(
+    card(page).getByRole("button", { name: "编辑 /resume" }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "设置" })).toBeVisible();
 });
 
 test("an open add dialog preserves input when another tab fills the list", async ({
   page,
+  request,
 }) => {
   await page.goto("/settings");
-  await page.evaluate(() =>
-    localStorage.setItem(
-      "webmux.quickCommands",
-      JSON.stringify(
-        Array.from({ length: 49 }, (_, index) => ({
+  const initial = await (await request.get("/api/settings")).json();
+  await request.patch("/api/settings", {
+    data: {
+      baseRevision: initial.revision,
+      changes: {
+        quickCommands: Array.from({ length: 49 }, (_, index) => ({
           id: `command-${index}`,
           name: "",
           command: `echo ${index}`,
           enter: false,
         })),
-      ),
-    ),
-  );
+      },
+    },
+  });
   await page.reload();
   await card(page).getByRole("button", { name: "添加快捷指令" }).click();
   const dialog = page.getByRole("dialog", { name: "添加快捷指令" });
@@ -302,11 +308,9 @@ test("an open add dialog preserves input when another tab fills the list", async
     await expect(dialog.getByRole("alert")).toBeVisible();
     await expect(body).toHaveValue("echo tab-a");
     expect(
-      await page.evaluate(() =>
-        JSON.parse(localStorage.getItem("webmux.quickCommands")!).map(
-          (cmd: { command: string }) => cmd.command,
-        ),
-      ),
+      (
+        await (await request.get("/api/settings")).json()
+      ).values.quickCommands.map((cmd: { command: string }) => cmd.command),
     ).toEqual([
       ...Array.from({ length: 49 }, (_, index) => `echo ${index}`),
       "echo tab-b",
@@ -378,18 +382,22 @@ test("narrow code view keeps the quick-command entry accessible", async ({
 
 test("desktop shows the entry beside the draft button until the toolbar is forced", async ({
   page,
+  request,
   workDir,
 }, testInfo) => {
   test.skip(testInfo.project.use.isMobile, "Exercises a non-coarse pointer");
   await page.goto("/");
-  await page.evaluate(() =>
-    localStorage.setItem(
-      "webmux.quickCommands",
-      JSON.stringify([
-        { id: "a", name: "打招呼", command: "echo desk-ok", enter: true },
-      ]),
-    ),
-  );
+  const initial = await (await request.get("/api/settings")).json();
+  await request.patch("/api/settings", {
+    data: {
+      baseRevision: initial.revision,
+      changes: {
+        quickCommands: [
+          { id: "a", name: "打招呼", command: "echo desk-ok", enter: true },
+        ],
+      },
+    },
+  });
   await createShell(page, "Desktop quick commands", workDir);
   const header = page.locator(".terminal-header");
   const bar = page.getByRole("complementary", { name: "终端软键" });

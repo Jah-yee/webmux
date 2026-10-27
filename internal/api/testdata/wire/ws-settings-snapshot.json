@@ -1,0 +1,18 @@
+{
+  "body": {
+    "settings": {
+      "revision": 0,
+      "updatedAt": "",
+      "values": {
+        "codeReader": null,
+        "fontSize": null,
+        "forceSoftKeys": null,
+        "homeWorktrees": null,
+        "preview": null,
+        "quickCommands": null,
+        "theme": null
+      }
+    },
+    "type": "settings"
+  }
+}

@@ -16,20 +16,21 @@ import (
 )
 
 type Config struct {
-	Listen           string          `toml:"listen"`
-	Token            string          `toml:"token"`
-	ScrollbackBytes  int             `toml:"scrollback_bytes"`
-	DefaultCwd       string          `toml:"default_cwd"`
-	StateDir         string          `toml:"state_dir"`
-	IdleAfterSeconds int             `toml:"idle_after_seconds"`
-	PromptPatterns   []string        `toml:"prompt_patterns"`
-	AgentProtocol    bool            `toml:"agent_protocol"`
-	BellAttention    bool            `toml:"bell_attention"`
-	ProgramStatus    bool            `toml:"program_status"`
-	AllowedOrigins   []string        `toml:"allowed_origins"`
-	Tunnel           TunnelConfig    `toml:"tunnel"`
-	Tailscale        TailscaleConfig `toml:"tailscale"`
-	Push             PushConfig      `toml:"push"`
+	Sources          map[string]string `toml:"-" json:"-"`
+	Listen           string            `toml:"listen"`
+	Token            string            `toml:"token"`
+	ScrollbackBytes  int               `toml:"scrollback_bytes"`
+	DefaultCwd       string            `toml:"default_cwd"`
+	StateDir         string            `toml:"state_dir"`
+	IdleAfterSeconds int               `toml:"idle_after_seconds"`
+	PromptPatterns   []string          `toml:"prompt_patterns"`
+	AgentProtocol    bool              `toml:"agent_protocol"`
+	BellAttention    bool              `toml:"bell_attention"`
+	ProgramStatus    bool              `toml:"program_status"`
+	AllowedOrigins   []string          `toml:"allowed_origins"`
+	Tunnel           TunnelConfig      `toml:"tunnel"`
+	Tailscale        TailscaleConfig   `toml:"tailscale"`
+	Push             PushConfig        `toml:"push"`
 }
 
 // TailscaleConfig selects the managed Tailscale Serve or Funnel entry point.
@@ -253,10 +254,14 @@ func Load(path string, required bool) (Config, error) {
 		},
 		Tailscale: TailscaleConfig{Mode: TailscaleOff, Provider: "auto"},
 	}
-	if _, err := toml.DecodeFile(path, &c); err != nil {
+	metadata, err := toml.DecodeFile(path, &c)
+	if err != nil {
 		if required || !errors.Is(err, os.ErrNotExist) {
 			return c, err
 		}
+	}
+	for _, key := range metadata.Keys() {
+		c.SetSource(key.String(), "toml")
 	}
 	return c, nil
 }

@@ -95,6 +95,7 @@ func (s *Service) Close() {
 	s.closeOnce.Do(func() {
 		s.cancel()
 		s.wg.Wait()
+		s.store.Close()
 	})
 }
 
@@ -104,7 +105,9 @@ func (s *Service) Unavailable() error {
 	case s == nil:
 		return ErrDisabled
 	case s.store == nil:
-		return ErrStorage
+		return fmt.Errorf("%w: %w", ErrStorage, s.storeErr)
+	case s.store.Unavailable() != nil:
+		return fmt.Errorf("%w: %w", ErrStorage, s.store.Unavailable())
 	}
 	return nil
 }
@@ -115,6 +118,9 @@ func (s *Service) Status() Status {
 	}
 	if s.store == nil {
 		return Status{Enabled: true, Error: s.storeErr.Error()}
+	}
+	if err := s.store.Unavailable(); err != nil {
+		return Status{Enabled: true, Error: err.Error()}
 	}
 	return Status{Enabled: true, Available: true, Subscriptions: s.store.Count()}
 }
@@ -254,6 +260,9 @@ func (s *Service) work() {
 		case <-s.ctx.Done():
 			return
 		case alert := <-s.queue:
+			if s.Unavailable() != nil {
+				continue
+			}
 			// Serial within one alert: at most 32 requests, and no burst
 			// against a single push service.
 			for _, sub := range s.store.List() {

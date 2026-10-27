@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AppearanceSettings from "../components/AppearanceSettings.svelte";
+  import { settings, changeSettings, saveSettings } from "../settings.svelte";
   import { errorMessage } from "../error";
   import { onMount } from "svelte";
   import IconArrowDown from "~icons/tabler/arrow-down";
@@ -29,7 +31,6 @@
   import {
     defaultPreviewSettings,
     previewSettings,
-    updatePreviewSettings,
   } from "../previewSettings.svelte";
   import { selectPreview } from "../preview";
   import {
@@ -55,6 +56,7 @@
   let dialogOpen = $state(false);
   let editing = $state<QuickCommand>();
   let deleteOpen = $state(false);
+  let clearQuickOpen = $state(false);
   let deleting = $state<QuickCommand>();
   const full = $derived(quickCommands.list.length >= QUICK_COMMANDS_LIMIT);
 
@@ -62,12 +64,12 @@
     editing = cmd;
     dialogOpen = true;
   }
-  function upsert(cmd: QuickCommand) {
+  async function upsert(cmd: QuickCommand) {
     const list = quickCommands.list;
     const exists = list.some((item) => item.id === cmd.id);
     if (!exists && list.length >= QUICK_COMMANDS_LIMIT)
       return `最多保存 ${QUICK_COMMANDS_LIMIT} 条快捷指令，请先删除一条后再保存。`;
-    saveQuickCommands(
+    await saveQuickCommands(
       exists
         ? list.map((item) => (item.id === cmd.id ? cmd : item))
         : [...list, cmd],
@@ -81,7 +83,7 @@
     if (!from || !to) return;
     list[index] = to;
     list[index + offset] = from;
-    saveQuickCommands(list);
+    void saveQuickCommands(list).catch(() => undefined);
   }
   // Launch configs live on the server; a load failure (for example 503 when
   // the state file is corrupt or locked) only disables this card.
@@ -132,6 +134,8 @@
   let savedDrafts = $state(draftStorage.count());
   let savedScratch = $state(draftStorage.scratchCount());
   let clearDraftsOpen = $state(false);
+  let linesDirty = $state(false);
+  let skipDirty = $state(false);
   let lines = $state<number | undefined>(previewSettings.lines);
   let skip = $state<number | undefined>(previewSettings.skip);
   const validation = $derived(PreviewSettingsSchema.safeParse({ lines, skip }));
@@ -143,8 +147,25 @@
   const preview = $derived(selectPreview(example, previewSettings));
 
   $effect(() => {
-    if (validation.success) updatePreviewSettings(validation.data);
+    if (!linesDirty) lines = previewSettings.lines;
+    if (!skipDirty) skip = previewSettings.skip;
   });
+  async function savePreview(field: "lines" | "skip") {
+    const value = field === "lines" ? lines : skip;
+    const parsed = PreviewSettingsSchema.safeParse({
+      lines: previewSettings.lines,
+      skip: previewSettings.skip,
+      [field]: value,
+    });
+    if (!parsed.success) return;
+    try {
+      await saveSettings({ preview: parsed.data });
+      if (field === "lines") linesDirty = false;
+      else skipDirty = false;
+    } catch {
+      /* keep the input; shared status reports the failure */
+    }
+  }
   onMount(() => {
     document.title = "WebMux · 设置";
     void loadLaunchConfigs();
@@ -157,6 +178,7 @@
     size="icon-sm"
     aria-label={`删除 ${label}`}
     title="删除"
+    disabled={!settings.ready}
     {onclick}><IconTrash aria-hidden="true" /></Button
   >
 {/snippet}
@@ -185,9 +207,10 @@
       <div>
         <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">设置</h1>
         <p class="mt-2 text-sm text-muted-foreground">
-          快捷指令、草稿和预览只保存在当前浏览器；启动配置与公网访问设置保存在服务端，在所有设备间共享。隧道配置和启停无需重启；通知推送按当前设备管理。
+          外观、快捷指令、预览和主页工作树保存在服务端，在所有设备间同步；草稿、最近目录与登录凭据仅在当前设备保存。启动配置与公网访问设置也由服务端管理。隧道配置和启停无需重启；通知推送按当前设备管理。
         </p>
       </div>
+      <AppearanceSettings />
       <Card.Root id="quick-commands" class="scroll-mt-4">
         <Card.Header>
           <Card.Title>快捷指令</Card.Title>
@@ -195,7 +218,7 @@
             >点击终端底部工具栏或顶栏的 <IconBolt
               class="inline size-3.5 align-[-2px]"
               aria-label="闪电"
-            /> 按钮即可发送；仅保存在当前浏览器。</Card.Description
+            /> 按钮即可发送；保存到服务端并同步至所有设备。</Card.Description
           >
         </Card.Header>
         <Card.Content class="space-y-4">
@@ -209,7 +232,7 @@
                 >
               </Empty.Header>
               <Empty.Content>
-                <Button onclick={() => edit()}
+                <Button disabled={!settings.ready} onclick={() => edit()}
                   ><IconPlus aria-hidden="true" />添加快捷指令</Button
                 >
               </Empty.Content>
@@ -241,7 +264,7 @@
                       size="icon-sm"
                       aria-label={`上移 ${label}`}
                       title="上移"
-                      disabled={index === 0}
+                      disabled={!settings.ready || index === 0}
                       onclick={() => move(index, -1)}
                       ><IconArrowUp aria-hidden="true" /></Button
                     >
@@ -250,7 +273,8 @@
                       size="icon-sm"
                       aria-label={`下移 ${label}`}
                       title="下移"
-                      disabled={index === quickCommands.list.length - 1}
+                      disabled={!settings.ready ||
+                        index === quickCommands.list.length - 1}
                       onclick={() => move(index, 1)}
                       ><IconArrowDown aria-hidden="true" /></Button
                     >
@@ -263,7 +287,10 @@
               {/each}
             </Item.Group>
             <div class="flex flex-wrap items-center gap-3">
-              <Button variant="outline" disabled={full} onclick={() => edit()}
+              <Button
+                variant="outline"
+                disabled={!settings.ready || full}
+                onclick={() => edit()}
                 ><IconPlus aria-hidden="true" />添加快捷指令</Button
               >
               {#if full}<span class="text-xs text-muted-foreground"
@@ -271,6 +298,23 @@
                 >{/if}
             </div>
           {/if}
+          <div class="flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!settings.ready}
+              onclick={() => changeSettings({ quickCommands: null })}
+              >恢复预置指令</Button
+            >
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!settings.ready || quickCommands.list.length === 0}
+              onclick={() => {
+                clearQuickOpen = true;
+              }}>删除全部快捷指令</Button
+            >
+          </div>
         </Card.Content>
       </Card.Root>
       <Card.Root
@@ -442,6 +486,11 @@
                 max={50}
                 step={1}
                 bind:value={lines}
+                oninput={() => {
+                  linesDirty = true;
+                }}
+                onchange={() => void savePreview("lines")}
+                disabled={!settings.ready}
                 aria-invalid={!validation.success}
                 aria-describedby="preview-lines-help"
               />
@@ -458,6 +507,11 @@
                 max={50}
                 step={1}
                 bind:value={skip}
+                oninput={() => {
+                  skipDirty = true;
+                }}
+                onchange={() => void savePreview("skip")}
+                disabled={!settings.ready}
                 aria-invalid={!validation.success}
                 aria-describedby="preview-skip-help"
               />
@@ -489,8 +543,9 @@
           <Button
             variant="outline"
             onclick={() => {
-              lines = defaultPreviewSettings.lines;
-              skip = defaultPreviewSettings.skip;
+              linesDirty = false;
+              skipDirty = false;
+              changeSettings({ preview: null });
             }}
             >恢复默认（{defaultPreviewSettings.lines} 行，跳过 {defaultPreviewSettings.skip}
             行）</Button
@@ -547,11 +602,15 @@
       <AlertDialog.Cancel>取消</AlertDialog.Cancel>
       <Button
         variant="destructive"
-        onclick={() => {
-          saveQuickCommands(
-            quickCommands.list.filter((item) => item.id !== deleting?.id),
-          );
-          deleteOpen = false;
+        onclick={async () => {
+          try {
+            await saveQuickCommands(
+              quickCommands.list.filter((item) => item.id !== deleting?.id),
+            );
+            deleteOpen = false;
+          } catch {
+            /* shared settings status retains error */
+          }
         }}>删除</Button
       >
     </AlertDialog.Footer>
@@ -575,6 +634,32 @@
           savedScratch = draftStorage.scratchCount();
           clearDraftsOpen = false;
         }}>确认清除</AlertDialog.Action
+      >
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root bind:open={clearQuickOpen}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>删除全部快捷指令？</AlertDialog.Title>
+      <AlertDialog.Description
+        >所有设备上的快捷指令列表都会清空。恢复预置指令可重新显示默认列表。</AlertDialog.Description
+      >
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>取消</AlertDialog.Cancel>
+      <Button
+        variant="destructive"
+        disabled={!settings.ready || settings.saving}
+        onclick={async () => {
+          try {
+            await saveSettings({ quickCommands: [] });
+            clearQuickOpen = false;
+          } catch {
+            /* shared status */
+          }
+        }}>删除全部</Button
       >
     </AlertDialog.Footer>
   </AlertDialog.Content>

@@ -2,14 +2,11 @@ package workspace
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/launch"
@@ -50,7 +47,7 @@ type Service struct {
 	mu            sync.Mutex
 	capability    Capability
 	entries       []*repositoryState
-	lock          *os.File
+	store         *statefile.Handle[registry]
 	coord         sync.Mutex
 	starts        map[string]int
 	reservations  map[string]bool
@@ -82,11 +79,7 @@ func New(stateDir string, manager *session.Manager, launches *launch.Service, de
 func (s *Service) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.lock != nil {
-		_ = syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
-		_ = s.lock.Close()
-		s.lock = nil
-	}
+	s.store.Close()
 	s.capability.RegistryAvailable = false
 	s.capability.RegistryError = "仓库服务已关闭"
 	s.clearConfirmations()
@@ -98,37 +91,20 @@ func (s *Service) load() error {
 		return err
 	}
 	s.stateDir = expanded
-	if err := os.MkdirAll(s.stateDir, 0700); err != nil {
-		return err
-	}
-	if err := os.Chmod(s.stateDir, 0700); err != nil {
-		return err
-	}
-	lock, err := os.OpenFile(filepath.Join(s.stateDir, "repositories.lock"), os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	if err := lock.Chmod(0600); err != nil {
-		_ = lock.Close()
-		return err
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = lock.Close()
-		return fmt.Errorf("状态目录已被另一实例使用: %w", err)
-	}
-	s.lock = lock
-	path := filepath.Join(s.stateDir, "repositories.json")
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
+	var stored registry
+	s.store, stored, err = statefile.Open[registry](s.stateDir, statefile.Repositories, validateRegistry)
+	if statefile.IsKind(err, statefile.Missing) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	var stored registry
-	if err := json.Unmarshal(data, &stored); err != nil {
-		return err
+	for _, entry := range stored.Repositories {
+		s.entries = append(s.entries, newRepository(entry))
 	}
+	return nil
+}
+func validateRegistry(stored registry) error {
 	if stored.Version != 1 || stored.Repositories == nil {
 		return errors.New("不支持或损坏的仓库清单")
 	}
@@ -138,12 +114,6 @@ func (s *Service) load() error {
 			return errors.New("仓库清单身份无效或重复")
 		}
 		ids[entry.ID], paths[entry.CommonDir] = true, true
-	}
-	if err := os.Chmod(path, 0600); err != nil {
-		return err
-	}
-	for _, entry := range stored.Repositories {
-		s.entries = append(s.entries, newRepository(entry))
 	}
 	return nil
 }
@@ -157,12 +127,12 @@ func (s *Service) save(entries []*repositoryState) error {
 	for _, entry := range entries {
 		stored.Repositories = append(stored.Repositories, entry.entry)
 	}
-	err := statefile.WriteJSON(filepath.Join(s.stateDir, "repositories.json"), stored, statefile.Options{TempPattern: ".repositories-*", RequireDirSync: true})
-	if dirErr, ok := errors.AsType[*statefile.DirSyncError](err); ok {
+	err := s.store.Commit(stored)
+	if statefile.IsKind(err, statefile.CommitUncertain) {
 		// Rename already published different bytes. Keep the last confirmed
 		// memory state, but never allow it to overwrite the uncertain disk state.
 		s.capability.RegistryAvailable = false
-		s.capability.RegistryError = "清单已替换但目录同步失败，持久结果不确定；仓库管理已停用，请重启重新读取: " + dirErr.Error()
+		s.capability.RegistryError = "清单已替换但目录同步失败，持久结果不确定；仓库管理已停用，请重启重新读取: " + err.Error()
 		return errors.New(s.capability.RegistryError)
 	}
 	return err

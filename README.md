@@ -26,6 +26,8 @@ WebMux 是一个单二进制的 Web 终端服务。PTY 会话由服务端持有�
 
 </div>
 
+主题、字号、预览、代码阅读、快捷指令、主页工作树和底部工具栏偏好由服务端保存并跨设备同步；设备凭据与草稿仍保留在本机。详见 [使用说明](docs/usage.md)。
+
 ## 设计理念
 
 - **第一级别的 WSL 支持**：Windows 不是“顺带能用”的平台。WebMux 运行在 WSL 2 发行版中，Windows 托盘负责安装 / 升级（校验发布摘要）、启动、监控、自动重启和远程访问转发；`webmux.exe` 控制台客户端在 PowerShell / Windows Terminal 中直接 `run` / `attach` WSL 里的会话。Windows 客户端经 `wsl.exe --exec webmux bridge` 访问本机 API，无需 Token，也不依赖 WSL 的 localhost 转发或网络模式；当前 Windows 目录自动换算为 WSL 路径。

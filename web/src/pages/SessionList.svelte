@@ -28,7 +28,7 @@
   import SessionListEmpty from "../components/SessionListEmpty.svelte";
   import { homeWorktrees } from "../homeWorktrees.svelte";
   import { setLaunchPreviews } from "../launchPreviews.svelte";
-  import { homeLayout, pruneHomeWorktrees, setPinned } from "../homeWorktrees";
+  import { homeLayout, setPinned } from "../homeWorktrees";
   import { matchesSessionQuery } from "../session-location";
   import { matchesStatusFilter, type StatusFilter } from "../session-status";
   import type { TerminalDrafts } from "../terminal-draft.svelte";
@@ -173,7 +173,6 @@
       );
       if (!disposed && generation === refreshGeneration) {
         repositories = result;
-        homeWorktrees.save(pruneHomeWorktrees(homeWorktrees.value, result));
       }
     } catch (err) {
       if (!disposed && generation === refreshGeneration)

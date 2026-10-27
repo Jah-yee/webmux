@@ -73,3 +73,6 @@ program_status = true
 # Codex CLI, Gemini CLI, Open Code and omp there; edit or delete them freely.
 # Commands run directly, without an implicit shell. To load ~/.bashrc for
 # Open Code, save argv ["bash", "-ic", "exec opencode \"$@\"", "opencode"].
+
+# 主题、字号、阅读偏好、快捷指令与主页工作树由 settings.json 管理并跨设备同步。
+# TOML 保留启动、安全、进程策略与专用公网访问服务的默认值。

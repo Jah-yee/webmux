@@ -15,16 +15,19 @@
     open = $bindable(false),
     initial,
     save,
+    disabled = false,
   }: {
     open: boolean;
+    disabled?: boolean;
     /** Command being edited; undefined creates a new one. */
     initial: QuickCommand | undefined;
-    save: (cmd: QuickCommand) => string;
+    save: (cmd: QuickCommand) => string | Promise<string>;
   } = $props();
   let name = $state("");
   let command = $state("");
   let enter = $state(false);
   let error = $state("");
+  let saving = $state(false);
   let commandInput = $state<HTMLTextAreaElement | null>(null);
   const draft = $derived(
     QuickCommandSchema.safeParse({
@@ -46,11 +49,21 @@
     });
   });
 
-  function submit(event: SubmitEvent) {
+  async function submit(event: SubmitEvent) {
     event.preventDefault();
     if (!draft.success) return;
-    error = save({ ...draft.data, id: initial?.id ?? newQuickCommandId() });
-    if (!error) open = false;
+    saving = true;
+    try {
+      error = await save({
+        ...draft.data,
+        id: initial?.id ?? newQuickCommandId(),
+      });
+      if (!error) open = false;
+    } catch (err) {
+      error = (err as Error).message;
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -126,7 +139,9 @@
             open = false;
           }}>取消</Button
         >
-        <Button type="submit" disabled={!draft.success}>保存</Button>
+        <Button type="submit" disabled={!draft.success || saving || disabled}
+          >保存</Button
+        >
       </Dialog.Footer>
     </form>
   </Dialog.Content>

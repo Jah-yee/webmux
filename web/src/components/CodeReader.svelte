@@ -24,7 +24,8 @@
   import IconListNumbers from "~icons/tabler/list-numbers";
   import IconNumber from "~icons/tabler/number";
   import IconSearch from "~icons/tabler/search";
-  import { store, stored } from "../api";
+  import { settings, changeSettings } from "../settings.svelte";
+  import { defaultCodeReader } from "../settings-intent";
   let {
     text,
     path,
@@ -52,14 +53,22 @@
   const pickLine = StateEffect.define<number | undefined>();
   const gutterSlot = new Compartment();
   let lineGutter: Extension = [];
-  let showGutter = $state(stored("codeLineNumbers", "show") !== "hide");
+  const showGutter = $derived(
+    (settings.values.codeReader ?? defaultCodeReader).lineNumbers === "show",
+  );
   function toggleGutter() {
-    showGutter = !showGutter;
-    store("codeLineNumbers", showGutter ? "show" : "hide");
+    changeSettings({
+      codeReader: {
+        ...(settings.values.codeReader ?? defaultCodeReader),
+        lineNumbers: showGutter ? "hide" : "show",
+      },
+    });
+  }
+  $effect(() => {
     view?.dispatch({
       effects: gutterSlot.reconfigure(showGutter ? lineGutter : []),
     });
-  }
+  });
   export function clearLineAction() {
     actionLine = undefined;
     actionTop = undefined;

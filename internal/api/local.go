@@ -16,6 +16,7 @@ import (
 
 // Local supplies the server-side state behind /local/v1/*.
 type Local struct {
+	Configuration func() contract.Configuration
 	// Status describes the running instance; record and localApi are true.
 	Status func() contract.StatusV1
 	// Launcher is the recorded launcher; systemd and launchd refuse an
@@ -62,6 +63,9 @@ func NewLocal(d Deps, local Local) http.Handler {
 	s.local = true
 	routes := s.routes()
 	mux := http.NewServeMux()
+	if local.Configuration != nil {
+		mux.HandleFunc("GET "+contract.PathConfiguration, func(w http.ResponseWriter, r *http.Request) { reply(w, 200, local.Configuration()) })
+	}
 	mux.HandleFunc("GET "+contract.PathStatus, func(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusOK, local.Status())
 	})

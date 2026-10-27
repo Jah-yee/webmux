@@ -170,7 +170,13 @@ test("pinch resizes real cells and rebases one-finger scrolling, while cancel an
   pointer(target, "pointermove", 2, { x: first.x + 130, y: first.y });
   await expect.poll(() => geometry(socket).row).toBeGreaterThan(originalHeight);
   await expectDomText("edge-ready");
-  expect(Number(localStorage.getItem("webmux.fontSize"))).toBeGreaterThan(14);
+  await expect
+    .poll(
+      () =>
+        JSON.parse(localStorage.getItem("webmux.settingsCache")!).values
+          .fontSize,
+    )
+    .toBeGreaterThan(14);
   pointer(target, "pointerup", 2, { x: first.x + 130, y: first.y });
   expect(inputText(socket)).toBe("");
   const height = geometry(socket).row;

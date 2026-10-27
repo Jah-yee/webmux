@@ -3,15 +3,10 @@
 package tunnelsettings
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 
 	"github.com/rainchan/webmux/internal/config"
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -39,7 +34,7 @@ type storedFile struct {
 type Service struct {
 	mu                sync.Mutex
 	dir, path         string
-	lock              *os.File
+	store             *statefile.Handle[storedFile]
 	defaults, current config.TunnelConfig
 	web               bool
 	broken            error
@@ -57,7 +52,7 @@ func Open(stateDir string, defaults config.TunnelConfig) *Service {
 		dir, err = filepath.Abs(dir)
 	}
 	if err == nil {
-		s.dir, s.path = dir, filepath.Join(dir, "tunnel.json")
+		s.dir, s.path = dir, filepath.Join(dir, "tunnel-settings.json")
 		err = s.load()
 	}
 	if err != nil {
@@ -67,55 +62,32 @@ func Open(stateDir string, defaults config.TunnelConfig) *Service {
 	return s
 }
 
+func decodeStored(f storedFile, defaults config.TunnelConfig) (config.TunnelConfig, error) {
+	if f.V != 1 || f.Enabled == nil || f.Hostname == nil {
+		return config.TunnelConfig{}, errors.New("incomplete tunnel settings")
+	}
+	next, err := config.ValidateTunnelSettings(f.Mode, *f.Hostname, f.Token)
+	if err != nil || (f.Mode == "quick" && (f.Token != "" || *f.Hostname != "")) {
+		return config.TunnelConfig{}, errors.New("invalid tunnel settings")
+	}
+	next.Enabled = *f.Enabled
+	next.Cloudflared = defaults.Cloudflared
+	next.DownloadMirrors = defaults.DownloadMirrors
+	return next, nil
+}
 func (s *Service) load() error {
-	if err := os.MkdirAll(s.dir, 0700); err != nil {
-		return errors.New("cannot create state directory")
-	}
-	if err := os.Chmod(s.dir, 0700); err != nil {
-		return errors.New("cannot secure state directory")
-	}
-	lock, err := os.OpenFile(filepath.Join(s.dir, "tunnel-config.lock"), os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return errors.New("cannot open tunnel settings lock")
-	}
-	if err := lock.Chmod(0600); err != nil {
-		_ = lock.Close()
-		return errors.New("cannot secure tunnel settings lock")
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = lock.Close()
-		return errors.New("tunnel settings are locked by another instance")
-	}
-	s.lock = lock
-	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		// A dangling symlink is not a confirmed missing settings file.
-		if _, statErr := os.Lstat(s.path); errors.Is(statErr, os.ErrNotExist) {
-			return nil
-		}
+	var f storedFile
+	var err error
+	s.store, f, err = statefile.Open[storedFile](s.dir, statefile.Tunnel, func(f storedFile) error { _, err := decodeStored(f, s.defaults); return err })
+	if statefile.IsKind(err, statefile.Missing) {
+		return nil
 	}
 	if err != nil {
-		return errors.New("cannot read tunnel settings file")
+		return err
 	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	var stored storedFile
-	if err := d.Decode(&stored); err != nil {
-		return errors.New("tunnel settings file is corrupt")
-	}
-	if err := d.Decode(new(any)); err != io.EOF || stored.V != 1 || stored.Enabled == nil || stored.Hostname == nil {
-		return errors.New("tunnel settings file is corrupt or has an unsupported version")
-	}
-	next, err := config.ValidateTunnelSettings(stored.Mode, *stored.Hostname, stored.Token)
-	if err != nil || (stored.Mode == "quick" && (stored.Token != "" || *stored.Hostname != "")) {
-		return errors.New("tunnel settings file contains invalid fields")
-	}
-	if err := os.Chmod(s.path, 0600); err != nil {
-		return errors.New("cannot secure tunnel settings file")
-	}
-	s.current.Enabled, s.current.Token, s.current.Hostname = *stored.Enabled, next.Token, next.Hostname
-	s.web = true
-	return nil
+	s.current, err = decodeStored(f, s.defaults)
+	s.web = err == nil
+	return err
 }
 
 // Effective returns the current settings and whether they came from the web.
@@ -142,7 +114,7 @@ func Prepare(current config.TunnelConfig, mode, hostname string, token *string) 
 
 func (s *Service) unavailableLocked() error {
 	if s.broken != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, s.broken)
+		return fmt.Errorf("%w: %w", ErrUnavailable, s.broken)
 	}
 	return nil
 }
@@ -176,8 +148,8 @@ func (s *Service) Save(next config.TunnelConfig) error {
 		return err
 	}
 	stored := storedFile{V: 1, Enabled: &normalized.Enabled, Mode: mode, Token: normalized.Token, Hostname: &normalized.Hostname}
-	if err := statefile.WriteJSON(s.path, stored, statefile.Options{TempPattern: ".tunnel-*", RequireDirSync: true}); err != nil {
-		s.broken = errors.New("cannot persist tunnel settings")
+	if err := s.store.Commit(stored); err != nil {
+		s.broken = err
 		return s.unavailableLocked()
 	}
 	s.current, s.web = normalized, true
@@ -195,19 +167,9 @@ func (s *Service) Reset() (config.TunnelConfig, error) {
 	if err := s.unavailableLocked(); err != nil {
 		return config.TunnelConfig{}, err
 	}
-	err := os.Remove(s.path)
-	if err == nil {
-		var dir *os.File
-		dir, err = os.Open(s.dir)
-		if err == nil {
-			err = dir.Sync()
-			_ = dir.Close()
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		err = nil
-	}
+	err := s.store.Remove()
 	if err != nil {
-		s.broken = errors.New("cannot remove tunnel settings")
+		s.broken = err
 		return config.TunnelConfig{}, s.unavailableLocked()
 	}
 	s.current, s.web = s.defaults, false
@@ -220,10 +182,6 @@ func (s *Service) Close() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.lock != nil {
-		_ = syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
-		_ = s.lock.Close()
-		s.lock = nil
-	}
+	s.store.Close()
 	s.broken = errors.New("tunnel settings service is closed")
 }

@@ -19,6 +19,7 @@ var webmux = manifest{
 		// Business rules, state, filesystem and processes.
 		"internal/session":           service,
 		"internal/workspace":         service,
+		"internal/settings":          service,
 		"internal/launch":            service,
 		"internal/push":              service,
 		"internal/codeview":          service,
@@ -31,6 +32,7 @@ var webmux = manifest{
 		"internal/contract":      shared,
 		"internal/config":        shared,
 		"internal/runtime":       shared,
+		"internal/jsonutil":      shared,
 		"internal/statefile":     shared,
 		"internal/fetch":         shared,
 		"internal/pathutil":      shared,

@@ -79,9 +79,13 @@ async function longPress(page: Page, start: Point, end?: Point) {
 
 test("dark theme corrects explicit black ANSI input and survives reload", async ({
   page,
+  request,
   workDir,
 }) => {
-  await page.addInitScript(() => localStorage.setItem("webmux.theme", "dark"));
+  const prefs = await (await request.get("/api/settings")).json();
+  await request.patch("/api/settings", {
+    data: { baseRevision: prefs.revision, changes: { theme: "dark" } },
+  });
   await createShell(page, "Dark contrast", workDir);
   await runCommand(
     page,

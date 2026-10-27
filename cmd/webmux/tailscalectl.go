@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/rainchan/webmux/internal/api"
@@ -26,8 +24,8 @@ import (
 )
 
 const (
-	tailscaleStateFile    = "tailscale.json"
-	tailscaleLockFile     = "tailscale.lock"
+	tailscaleStateFile    = "tailscale-ownership.json"
+	tailscaleLockFile     = "tailscale-ownership.json.lock"
 	tailscaleStateVersion = 1
 )
 
@@ -71,7 +69,7 @@ type tailscaleController struct {
 	listenBlocked string
 	record        *tailscaleState
 	storageErr    error
-	lock          *os.File
+	ownership     *statefile.Handle[tailscaleState]
 	localPort     int
 	closed        bool
 	baseCtx       context.Context
@@ -186,11 +184,14 @@ func (tc *tailscaleController) ResetSettings() (contract.TailscaleStatus, error)
 // refuses startup only when an owned entry cannot be closed or an unowned
 // entry already points at this target.
 func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error {
+	if err := statefile.CheckLegacy(tc.dir, statefile.TailscaleOwnership); err != nil {
+		return err
+	}
 	if tc.cfg.Provider == "windows" && !tc.isWSL() {
 		return errors.New("tailscale.provider \"windows\" is only valid inside WSL")
 	}
 	hasState := false
-	if _, err := os.Stat(tc.path); err == nil {
+	if _, err := os.Lstat(tc.path); !errors.Is(err, os.ErrNotExist) {
 		hasState = true
 	}
 	if !tc.cfg.Enabled() && !hasState {
@@ -237,7 +238,7 @@ func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error
 				return err
 			}
 		} else if tc.entryPointsTo(ctx, target) {
-			return errors.New("tailscale.json 缺失，但已有入口指向当前监听地址；无法确认所有权，拒绝启动")
+			return errors.New("tailscale-ownership.json 缺失，但已有入口指向当前监听地址；无法确认所有权，拒绝启动")
 		}
 	}
 	return nil
@@ -268,52 +269,45 @@ func recordStale(record *tailscaleState, cfg config.TailscaleConfig, target stri
 	return providerFamily(record.Provider) != cfg.Provider
 }
 
-func (tc *tailscaleController) openLock() error {
-	if tc.lock != nil {
-		return nil
+func validateOwnership(r tailscaleState) error {
+	if r.V != tailscaleStateVersion || r.Provider == "" || r.DNSName == "" || r.Target == "" || r.Port < 1 || r.Port > 65535 || (r.Status != "pending" && r.Status != "active") || (r.Mode != config.TailscaleServe && r.Mode != config.TailscaleFunnel) {
+		return errors.New("invalid ownership record")
 	}
-	if err := os.MkdirAll(tc.dir, 0700); err != nil {
-		return fmt.Errorf("创建状态目录: %w", err)
-	}
-	lock, err := os.OpenFile(tc.lockPath, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return fmt.Errorf("打开 tailscale 锁文件: %w", err)
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = lock.Close()
-		return errors.New("检测到 Tailscale 状态目录已被另一实例使用")
-	}
-	tc.lock = lock
+
 	return nil
 }
-
+func (tc *tailscaleController) openLock() error {
+	if tc.ownership != nil {
+		return tc.ownership.Err()
+	}
+	var err error
+	tc.ownership, _, err = statefile.Open[tailscaleState](tc.dir, statefile.TailscaleOwnership, validateOwnership)
+	if statefile.IsKind(err, statefile.Missing) {
+		return nil
+	}
+	return err
+}
 func (tc *tailscaleController) loadState() (*tailscaleState, error) {
-	data, err := os.ReadFile(tc.path)
-	if errors.Is(err, os.ErrNotExist) {
+	r, err := statefile.ReadSnapshot[tailscaleState](tc.dir, statefile.TailscaleOwnership, validateOwnership)
+	if statefile.IsKind(err, statefile.Missing) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("读取 tailscale.json: %w", err)
+		return nil, err
 	}
-	var record tailscaleState
-	if err := json.Unmarshal(data, &record); err != nil {
-		return nil, errors.New("tailscale.json 损坏，无法确认入口所有权")
-	}
-	if record.V != tailscaleStateVersion {
-		return nil, errors.New("tailscale.json 版本不受支持")
-	}
-	return &record, nil
+	return &r, nil
 }
-
 func (tc *tailscaleController) saveRecord(record tailscaleState) error {
-	if err := os.MkdirAll(tc.dir, 0700); err != nil {
+	if err := tc.openLock(); err != nil {
 		return err
 	}
-	return statefile.WriteJSON(tc.path, record, statefile.Options{TempPattern: ".tailscale-*"})
+	return tc.ownership.Commit(record)
 }
-
-func (tc *tailscaleController) deleteRecord() {
-	_ = os.Remove(tc.path)
+func (tc *tailscaleController) deleteRecord() error {
+	if tc.ownership == nil {
+		return errors.New("ownership store unavailable")
+	}
+	return tc.ownership.Remove()
 }
 
 func (tc *tailscaleController) removeRecord(ctx context.Context, record *tailscaleState) error {
@@ -323,7 +317,9 @@ func (tc *tailscaleController) removeRecord(ctx context.Context, record *tailsca
 		tc.clearRecord()
 		return err
 	}
-	tc.deleteRecord()
+	if err := tc.deleteRecord(); err != nil {
+		return err
+	}
 	tc.clearRecord()
 	return nil
 }
@@ -393,7 +389,7 @@ func (tc *tailscaleController) refuseUnownedTarget(ctx context.Context, target s
 		return nil
 	}
 	if entry, ok := serve.Lookup(status.DNSName, port); ok && entry.Proxy == target {
-		return fmt.Errorf("tailscale.json 缺失，但 %d 端口已有指向 %s 的入口；无法确认所有权，拒绝启动", port, target)
+		return fmt.Errorf("tailscale-ownership.json 缺失，但 %d 端口已有指向 %s 的入口；无法确认所有权，拒绝启动", port, target)
 	}
 	return nil
 }
@@ -542,7 +538,10 @@ func (tc *tailscaleController) reconcile(cfg config.TailscaleConfig) bool {
 		tc.fail(fmt.Errorf("未能关闭上一个 Tailscale 入口，新设置尚未应用：%s", err.Error()), true)
 		return false
 	}
-	tc.deleteRecord()
+	if err := tc.deleteRecord(); err != nil {
+		tc.fail(err, true)
+		return false
+	}
 	tc.clearRecord()
 	// Entries in the cached detection predate the removal.
 	tc.svc.Refresh()
@@ -643,7 +642,7 @@ func (tc *tailscaleController) apply(ctx context.Context) {
 	tc.mu.Unlock()
 	if err := tc.saveRecord(record); err != nil {
 		tc.clearRecord()
-		tc.fail(fmt.Errorf("无法写入 tailscale.json: %w", err), false)
+		tc.fail(fmt.Errorf("无法写入 tailscale-ownership.json: %w", err), false)
 		return
 	}
 	if err := tc.svc.Apply(ctx, cfg.Mode, port, localPort); err != nil {
@@ -721,8 +720,11 @@ func (tc *tailscaleController) cleanupFailed(ctx context.Context, record tailsca
 		tc.fail(fmt.Errorf("%s；本次入口可能仍存在，请手工执行 `tailscale serve --https=%d off`：%s", tailscaleReason(cause, providerFamily(record.Provider)), record.Port, err), false)
 		return
 	}
+	if err := tc.deleteRecord(); err != nil {
+		tc.fail(err, false)
+		return
+	}
 	tc.clearRecord()
-	tc.deleteRecord()
 	tc.fail(cause, false)
 }
 
@@ -795,13 +797,12 @@ func (tc *tailscaleController) Close() {
 				"error", err, "port", record.Port,
 				"serveHint", fmt.Sprintf("tailscale serve --https=%d off", record.Port))
 		} else {
-			tc.deleteRecord()
+			if err := tc.deleteRecord(); err != nil {
+				tc.logger.Warn("ownership deletion not durable", "error", err)
+			}
 		}
 	}
-	if tc.lock != nil {
-		_ = tc.lock.Close()
-		tc.lock = nil
-	}
+	tc.ownership.Close()
 }
 
 // Refresh bypasses the detection cache for an explicit settings-page refresh.

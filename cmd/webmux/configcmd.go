@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/BurntSushi/toml"
@@ -93,17 +94,31 @@ func configPath(args []string, stdout, stderr io.Writer) int {
 }
 
 func configShow(args []string, stdout, stderr io.Writer) int {
-	var asJSON *bool
-	path, explicit, ok := configFlags("show", args, stderr, func(f *flag.FlagSet) { asJSON = f.Bool("json", false, "print the config contract v1 as JSON") })
+	var asJSON, live *bool
+	path, explicit, ok := configFlags("show", args, stderr, func(f *flag.FlagSet) {
+		asJSON = f.Bool("json", false, "print the safe configuration view as JSON")
+		live = f.Bool("live", false, "read the running process instead of disk")
+	})
 	if !ok {
 		return contract.ExitUsage
 	}
-	c, err := client.LoadConfig(path, explicit)
+	var view contract.Configuration
+	var err error
+	if *live {
+		view, err = liveConfiguration(path, explicit)
+	} else {
+		var c config.Config
+		c, err = client.LoadConfig(path, explicit)
+		if err == nil {
+			view = configuredView(path, c)
+		} else {
+			err = fmt.Errorf("configuration unavailable: %s", path)
+		}
+	}
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "webmux config show:", describeConfigError(path, err))
+		_, _ = fmt.Fprintln(stderr, "webmux config show:", err)
 		return contract.ExitError
 	}
-	view := configView(path, c)
 	if *asJSON {
 		writeJSON(stdout, view)
 		return contract.ExitOK
@@ -113,6 +128,7 @@ func configShow(args []string, stdout, stderr io.Writer) int {
 	if !view.Exists {
 		source += " (not found; defaults)"
 	}
+	line("View:            %s", view.View)
 	line("Config:          %s", source)
 	line("Listen:          %s", view.Listen)
 	line("Token:           %s", map[bool]string{true: "configured", false: "not configured"}[view.TokenConfigured])
@@ -121,21 +137,19 @@ func configShow(args []string, stdout, stderr io.Writer) int {
 	for _, origin := range view.AllowedOrigins {
 		line("Allowed origin:  %s", origin)
 	}
-	return contract.ExitOK
-}
-
-func configView(path string, c config.Config) contract.ConfigV1 {
-	view := contract.ConfigV1{
-		V:               contract.V,
-		Path:            path,
-		Exists:          exists(path),
-		Listen:          c.Listen,
-		TokenConfigured: c.Token != "",
-		DefaultCwd:      c.DefaultCwd,
-		StateDir:        c.StateDir,
-		AllowedOrigins:  append([]string{}, c.AllowedOrigins...),
+	keys := make([]string, 0, len(view.Fields))
+	for key := range view.Fields {
+		keys = append(keys, key)
 	}
-	return view
+	sort.Strings(keys)
+	for _, key := range keys {
+		f := view.Fields[key]
+		line("%s: %v [%s]", key, f.Value, f.Source)
+	}
+	for _, store := range view.Stores {
+		line("Store %s: %s (%s; lock=%s)", store.ID, store.Status, store.Path, store.Lock)
+	}
+	return contract.ExitOK
 }
 
 // describeConfigError adds the file, line and column to TOML syntax errors.

@@ -1,20 +1,12 @@
-import { stored, store } from "./api";
+import { settings, saveSettings } from "./settings.svelte";
 import { QuickCommandsSchema, type QuickCommand } from "./schemas";
 import { parseQuickCommands } from "./quickCommands";
 
-const key = "quickCommands";
-
-export const quickCommands = $state({
-  list: parseQuickCommands(stored(key)),
-});
-
+export const quickCommands = {
+  get list() {
+    return settings.values.quickCommands ?? parseQuickCommands("");
+  },
+};
 export function saveQuickCommands(list: QuickCommand[]) {
-  const data = QuickCommandsSchema.parse(list);
-  quickCommands.list = data;
-  store(key, JSON.stringify(data));
+  return saveSettings({ quickCommands: QuickCommandsSchema.parse(list) });
 }
-
-window.addEventListener("storage", (event) => {
-  if (event.key === null || event.key === `webmux.${key}`)
-    quickCommands.list = parseQuickCommands(stored(key));
-});

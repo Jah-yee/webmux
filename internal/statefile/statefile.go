@@ -4,6 +4,7 @@ package statefile
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -41,8 +42,29 @@ func (e *DirSyncError) Unwrap() error { return e.Err }
 // The temporary file is removed on every path except a successful rename.
 // The parent directory must already exist.
 func Write(path string, data []byte, opt Options) error {
+	return writeWithOps(path, data, opt, publicationOps{
+		create: func(dir, pattern string) (stagedFile, error) { return os.CreateTemp(dir, pattern) },
+		rename: os.Rename, link: os.Link, remove: os.Remove, syncDir: syncDir,
+	})
+}
+
+type stagedFile interface {
+	Name() string
+	Chmod(os.FileMode) error
+	Write([]byte) (int, error)
+	Sync() error
+	Close() error
+}
+type publicationOps struct {
+	create       func(string, string) (stagedFile, error)
+	rename, link func(string, string) error
+	remove       func(string) error
+	syncDir      func(string) error
+}
+
+func writeWithOps(path string, data []byte, opt Options, ops publicationOps) error {
 	dir := filepath.Dir(path)
-	f, err := os.CreateTemp(dir, opt.TempPattern)
+	f, err := ops.create(dir, opt.TempPattern)
 	if err != nil {
 		return err
 	}
@@ -50,11 +72,15 @@ func Write(path string, data []byte, opt Options) error {
 	published := false
 	defer func() {
 		if !published || opt.Exclusive {
-			_ = os.Remove(tmp)
+			_ = ops.remove(tmp)
 		}
 	}()
 	if err = f.Chmod(Perm); err == nil {
-		_, err = f.Write(data)
+		var n int
+		n, err = f.Write(data)
+		if err == nil && n != len(data) {
+			err = io.ErrShortWrite
+		}
 	}
 	if err == nil {
 		err = f.Sync()
@@ -66,15 +92,15 @@ func Write(path string, data []byte, opt Options) error {
 		return err
 	}
 	if opt.Exclusive {
-		err = os.Link(tmp, path)
+		err = ops.link(tmp, path)
 	} else {
-		err = os.Rename(tmp, path)
+		err = ops.rename(tmp, path)
 	}
 	if err != nil {
 		return err
 	}
 	published = true
-	if err := syncDir(dir); err != nil && opt.RequireDirSync {
+	if err := ops.syncDir(dir); err != nil && opt.RequireDirSync {
 		return &DirSyncError{Err: err}
 	}
 	return nil

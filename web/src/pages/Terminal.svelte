@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { settings, changeSettings } from "../settings.svelte";
   import { errorMessage } from "../error";
   import { onMount, tick, untrack } from "svelte";
   import { MediaQuery } from "svelte/reactivity";
@@ -55,7 +56,7 @@
   let copyText = $state("");
   let settingsOpen = $state(false);
   let scratchOpen = $state(false);
-  let forceSoftKeys = $state(false);
+  const forceSoftKeys = $derived(settings.values.forceSoftKeys ?? false);
   let mounted = false;
   let codeShown = $state(false);
   const desktopMedia = new MediaQuery("(min-width: 1024px)");
@@ -407,7 +408,9 @@
     uploading={uploads.progress !== null}
     {desktop}
     bind:codeShown
-    bind:forceSoftKeys
+    bind:forceSoftKeys={
+      () => forceSoftKeys, (value) => changeSettings({ forceSoftKeys: value })
+    }
     {quickMenu}
     upload={uploads.uploadFiles}
     {toggleDraft}

@@ -3,6 +3,7 @@
   import * as NavigationMenu from "$lib/components/ui/navigation-menu";
 
   const sections = [
+    { id: "appearance", label: "外观与阅读" },
     { id: "quick-commands", label: "快捷指令" },
     { id: "launch-configs", label: "启动配置" },
     { id: "drafts", label: "草稿与暂存" },

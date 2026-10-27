@@ -1,16 +1,11 @@
 package launch
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/rainchan/webmux/internal/pathutil"
@@ -19,12 +14,9 @@ import (
 
 const (
 	fileName = "launch-configs.json"
-	lockName = "launch-configs.lock"
-	// fileVersion adds optional per-config preview settings. Version 1 files,
-	// with or without icons, load unchanged with Preview nil; saves always
-	// write the current version.
-	fileVersion    = 2
-	oldFileVersion = 1
+	lockName = "launch-configs.json.lock"
+	// Only the current format is accepted; upgrades are explicit.
+	fileVersion = 2
 )
 
 type storedFile struct {
@@ -33,14 +25,14 @@ type storedFile struct {
 }
 
 // Service owns <state_dir>/launch-configs.json. It holds an exclusive flock
-// on launch-configs.lock until Close, so a second instance on the same state
+// on launch-configs.json.lock until Close, so a second instance on the same state
 // directory reports unavailable instead of overwriting the file. A nil
 // *Service is unavailable.
 type Service struct {
 	mu      sync.Mutex
 	dir     string
 	path    string
-	lock    *os.File
+	store   *statefile.Handle[storedFile]
 	configs []Config
 	// fresh reports that launch-configs.json did not exist at Open and has not
 	// been written since; only then does Seed fill it.
@@ -72,54 +64,22 @@ func Open(stateDir string) *Service {
 }
 
 func (s *Service) load() error {
-	if err := os.MkdirAll(s.dir, 0700); err != nil {
-		return fmt.Errorf("创建状态目录: %w", err)
-	}
-	if err := os.Chmod(s.dir, 0700); err != nil {
-		return fmt.Errorf("设置状态目录权限: %w", err)
-	}
-	lock, err := os.OpenFile(filepath.Join(s.dir, lockName), os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return fmt.Errorf("打开锁文件: %w", err)
-	}
-	if err := lock.Chmod(0600); err != nil {
-		_ = lock.Close()
-		return fmt.Errorf("设置锁文件权限: %w", err)
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = lock.Close()
-		return fmt.Errorf("状态目录已被另一实例使用: %w", err)
-	}
-	s.lock = lock
-	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
+	var f storedFile
+	var err error
+	s.store, f, err = statefile.Open[storedFile](s.dir, statefile.Launch, func(f storedFile) error { _, err := validateStored(f); return err })
+	if statefile.IsKind(err, statefile.Missing) {
 		s.fresh = true
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("读取文件: %w", err)
-	}
-	configs, err := parse(data)
-	if err != nil {
 		return err
 	}
-	s.configs = configs
-	return nil
+	s.configs, err = validateStored(f)
+	return err
 }
 
-// parse accepts the current format and version 1 files, which had no preview
-// settings but may carry icons. Errors name fields, never environment values.
-func parse(data []byte) ([]Config, error) {
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	var stored storedFile
-	if err := d.Decode(&stored); err != nil {
-		return nil, fmt.Errorf("文件无法解析: %s", describeDecodeError(err))
-	}
-	if err := d.Decode(new(any)); err != io.EOF {
-		return nil, errors.New("文件无法解析: 包含多余内容")
-	}
-	if (stored.V != oldFileVersion && stored.V != fileVersion) || stored.Configs == nil {
+func validateStored(stored storedFile) ([]Config, error) {
+	if stored.V != fileVersion || stored.Configs == nil {
 		return nil, errors.New("文件损坏或版本不受支持")
 	}
 	if len(stored.Configs) > MaxConfigs {
@@ -147,23 +107,6 @@ func parse(data []byte) ([]Config, error) {
 	return configs, nil
 }
 
-// describeDecodeError drops literal values, which may be secrets, from JSON
-// errors and keeps the location.
-func describeDecodeError(err error) string {
-	var syntax *json.SyntaxError
-	var typed *json.UnmarshalTypeError
-	switch {
-	case errors.As(err, &syntax):
-		return fmt.Sprintf("JSON 语法错误（偏移 %d）", syntax.Offset)
-	case errors.As(err, &typed):
-		return fmt.Sprintf("字段 %s 类型错误（偏移 %d）", typed.Field, typed.Offset)
-	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
-		return "内容为空或不完整"
-	default:
-		return err.Error()
-	}
-}
-
 // Close releases the file lock; the service is unavailable afterwards.
 func (s *Service) Close() {
 	if s == nil {
@@ -171,11 +114,7 @@ func (s *Service) Close() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.lock != nil {
-		_ = syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
-		_ = s.lock.Close()
-		s.lock = nil
-	}
+	s.store.Close()
 	if s.broken == nil {
 		s.broken = errors.New("服务已关闭")
 	}
@@ -203,9 +142,12 @@ func (s *Service) Unavailable() error {
 
 func (s *Service) unavailableLocked() error {
 	if s.broken == nil {
-		return nil
+		s.broken = s.store.Err()
+		if s.broken == nil {
+			return nil
+		}
 	}
-	return fmt.Errorf("%w: %v（%s）", ErrUnavailable, s.broken, s.path)
+	return fmt.Errorf("%w: %w（%s）", ErrUnavailable, s.broken, s.path)
 }
 
 // lockAvailable locks s.mu when the store works; callers must unlock it.
@@ -373,7 +315,7 @@ func (s *Service) saveLocked(configs []Config) error {
 	if configs == nil {
 		configs = []Config{}
 	}
-	err := statefile.WriteJSON(s.path, storedFile{V: fileVersion, Configs: configs}, statefile.Options{TempPattern: ".launch-configs-*"})
+	err := s.store.Commit(storedFile{V: fileVersion, Configs: configs})
 	if err != nil {
 		return fmt.Errorf("保存启动配置: %w", err)
 	}

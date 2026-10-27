@@ -43,7 +43,7 @@ provider = "auto" # auto | linux | windows
 # command = "/usr/bin/tailscale"
 ```
 
-- `mode = "off"` 是默认值，不创建入口，也不创建 `tailscale.json`。
+- `mode = "off"` 是默认值，不创建入口，也不创建 `tailscale-ownership.json`。
 - `mode != "off"` 视为网络入口：留空 token 时生成本次进程的 256 位 token；
   显式 token 少于 43 个字符时拒绝启动。
 - 手工修改 TOML 后需要重启 WebMux；已有网页设置时，先“恢复配置文件设置”才会
