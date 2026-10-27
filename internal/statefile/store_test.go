@@ -277,8 +277,11 @@ func TestSymlinkedStateDirectory(t *testing.T) {
 	}
 	h.Close()
 	next, value, err := Open[testDocument](link, Settings, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer next.Close()
-	if err != nil || value.Value != "kept" {
-		t.Fatalf("reopen: %+v %v", value, err)
+	if value.Value != "kept" {
+		t.Fatalf("reopen: %+v", value)
 	}
 }
