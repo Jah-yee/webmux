@@ -17,6 +17,7 @@ const groups: Array<[z.ZodType, string[]]> = [
   [S.CodeLocationSchema, ["code-locate"]],
   [S.ConfigSchema, ["config"]],
   [S.DirectoriesSchema, ["fs-dirs-default", "fs-dirs-empty", "fs-dirs-prefix"]],
+  [S.ErrorSchema, ["settings-conflict"]],
   [S.NoContentSchema, ["fs-mkdir", "launch-delete", "push-unsubscribe"]],
   [S.HealthSchema, ["health"]],
   [
@@ -57,6 +58,11 @@ const groups: Array<[z.ZodType, string[]]> = [
     ],
   ],
   [z.array(S.SessionInfoSchema), ["sessions-list-empty", "sessions-list"]],
+  [
+    S.SettingsSnapshotSchema,
+    ["settings-get", "settings-patch", "settings-reset"],
+  ],
+  [S.SettingsEventSchema, ["ws-settings-snapshot", "ws-settings-update"]],
   [
     S.TunnelSettingsSchema,
     ["tunnel-enabled", "tunnel-get", "tunnel-reset", "tunnel-settings"],

@@ -58,7 +58,7 @@
       <div class="space-y-2">
         <p class="text-sm font-medium">主题</p>
         <div class="flex flex-wrap gap-2" role="group" aria-label="主题">
-          {#each [{ value: null, label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }] as option}
+          {#each [{ value: null, label: "跟随系统" }, { value: "light", label: "浅色" }, { value: "dark", label: "深色" }] as option (option.value)}
             <Button
               variant={settings.values.theme === option.value
                 ? "secondary"

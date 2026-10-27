@@ -1,3 +1,4 @@
+import { SvelteSet } from "svelte/reactivity";
 import { api, APIError, stored, store } from "./api";
 import { connect, type SocketConnection } from "./ws";
 import {
@@ -42,7 +43,7 @@ let socket: SocketConnection | undefined;
 let generation = 0;
 let serial: Promise<unknown> = Promise.resolve();
 let pending: SettingsIntent[] = [];
-const observers = new Set<() => void>();
+const observers = new SvelteSet<() => void>();
 function render() {
   let values = confirmed.values;
   for (const operation of pending) values = { ...values, ...operation(values) };
