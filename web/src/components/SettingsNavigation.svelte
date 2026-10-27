@@ -19,8 +19,27 @@
 
   onMount(() => {
     const targets = sections.map(({ id }) => document.getElementById(id)!);
+    const header = document.querySelector<HTMLElement>(
+      ".safe-area-page > .app-header",
+    );
     const desktop = matchMedia("(min-width: 1024px)");
+    const standalone = matchMedia("(display-mode: standalone)");
     let frame = 0;
+
+    // A Home Screen app keeps the header sticky, so the navigation must clear
+    // its real height: the touch-target padding and safe-area inset make it
+    // taller than the header height constant. Browser tabs let the header
+    // scroll away and keep the CSS offsets.
+    function syncOffset() {
+      const height = standalone.matches
+        ? header?.getBoundingClientRect().height
+        : 0;
+      navigation.style.top = height ? `${height}px` : "";
+    }
+    function onStandaloneChange() {
+      syncOffset();
+      schedule();
+    }
 
     function update() {
       frame = 0;
@@ -64,12 +83,19 @@
     }
 
     for (const target of targets) target.tabIndex = -1;
-    const observer = new ResizeObserver(schedule);
+    const observer = new ResizeObserver((entries) => {
+      if (header && entries.some(({ target }) => target === header))
+        syncOffset();
+      schedule();
+    });
     observer.observe(document.getElementById("settings-content")!);
     observer.observe(navigation);
+    if (header) observer.observe(header, { box: "border-box" });
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     window.addEventListener("hashchange", followHash);
+    standalone.addEventListener("change", onStandaloneChange);
+    syncOffset();
     followHash();
     return () => {
       cancelAnimationFrame(frame);
@@ -77,6 +103,7 @@
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       window.removeEventListener("hashchange", followHash);
+      standalone.removeEventListener("change", onStandaloneChange);
     };
   });
 </script>
@@ -132,16 +159,6 @@
       top: 1rem;
       margin-top: 2rem;
       border-bottom: 0;
-    }
-  }
-  @media (display-mode: standalone) {
-    .settings-navigation {
-      top: calc(2.75rem + env(safe-area-inset-top));
-    }
-  }
-  @media (display-mode: standalone) and (max-height: 450px) {
-    .settings-navigation {
-      top: calc(36px + env(safe-area-inset-top));
     }
   }
 </style>

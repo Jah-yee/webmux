@@ -8,6 +8,7 @@ import Settings from "../../src/pages/Settings.svelte";
 const originalURL = location.href;
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await cleanup();
   await userEvent.cleanup();
   vi.unstubAllGlobals();
@@ -16,30 +17,37 @@ afterEach(async () => {
   await page.viewport(1024, 900);
 });
 
+function stubBackend() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async (input) => {
+      const path = new URL(String(input), location.href).pathname;
+      if (path === "/api/settings")
+        return Response.json({
+          revision: 0,
+          updatedAt: "",
+          values: emptySettings,
+        });
+      if (path === "/api/launch-configs") return Response.json([]);
+      if (path === "/api/config") return Response.json({ defaultCwd: "/tmp" });
+      return Response.json({ error: "unavailable" }, { status: 503 });
+    }),
+  );
+}
+
+async function openSettings() {
+  stubBackend();
+  stopSettings();
+  await reloadSettings();
+  stopSettings();
+  await reloadSettings();
+  render(Settings);
+}
+
 for (const width of [1280, 393]) {
   test(`section links stay reachable and preserve editing at ${width}px`, async () => {
     await page.viewport(width, 851);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn<typeof fetch>(async (input) => {
-        const path = new URL(String(input), location.href).pathname;
-        if (path === "/api/settings")
-          return Response.json({
-            revision: 0,
-            updatedAt: "",
-            values: emptySettings,
-          });
-        if (path === "/api/launch-configs") return Response.json([]);
-        if (path === "/api/config")
-          return Response.json({ defaultCwd: "/tmp" });
-        return Response.json({ error: "unavailable" }, { status: 503 });
-      }),
-    );
-    stopSettings();
-    await reloadSettings();
-    stopSettings();
-    await reloadSettings();
-    render(Settings);
+    await openSettings();
     const nav = page.getByRole("navigation", { name: "设置分区" });
     const current = () =>
       nav.element().querySelector("a[data-active]")?.getAttribute("href");
@@ -68,6 +76,9 @@ for (const width of [1280, 393]) {
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       innerWidth,
     );
+    expect(
+      document.querySelector<HTMLElement>(".settings-navigation")!.style.top,
+    ).toBe("");
 
     document.getElementById("preview")!.scrollIntoView();
     await expect.poll(current).toBe("#preview");
@@ -75,3 +86,43 @@ for (const width of [1280, 393]) {
     await expect.poll(current).toBe("#quick-commands");
   });
 }
+
+test("standalone navigation follows the measured header height", async () => {
+  await page.viewport(393, 851);
+  const nativeMatchMedia = window.matchMedia.bind(window);
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query) =>
+      ({
+        matches:
+          query === "(display-mode: standalone)"
+            ? true
+            : nativeMatchMedia(query).matches,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }) as MediaQueryList,
+  );
+  await openSettings();
+  const nav = page.getByRole("navigation", { name: "设置分区" });
+  await expect
+    .element(nav.getByRole("link", { name: "快捷指令" }))
+    .toBeVisible();
+  const header = document.querySelector<HTMLElement>(
+    ".safe-area-page > .app-header",
+  )!;
+  const navigation = document.querySelector<HTMLElement>(
+    ".settings-navigation",
+  )!;
+  await expect
+    .poll(() =>
+      Math.round(
+        parseFloat(navigation.style.top) -
+          header.getBoundingClientRect().height,
+      ),
+    )
+    .toBe(0);
+});
