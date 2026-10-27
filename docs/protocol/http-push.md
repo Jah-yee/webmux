@@ -35,6 +35,6 @@
 }
 ```
 
-`title` 为去除控制字符、截断到 80 字符的会话标题，为空或 `include_title = false` 时为 `WebMux`；`body` 按种类固定（需要回答、等待授权、出错停止、回合结束、有新通知、响铃提醒）；`navigate` 为登记时的来源加 `/s/<ID>`。负载不含 cwd、命令、预览、OSC 正文或终端输出。测试通知的标题为 `WebMux`、正文为 `测试通知`，`webmux` 为 `{"v": 1, "test": true}`。
+`title` 为去除控制字符、截断到 80 字符的会话标题，为空或 `include_title = false` 时为 `WebMux`；`body` 按种类固定，形如“等待授权 · Agent 请求执行工具操作”：前半是与会话列表一致的短标签（需要回答、等待授权、本轮完成、出错停止、有通知、响铃提醒），后半是可执行的下一步；`navigate` 为登记时的来源加 `/s/<ID>`。负载不含 cwd、命令、预览、OSC 正文或终端输出。测试通知的标题为 `WebMux 测试通知`、正文为 `若看到此消息，说明推送已生效`，`webmux` 为 `{"v": 1, "test": true}`。
 
 前端 Service Worker `/sw.js` 只处理 `push` 与 `notificationclick`，不拦截请求、不持有 Token；点击时只用 `webmux.sessionId`（须匹配 `^[a-z2-7]{8}$`）与自身来源拼出 `/s/<ID>`，否则打开 `/`。

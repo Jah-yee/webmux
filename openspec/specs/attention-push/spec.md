@@ -1,7 +1,7 @@
 # attention-push Specification
 
 ## Purpose
-在用户离开页面、关闭浏览器标签或手机锁屏后，通过 Web Push 把会话的明确注意力信号（提问、授权、回合结束、错误、终端通知）提醒到已订阅的设备，并以 Cloudflare Named Tunnel 作为手机端的安全上下文。
+在用户离开页面、关闭浏览器标签或手机锁屏后，通过 Web Push 把会话的明确注意力信号（提问、授权、本轮完成、错误、终端通知）提醒到已订阅的设备，并以 Cloudflare Named Tunnel 作为手机端的安全上下文。
 
 ## Requirements
 
@@ -172,7 +172,7 @@
 #### Scenario: 测试成功
 
 - **WHEN** 推送服务以 201 接受全部订阅的测试通知
-- **THEN** 接口返回 200，`accepted` 等于 `devices`，每台设备显示标题为“WebMux”、正文为“测试通知”的通知
+- **THEN** 接口返回 200，`accepted` 等于 `devices`，每台设备显示标题为“WebMux 测试通知”、正文为“若看到此消息，说明推送已生效”的通知
 
 #### Scenario: 部分订阅已失效
 
@@ -234,12 +234,12 @@
 
 ### Requirement: 推送内容
 
-推送负载 SHALL 是不超过 4096 字节的 JSON，含 Declarative Web Push 字段 `web_push: 8030` 与 `notification`（`title`、`body`、`navigate`、`tag`），以及 `webmux` 对象（`v`、`sessionId`、`kind`、`source`、`since`）。`title` 为会话标题（去除控制字符、截断至 80 字符）；标题为空或 `include_title = false` 时为“WebMux”。`body` 为该种类的固定文案，`navigate` 为订阅来源加 `/s/<会话 ID>`，`tag` 按会话区分。负载 MUST NOT 含 cwd、命令、预览、OSC 通知正文或任何 PTY 输出。
+推送负载 SHALL 是不超过 4096 字节的 JSON，含 Declarative Web Push 字段 `web_push: 8030` 与 `notification`（`title`、`body`、`navigate`、`tag`），以及 `webmux` 对象（`v`、`sessionId`、`kind`、`source`、`since`）。`title` 为会话标题（去除控制字符、截断至 80 字符）；标题为空或 `include_title = false` 时为“WebMux”。`body` 为该种类的固定文案（形如“等待授权 · Agent 请求执行工具操作”，前半是会话列表同款短标签，后半是可执行的下一步），`navigate` 为订阅来源加 `/s/<会话 ID>`，`tag` 按会话区分。负载 MUST NOT 含 cwd、命令、预览、OSC 通知正文或任何 PTY 输出。
 
 #### Scenario: 授权请求的负载
 
 - **WHEN** 来源为 `https://term.example.com` 的订阅收到标题为 `deploy` 的会话 `abcdefgh` 的 permission 提醒
-- **THEN** 解密后的负载中 `notification.title` 为 `deploy`，`notification.body` 为“等待授权”，`notification.navigate` 为 `https://term.example.com/s/abcdefgh`，`webmux.kind` 为 `permission`
+- **THEN** 解密后的负载中 `notification.title` 为 `deploy`，`notification.body` 为“等待授权 · Agent 请求执行工具操作”，`notification.navigate` 为 `https://term.example.com/s/abcdefgh`，`webmux.kind` 为 `permission`
 
 #### Scenario: 不包含终端内容
 

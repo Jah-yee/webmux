@@ -72,7 +72,7 @@ add-zsh-hook precmd _webmux_osc7
 | -------- | ----------------------------------------------------------------------------------------------- |
 | 需要回答 | `OSC 7501` 状态 `blocked`（`kind=question`、`auth` 或未注明）；Warp 结构化事件 `question_asked` |
 | 等待授权 | `OSC 7501` 状态 `blocked` 且 `kind=permission`；Warp 结构化事件 `permission_request`            |
-| 已完成   | `OSC 7501` 状态 `done`；Warp 结构化事件 `stop` / `idle_prompt`                                  |
+| 本轮完成 | `OSC 7501` 状态 `done`；Warp 结构化事件 `stop` / `idle_prompt`                                  |
 | 出错停止 | `OSC 7501` 状态 `error`；Warp 结构化事件 `stop_failure`                                         |
 | 有通知   | 桌面通知序列 `OSC 9` / `OSC 777;notify`                                                         |
 | 响铃提醒 | 终端响铃（BEL），在你最后一次输入 1 秒后才计入，避开补全响铃                                    |

@@ -21,7 +21,7 @@ Service Worker 收到推送后 SHALL 立即用负载中的 `notification.title`�
 #### Scenario: 正常负载
 
 - **WHEN** 收到会话 `abcdefgh` 的 question 推送
-- **THEN** 设备显示标题为会话标题、正文为“需要回答”的通知，同一会话的后续通知替换前一条
+- **THEN** 设备显示标题为会话标题、正文为“需要回答 · Agent 正在等待你的输入”的通知，同一会话的后续通知替换前一条
 
 #### Scenario: 无法解析的负载
 
@@ -123,17 +123,16 @@ Service Worker 收到推送后 SHALL 立即用负载中的 `notification.title`�
 
 ### Requirement: Quick Tunnel 提示
 
-`GET /api/push` 报告 `quick_tunnel` 时，卡片 SHALL 说明 Quick Tunnel 每次启动更换地址，无法持续接收推送，并列出改用 Named Tunnel 的步骤：
+`GET /api/push` 报告 `quick_tunnel` 时，卡片 SHALL 先用一句话说明 Quick Tunnel 每次启动更换地址、旧订阅点开即失效，再给出改用 Named Tunnel 的步骤：
 
 1. 在 Cloudflare 控制台创建 Tunnel，把公共主机名指向 WebMux 本地地址；
-2. 在 WebMux 配置的 `[tunnel]` 中写入 `token` 与 `hostname`；
-3. 重启 WebMux 并开启公网隧道；
-4. 用新的公网链接打开 WebMux 并开启推送。
+2. 在“设置 → 公网访问”中选择 Named Tunnel，填写凭据与 `hostname`，保存并启用，无需重启；
+3. 用新的公网链接打开 WebMux 并重新开启推送。
 
 #### Scenario: 从 Quick Tunnel 打开
 
 - **WHEN** 用户从 `https://abc.trycloudflare.com` 打开设置页
-- **THEN** 卡片显示上述步骤，提及 `tunnel.token` 与 `tunnel.hostname`，不提供开启开关
+- **THEN** 卡片先显示旧订阅失效的结论，再显示上述步骤，不提供开启开关
 
 ### Requirement: 不支持来源提示
 
@@ -169,7 +168,7 @@ Service Worker 收到推送后 SHALL 立即用负载中的 `notification.title`�
 
 ### Requirement: 送达限制说明
 
-卡片 SHALL 简要说明推送是尽力送达：锁屏、省电、勿扰或设备离线超过有效期时可能延迟或丢失；无 Google Play 服务的 Android 设备不支持；桌面 Chrome、Edge 与 Firefox 需要浏览器进程在运行。会话列表中的状态仍是唯一准确来源。
+卡片 SHALL 以列表简要说明推送是尽力送达：锁屏、省电、勿扰或设备离线超过有效期时可能延迟或丢失；无 Google Play 服务的 Android 设备不支持；桌面 Chrome、Edge 与 Firefox 需要浏览器进程在运行。会话列表中的状态仍是唯一准确来源。
 
 #### Scenario: 查看说明
 

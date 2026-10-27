@@ -5,6 +5,9 @@
 
 // Same pattern as SessionInfoSchema.id in src/schemas.ts.
 const SESSION_ID = /^[a-z2-7]{8}$/;
+// Keep in sync with internal/push/alert.go (guarded by
+// TestServiceWorkerFallback): a payload that shows nothing can make the
+// browser revoke the subscription.
 const FALLBACK = { title: "WebMux", body: "有会话需要关注", tag: "webmux" };
 
 // Reads the notification fields and session ID from a push payload. Anything

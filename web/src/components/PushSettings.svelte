@@ -128,7 +128,7 @@
   <Card.Header>
     <Card.Title>通知推送</Card.Title>
     <Card.Description
-      >会话提问、等待授权、回合结束、出错或发出终端通知时提醒本设备；页面关闭或手机锁屏后也能收到，点击通知回到对应会话。只对当前设备生效。</Card.Description
+      >会话提问、等待授权、本轮完成、出错或发出终端通知时提醒本设备；页面关闭或手机锁屏后也能收到，点击通知回到对应会话。只对当前设备生效。</Card.Description
     >
   </Card.Header>
   <Card.Content class="space-y-4">
@@ -201,11 +201,12 @@
           </p>
         {:else if advice === "quick_tunnel"}
           <p class="font-medium">Quick Tunnel 无法持续接收推送</p>
+          <p>Quick Tunnel 每次启动都会更换地址，旧订阅点开即失效。</p>
           <p>
-            Quick Tunnel 每次启动都会更换地址，旧订阅点开即失效。在 Cloudflare
-            控制台创建 Tunnel 并设置公共主机名路由，再到“设置 → 公网访问” 选择
-            Named Tunnel，填写凭据与 hostname，保存并启用，无需重启。
-            用新的公网链接打开 WebMux 后开启推送。
+            请改用 Cloudflare Named Tunnel：在 Cloudflare 控制台创建 Tunnel
+            并设置公共主机名，再到“设置 → 公网访问”选择 Named Tunnel，填写凭据与
+            hostname，保存并启用，无需重启。用新的公网链接打开 WebMux
+            后重新开启推送。
           </p>
           <a class="underline underline-offset-2" href="/settings/tunnel"
             >查看公网访问配置</a
@@ -255,10 +256,14 @@
       <InlineNotice tone="success">{notice}</InlineNotice>
     {/if}
 
-    <p class="text-xs text-muted-foreground">
-      推送是尽力送达：锁屏、省电、勿扰或设备离线超过有效期时可能延迟或丢失；无
-      Google Play 服务的 Android 设备不支持；桌面 Chrome、Edge 与 Firefox
-      需要浏览器进程在运行。会话列表中的状态仍是唯一准确来源。
-    </p>
+    <div class="space-y-1 text-xs text-muted-foreground">
+      <p class="font-medium">推送是尽力送达</p>
+      <ul class="list-disc space-y-1 pl-5">
+        <li>锁屏、省电、勿扰或设备离线超过有效期时，可能延迟或丢失。</li>
+        <li>无 Google Play 服务的 Android 设备不支持。</li>
+        <li>桌面 Chrome、Edge 与 Firefox 需要浏览器进程在运行。</li>
+        <li>会话列表中的状态仍是唯一准确来源。</li>
+      </ul>
+    </div>
   </Card.Content>
 </Card.Root>
