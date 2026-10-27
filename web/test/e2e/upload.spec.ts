@@ -94,6 +94,65 @@ test("file chooser shows progress, survives foreground replay, and pastes a shel
   }
 });
 
+test("file chooser uploads every selected file and reports batch progress", async ({
+  page,
+  workDir,
+}) => {
+  const id = await createShell(page, "Multi-file upload", workDir);
+  const gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()];
+  const bodies: string[] = [];
+  await page.route(`**/api/sessions/${id}/upload`, async (route) => {
+    const index = bodies.length;
+    bodies.push(route.request().postDataBuffer()?.toString("utf8") ?? "");
+    await (gates[index]?.promise ?? Promise.resolve());
+    await route.continue();
+  });
+  try {
+    await page.locator(".xterm-helper-textarea").focus();
+    await page.keyboard.type("cat ");
+    const chooser = page.waitForEvent("filechooser");
+    await (await headerAction(page, "上传文件")).click();
+    await (
+      await chooser
+    ).setFiles([
+      {
+        name: "first.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("FIRST_FILE_CONTENT\n"),
+      },
+      {
+        name: "second.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("SECOND_FILE_CONTENT\n"),
+      },
+    ]);
+    // The picker's batch runs serially: the second request only starts after
+    // the first upload finished and its path was inserted.
+    await expect(
+      page.getByRole("status").filter({ hasText: "first.txt（1/2）" }),
+    ).toBeVisible();
+    await expect.poll(() => bodies.length).toBe(1);
+    gates[0]!.resolve();
+    await expect(
+      page.getByRole("status").filter({ hasText: "second.txt（2/2）" }),
+    ).toBeVisible();
+    await expect.poll(() => bodies.length).toBe(2);
+    gates[1]!.resolve();
+    await expect(
+      page.getByRole("progressbar", { name: "文件上传进度" }),
+    ).toBeHidden();
+    await expect(page.locator(".xterm-rows")).toContainText("first.txt");
+    await expect(page.locator(".xterm-rows")).toContainText("second.txt");
+    expect(bodies[0]).toContain("first.txt");
+    expect(bodies[1]).toContain("second.txt");
+    await page.locator(".xterm-helper-textarea").press("Enter");
+    await expectTerminalLine(page, "FIRST_FILE_CONTENT");
+    await expectTerminalLine(page, "SECOND_FILE_CONTENT");
+  } finally {
+    for (const gate of gates) gate.resolve();
+  }
+});
+
 test("cancelling an uploaded path during replay never pastes it after reconnect", async ({
   page,
   request,
