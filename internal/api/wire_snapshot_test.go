@@ -618,9 +618,19 @@ func wireSessions(f *wireFixture) {
 	// Session list events: the empty snapshot, then one session's life.
 	list := f.dial("/ws/sessions")
 	f.event(list, "ws-sessions-snapshot-empty", func(e map[string]any) bool { return e["type"] == "snapshot" })
-	exited := f.call("session-create-exiting", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "exit 3"}, "name": "exiting"}, 201)
+	// The command waits for a line so the create response is always its running
+	// state; a shell that exits immediately can publish the exit before the
+	// handler reads Info.
+	exited := f.call("session-create-exiting", "POST", "/api/sessions", map[string]any{"cmd": []string{"/bin/sh", "-c", "read _; exit 3"}, "name": "exiting"}, 201)
 	exitedID := str(exited, "id")
 	f.event(list, "ws-sessions-created", func(e map[string]any) bool { return e["type"] == "created" })
+	item, err := f.manager.Get(exitedID)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	if err := item.Write([]byte("\n")); err != nil {
+		f.t.Fatal(err)
+	}
 	f.event(list, "ws-sessions-updated", func(e map[string]any) bool {
 		return e["type"] == "updated" && str(e["session"], "status") == "exited"
 	})

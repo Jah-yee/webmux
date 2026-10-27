@@ -6,7 +6,7 @@
     "cmd": [
       "/bin/sh",
       "-c",
-      "exit 3"
+      "read _; exit 3"
     ],
     "cols": 80,
     "createdAt": "<time>",
