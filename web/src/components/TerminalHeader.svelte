@@ -148,6 +148,7 @@
   <Input
     bind:ref={fileInput}
     type="file"
+    multiple
     class="hidden"
     aria-label="选择上传文件"
     onchange={(event) => {
