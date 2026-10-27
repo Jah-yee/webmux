@@ -19,8 +19,9 @@ type Console struct {
 
 var _ Terminal = (*Console)(nil)
 
-// OpenConsole switches standard input to raw mode; Restore undoes it.
-func OpenConsole() (*Console, error) {
+// OpenConsole switches standard input to raw mode; Restore undoes it. The
+// interrupt callback exists for the Windows console handler and is unused here.
+func OpenConsole(func()) (*Console, error) {
 	in, out := int(os.Stdin.Fd()), int(os.Stdout.Fd())
 	if !term.IsTerminal(in) || !term.IsTerminal(out) {
 		return nil, ErrNotTerminal

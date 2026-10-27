@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/rainchan/webmux/internal/statefile"
 	"io"
 	"io/fs"
 	"os"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 type persistenceInventory struct {

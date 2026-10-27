@@ -2,6 +2,7 @@ package wire
 
 import (
 	"encoding/json"
+
 	"github.com/rainchan/webmux/internal/contract"
 	"github.com/rainchan/webmux/internal/jsonutil"
 	"github.com/rainchan/webmux/internal/settings"

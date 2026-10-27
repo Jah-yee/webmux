@@ -7,18 +7,20 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/rainchan/webmux/internal/session"
-	"github.com/rainchan/webmux/internal/workspace"
-	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
+
+	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/workspace"
+	"golang.org/x/sys/unix"
 )
 
 type binding struct {
@@ -97,11 +99,15 @@ func (s *Service) sweep() {
 		}
 	}
 }
+
+// fallbackIDs keeps ids unique if the system random source ever fails.
+var fallbackIDs atomic.Uint64
+
 func random() string {
 	var b [18]byte
-	_, err := rand.Read(b[:])
-	if err != nil {
-		panic(err)
+	if _, err := rand.Read(b[:]); err != nil {
+		n := fallbackIDs.Add(1)
+		return "fallback-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatUint(n, 36)
 	}
 	return base64.RawURLEncoding.EncodeToString(b[:])
 }
@@ -111,12 +117,12 @@ func nodePath(id string) (string, error) {
 	b, err := base64.RawURLEncoding.DecodeString(id)
 	p := string(b)
 	if err != nil || strings.ContainsRune(p, 0) || filepath.IsAbs(p) {
-		return "", problem(ErrInvalid, "无效文件标识")
+		return "", problemf(ErrInvalid, "无效文件标识")
 	}
 	if p != "" {
 		for _, part := range strings.Split(p, "/") {
 			if part == "" || part == "." || part == ".." || strings.EqualFold(part, ".git") {
-				return "", problem(ErrInvalid, "路径越界或 Git 内部路径")
+				return "", problemf(ErrInvalid, "路径越界或 Git 内部路径")
 			}
 		}
 	}
@@ -129,7 +135,7 @@ func (s *Service) acquire(ctx context.Context) (func(), error) {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-s.done:
-		return nil, problem(ErrUnavailable, "代码服务已关闭")
+		return nil, problemf(ErrUnavailable, "代码服务已关闭")
 	}
 }
 func git(ctx context.Context, root string, args ...string) ([]byte, error) {
@@ -140,7 +146,7 @@ func git(ctx context.Context, root string, args ...string) ([]byte, error) {
 func (s *Service) bind(ctx context.Context, id string) (*binding, error) {
 	item, err := s.manager.Get(id)
 	if err != nil {
-		return nil, problem(ErrNotFound, "会话不存在")
+		return nil, problemf(ErrNotFound, "会话不存在")
 	}
 	s.mu.Lock()
 	b := s.roots[id]
@@ -154,11 +160,11 @@ func (s *Service) bind(ctx context.Context, id string) (*binding, error) {
 	}
 	for _, segment := range strings.Split(cwd, string(os.PathSeparator)) {
 		if strings.EqualFold(segment, ".git") {
-			return nil, problem(ErrConflict, "会话启动目录位于 Git 内部，代码浏览不可用")
+			return nil, problemf(ErrConflict, "会话启动目录位于 Git 内部，代码浏览不可用")
 		}
 	}
 	if raw, e := git(ctx, cwd, "rev-parse", "--is-inside-git-dir"); e == nil && strings.TrimSpace(string(raw)) == "true" {
-		return nil, problem(ErrConflict, "Git 管理目录不可作为浏览根")
+		return nil, problemf(ErrConflict, "Git 管理目录不可作为浏览根")
 	}
 	root := cwd
 	b = &binding{Context: Context{ID: random(), Kind: "directory", Browse: true, Reason: "普通目录或 Git 不可用；忽略规则与差异不可用"}}
@@ -195,7 +201,7 @@ func (s *Service) bind(ctx context.Context, id string) (*binding, error) {
 	if linked := item.Info().Workspace; linked != nil && b.Diff {
 		expected, e := filepath.EvalSymlinks(linked.WorktreePath)
 		if e != nil || expected != root {
-			return nil, problem(ErrConflict, "工作区关联与浏览根不一致")
+			return nil, problemf(ErrConflict, "工作区关联与浏览根不一致")
 		}
 	}
 	b.Root = root
@@ -215,7 +221,7 @@ func (s *Service) bind(ctx context.Context, id string) (*binding, error) {
 func (s *Service) validate(ctx context.Context, b *binding) error {
 	stat, err := os.Lstat(b.Root)
 	if err != nil || !stat.IsDir() || !os.SameFile(b.identity, stat) {
-		return problem(ErrConflict, "浏览根身份已失效")
+		return problemf(ErrConflict, "浏览根身份已失效")
 	}
 	if b.Diff {
 		top, e := git(ctx, b.Root, "rev-parse", "--show-toplevel")
@@ -224,7 +230,7 @@ func (s *Service) validate(ctx context.Context, b *binding) error {
 		}
 		actual, e := filepath.EvalSymlinks(strings.TrimSuffix(string(top), "\n"))
 		if e != nil || actual != b.Root {
-			return problem(ErrConflict, "工作树根来源已改变")
+			return problemf(ErrConflict, "工作树根来源已改变")
 		}
 		common, e := git(ctx, b.Root, "rev-parse", "--path-format=absolute", "--git-common-dir")
 		if e != nil {
@@ -232,11 +238,11 @@ func (s *Service) validate(ctx context.Context, b *binding) error {
 		}
 		commonPath, e := filepath.EvalSymlinks(strings.TrimSuffix(string(common), "\n"))
 		if e != nil || commonPath != b.gitDirs[1] {
-			return problem(ErrConflict, "仓库 common directory 已改变")
+			return problemf(ErrConflict, "仓库 common directory 已改变")
 		}
 		commonInfo, e := os.Stat(commonPath)
 		if e != nil || !os.SameFile(commonInfo, b.commonIdentity) {
-			return problem(ErrConflict, "仓库 common directory 已替换")
+			return problemf(ErrConflict, "仓库 common directory 已替换")
 		}
 		out, e := git(ctx, b.Root, "rev-parse", "--absolute-git-dir")
 		if e != nil {
@@ -244,11 +250,11 @@ func (s *Service) validate(ctx context.Context, b *binding) error {
 		}
 		p, e := filepath.EvalSymlinks(strings.TrimSuffix(string(out), "\n"))
 		if e != nil || p != b.gitDirs[0] {
-			return problem(ErrConflict, "Git 来源身份已改变")
+			return problemf(ErrConflict, "Git 来源身份已改变")
 		}
 		stat, e = os.Stat(p)
 		if e != nil || !os.SameFile(stat, b.gitIdentity) {
-			return problem(ErrConflict, "Git 管理目录已替换")
+			return problemf(ErrConflict, "Git 管理目录已替换")
 		}
 	}
 	return nil
@@ -280,7 +286,7 @@ func withRoot[T any](ctx context.Context, s *Service, id, cid string, fn func(*b
 	return withBinding(ctx, s, id, func(b *binding) (T, error) {
 		if b.ID != cid {
 			var zero T
-			return zero, problem(ErrConflict, "浏览上下文已改变")
+			return zero, problemf(ErrConflict, "浏览上下文已改变")
 		}
 		return fn(b)
 	})
@@ -305,7 +311,7 @@ func (b *binding) open(p string) (*os.File, error) {
 	full := filepath.Join(b.Root, p)
 	for _, g := range b.gitDirs {
 		if full == g || strings.HasPrefix(full, g+"/") {
-			return nil, problem(ErrInvalid, "Git 管理路径不可读取")
+			return nil, problemf(ErrInvalid, "Git 管理路径不可读取")
 		}
 	}
 	fd, err := unix.Open(b.Root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
@@ -316,7 +322,7 @@ func (b *binding) open(p string) (*os.File, error) {
 	stat, err := f.Stat()
 	if err != nil || !os.SameFile(stat, b.identity) {
 		_ = f.Close()
-		return nil, problem(ErrConflict, "浏览根已替换")
+		return nil, problemf(ErrConflict, "浏览根已替换")
 	}
 	if p == "" {
 		return f, nil
@@ -326,7 +332,7 @@ func (b *binding) open(p string) (*os.File, error) {
 		if i > 0 {
 			if boundary(int(f.Fd())) {
 				_ = f.Close()
-				return nil, problem(ErrInvalid, "嵌套仓库边界不可遍历")
+				return nil, problemf(ErrInvalid, "嵌套仓库边界不可遍历")
 			}
 		}
 		flags := unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC
@@ -339,7 +345,7 @@ func (b *binding) open(p string) (*os.File, error) {
 			if os.IsNotExist(e) {
 				return nil, os.ErrNotExist
 			}
-			return nil, problem(ErrInvalid, "路径不可安全读取: %v", e)
+			return nil, problemf(ErrInvalid, "路径不可安全读取: %v", e)
 		}
 		f = os.NewFile(uintptr(next), full)
 	}
@@ -351,12 +357,12 @@ func (b *binding) open(p string) (*os.File, error) {
 	if stat.IsDir() && p != "" {
 		if boundary(int(f.Fd())) {
 			_ = f.Close()
-			return nil, problem(ErrInvalid, "嵌套仓库边界不可遍历")
+			return nil, problemf(ErrInvalid, "嵌套仓库边界不可遍历")
 		}
 	}
 	if !stat.IsDir() && !stat.Mode().IsRegular() {
 		_ = f.Close()
-		return nil, problem(ErrInvalid, "不支持读取特殊文件或链接")
+		return nil, problemf(ErrInvalid, "不支持读取特殊文件或链接")
 	}
 	return f, nil
 }
@@ -412,7 +418,7 @@ func (b *binding) read(p string) (Document, error) {
 		return Document{}, err
 	}
 	if !before.Mode().IsRegular() {
-		return Document{}, problem(ErrInvalid, "目标不是常规文件")
+		return Document{}, problemf(ErrInvalid, "目标不是常规文件")
 	}
 	candidate := imageCandidate(p)
 	limit := int64(MaxBytes + 1)
@@ -429,12 +435,12 @@ func (b *binding) read(p string) (Document, error) {
 	}
 	current, e := b.open(p)
 	if e != nil {
-		return Document{}, problem(ErrConflict, "读取期间文件已替换")
+		return Document{}, problemf(ErrConflict, "读取期间文件已替换")
 	}
 	defer func() { _ = current.Close() }()
 	now, e := current.Stat()
 	if e != nil || !os.SameFile(before, now) || before.Size() != after.Size() || before.ModTime() != after.ModTime() {
-		return Document{}, problem(ErrConflict, "读取期间文件发生变化，请刷新")
+		return Document{}, problemf(ErrConflict, "读取期间文件发生变化，请刷新")
 	}
 	ident := fileIdentity(before)
 	var d Document
@@ -487,10 +493,10 @@ func (s *Service) get(id, sid string) (*snapshot, error) {
 	defer s.mu.Unlock()
 	v := s.snapshots[sid]
 	if v == nil || time.Since(v.created) > Lifetime {
-		return nil, problem(ErrGone, "内容快照已过期，请刷新")
+		return nil, problemf(ErrGone, "内容快照已过期，请刷新")
 	}
 	if v.session != id {
-		return nil, problem(ErrInvalid, "快照不属于此会话")
+		return nil, problemf(ErrInvalid, "快照不属于此会话")
 	}
 	v.timeUsed = time.Now()
 	return v, nil
@@ -526,7 +532,7 @@ func (s *Service) SnapshotFile(ctx context.Context, id, sid, side string) (File,
 		if side == "old" {
 			d = v.diff.Old
 		} else if side != "new" {
-			return File{}, problem(ErrInvalid, "请选择 old/new 来源")
+			return File{}, problemf(ErrInvalid, "请选择 old/new 来源")
 		}
 		return File{Snapshot: sid, Document: d, Checked: v.diff.Checked}, nil
 	})

@@ -154,11 +154,11 @@
       "count": 1,
       "owner": "fresh-log"
     },
-    "cmd/webmux/tailscalectl.go|*tailscaleController.loadState|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
+    "cmd/webmux/tailscaleownership.go|*tailscaleController.loadState|github.com/rainchan/webmux/internal/statefile.ReadSnapshot": {
       "count": 1,
       "owner": "tailscale-ownership"
     },
-    "cmd/webmux/tailscalectl.go|*tailscaleController.openLock|github.com/rainchan/webmux/internal/statefile.Open": {
+    "cmd/webmux/tailscaleownership.go|*tailscaleController.openLock|github.com/rainchan/webmux/internal/statefile.Open": {
       "count": 1,
       "owner": "tailscale-ownership"
     },

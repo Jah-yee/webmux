@@ -38,7 +38,7 @@ func TestTruncatedObserverReplayRepaintsForegroundAtOriginalSize(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-c", script, "repaint", executable, "-test.run=^TestTruncatedObserverReplayRepaintsForegroundAtOriginalSize$"}, "", map[string]string{"WEBMUX_TEST_REPAINT_HELPER": "1"}, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/bash", "--noprofile", "--norc", "-c", script, "repaint", executable, "-test.run=^TestTruncatedObserverReplayRepaintsForegroundAtOriginalSize$"}, Name: "", Env: map[string]string{"WEBMUX_TEST_REPAINT_HELPER": "1"}, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

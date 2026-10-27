@@ -10,10 +10,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// sun_path is 104 bytes including the terminating NUL.
-const maxSocketPath = 103
-
-const darwinZombie = 5 // SZOMB
+const (
+	// sun_path is 104 bytes including the terminating NUL.
+	maxSocketPath = 103
+	darwinZombie  = 5 // SZOMB
+)
 
 // ProcessIdentity uses the kernel's microsecond process start time.
 func ProcessIdentity(pid int) (Identity, error) {

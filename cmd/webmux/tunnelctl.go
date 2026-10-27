@@ -38,9 +38,21 @@ type tunnelController struct {
 	closed             bool
 }
 
-func newTunnelController(cfg config.TunnelConfig, store *tunnelsettings.Service, local, token string, public *api.PublicOrigins, locate func(context.Context) (string, error), out io.Writer, logger *slog.Logger) *tunnelController {
-	_, web := store.Effective()
-	return &tunnelController{cfg: cfg, store: store, web: web, local: local, token: token, public: public, locate: locate, out: out, logger: logger, state: contract.TunnelOff}
+// tunnelControllerOptions are the launch-time inputs for a tunnelController.
+type tunnelControllerOptions struct {
+	Cfg    config.TunnelConfig
+	Store  *tunnelsettings.Service
+	Local  string
+	Token  string
+	Public *api.PublicOrigins
+	Locate func(context.Context) (string, error)
+	Out    io.Writer
+	Logger *slog.Logger
+}
+
+func newTunnelController(o tunnelControllerOptions) *tunnelController {
+	_, web := o.Store.Effective()
+	return &tunnelController{cfg: o.Cfg, store: o.Store, web: web, local: o.Local, token: o.Token, public: o.Public, locate: o.Locate, out: o.Out, logger: o.Logger, state: contract.TunnelOff}
 }
 
 func (tc *tunnelController) enableErrorLocked() error {

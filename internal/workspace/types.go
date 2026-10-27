@@ -37,8 +37,8 @@ type Error struct {
 
 func (e *Error) Error() string { return e.message }
 func (e *Error) Unwrap() error { return e.kind }
-func problem(kind error, format string, args ...any) error {
-	return &Error{kind, fmt.Sprintf(format, args...)}
+func problemf(kind error, format string, args ...any) error {
+	return &Error{kind: kind, message: fmt.Sprintf(format, args...)}
 }
 
 // errorKind classifies err like the controller does: its own kind, a timeout for

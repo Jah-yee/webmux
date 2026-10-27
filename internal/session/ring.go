@@ -1,6 +1,9 @@
 package session
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 // RingBuffer retains the newest capacity bytes without interpreting terminal output.
 // Offsets count every byte ever written, so a reader that knows how far it got
@@ -12,11 +15,14 @@ type RingBuffer struct {
 	total      uint64
 }
 
-func NewRingBuffer(capacity int) *RingBuffer {
+// ErrRingCapacity rejects a ring that cannot retain any output.
+var ErrRingCapacity = errors.New("ring capacity must be positive")
+
+func NewRingBuffer(capacity int) (*RingBuffer, error) {
 	if capacity < 1 {
-		panic("ring capacity must be positive")
+		return nil, ErrRingCapacity
 	}
-	return &RingBuffer{data: make([]byte, capacity)}
+	return &RingBuffer{data: make([]byte, capacity)}, nil
 }
 func (r *RingBuffer) Write(p []byte) {
 	r.mu.Lock()

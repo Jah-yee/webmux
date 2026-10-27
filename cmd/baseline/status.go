@@ -42,12 +42,12 @@ func (f *fixture) status() metric {
 		predicted := v.Status == session.StatusWaiting
 		observed[i] = fmt.Sprintf("%s: needs_human=%t, status=%s, predicted=%t", cases[i].name, cases[i].needsHuman, v.Status, predicted)
 		if cases[i].name == "agent_question" {
-			check(v.Attention != nil && v.Attention.Kind == attentionkind.Question, "agent question signal missing")
+			checkf(v.Attention != nil && v.Attention.Kind == attentionkind.Question, "agent question signal missing")
 		}
 		if cases[i].name == "agent_permission" {
-			check(v.Attention != nil && v.Attention.Kind == attentionkind.Permission, "agent permission signal missing")
+			checkf(v.Attention != nil && v.Attention.Kind == attentionkind.Permission, "agent permission signal missing")
 		}
-		check(predicted == cases[i].needsHuman, "%s", observed[i])
+		checkf(predicted == cases[i].needsHuman, "%s", observed[i])
 		return 1
 	})
 	for i := range m.Samples {

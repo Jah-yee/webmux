@@ -2,6 +2,7 @@ package session
 
 import (
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -11,6 +12,9 @@ import (
 const (
 	maxPreviewLines = 100
 	maxPreviewRunes = 120
+	// previewRefreshInterval bounds how often a burst of PTY output rebuilds
+	// the preview string; the manager flush below catches the final chunk.
+	previewRefreshInterval = 200 * time.Millisecond
 )
 
 // Preview observes the PTY's current screen, not its append-only output history.
@@ -20,6 +24,9 @@ type Preview struct {
 	screen *vt.Terminal
 	last   string // Bottom nonempty screen row, used for status classification.
 	text   string
+	// dirty marks screen changes not yet folded into text and last.
+	dirty       bool
+	refreshedAt time.Time
 	// colorSchemeReports is DEC mode 2031 (color scheme change reports).
 	colorSchemeReports bool
 }
@@ -47,19 +54,55 @@ func (s *Preview) Resize(cols, rows uint16) string {
 	// increase then pulls nonexistent history and leaves a nil viewport row.
 	normal := s.screen.Buffers().Normal()
 	normal.YBase, normal.YDisp = 0, 0
+	s.dirty = false
+	s.refreshedAt = time.Now()
 	return s.snapshot()
 }
 
 // Feed consumes split UTF-8 and terminal control sequences without changing
 // the bytes delivered to subscribers. Screen erasure also clears the preview.
+// It refreshes immediately; the session read path uses FeedThrottled.
 func (s *Preview) Feed(p []byte) string {
+	s.write(p)
+	return s.refresh(true)
+}
+
+// FeedThrottled is Feed for the PTY hot path: it records the screen change and
+// rebuilds text at most once per previewRefreshInterval.
+func (s *Preview) FeedThrottled(p []byte) string {
+	s.write(p)
+	return s.refresh(false)
+}
+
+func (s *Preview) write(p []byte) {
 	if len(p) == 0 {
-		return s.text
+		return
 	}
+	created := false
 	if s.screen == nil {
 		s.Resize(80, 24)
+		created = true
 	}
 	s.screen.Write(p)
+	s.dirty = true
+	if created {
+		// Resize stamped refreshedAt; the first chunk must still render now.
+		s.refreshedAt = time.Time{}
+	}
+}
+
+// refresh rebuilds text and last from a dirty screen, at most once per
+// previewRefreshInterval unless forced. It is called with Session.mu held.
+func (s *Preview) refresh(force bool) string {
+	if !s.dirty {
+		return s.text
+	}
+	now := time.Now()
+	if !force && now.Sub(s.refreshedAt) < previewRefreshInterval {
+		return s.text
+	}
+	s.dirty = false
+	s.refreshedAt = now
 	return s.snapshot()
 }
 

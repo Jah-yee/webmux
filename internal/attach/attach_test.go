@@ -115,7 +115,7 @@ func eventually(t *testing.T, what string, ok func() bool) {
 
 func TestAttachInputOutputResizeAndDetach(t *testing.T) {
 	m, client := server(t)
-	s, err := m.Create("", []string{"sh", "-c", "stty -echo; while read line; do echo \"got:$line\"; stty size; done"}, "", nil, "")
+	s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"sh", "-c", "stty -echo; while read line; do echo \"got:$line\"; stty size; done"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestAttachInputOutputResizeAndDetach(t *testing.T) {
 
 func TestAttachReportsExitCodeAndMissingSession(t *testing.T) {
 	m, client := server(t)
-	s, err := m.Create("", []string{"sh", "-c", "read x; exit 7"}, "", nil, "")
+	s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"sh", "-c", "read x; exit 7"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestAttachReportsExitCodeAndMissingSession(t *testing.T) {
 
 func TestObserveSendsNothing(t *testing.T) {
 	m, client := server(t)
-	s, err := m.Create("", []string{"cat"}, "", nil, "")
+	s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"cat"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestObserveSendsNothing(t *testing.T) {
 // must not claim it back: input is dropped under a banner until Enter.
 func TestOtherControllerKeepsControlUntilEnter(t *testing.T) {
 	m, client := server(t)
-	s, err := m.Create("", []string{"sh", "-c", "stty -echo; while read line; do echo \"got:$line\"; done"}, "", nil, "")
+	s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"sh", "-c", "stty -echo; while read line; do echo \"got:$line\"; done"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestAttachReportsNativeColorScheme(t *testing.T) {
 				}
 				return conn, err
 			}
-			s, err := m.Create("", []string{"sh", "-c", `stty -icanon -echo; printf '\033[?2031hready\n'; head -c 9 | tr '\033' E; echo; sleep 30`}, "", nil, "")
+			s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"sh", "-c", `stty -icanon -echo; printf '\033[?2031hready\n'; head -c 9 | tr '\033' E; echo; sleep 30`}, Name: "", Env: nil, ConfigID: ""})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -415,7 +415,7 @@ func TestRunCancelsAndJoinsIdleInput(t *testing.T) {
 				}
 				return conn, err
 			}
-			s, err := m.Create("", []string{"sh", "-c", "sleep 60"}, "", nil, "")
+			s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"sh", "-c", "sleep 60"}, Name: "", Env: nil, ConfigID: ""})
 			if err != nil {
 				t.Fatal(err)
 			}

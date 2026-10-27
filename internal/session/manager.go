@@ -52,10 +52,17 @@ type Manager struct {
 	stopOnce sync.Once
 	stopped  bool
 	initErr  error
+	// createMu serializes process startup without holding mu across fork/exec.
+	createMu sync.Mutex
 }
 
-var ErrNotFound = errors.New("session not found")
-var ErrRunning = errors.New("session is still running")
+// Error kinds; the workspace maps them to request errors.
+var (
+	ErrNotFound     = errors.New("session not found")
+	ErrRunning      = errors.New("session is still running")
+	ErrInvalid      = errors.New("invalid session request")
+	ErrShuttingDown = errors.New("server is shutting down")
+)
 
 func NewManager(o Options) *Manager {
 	if o.ScrollbackBytes == 0 {
@@ -81,57 +88,82 @@ func NewManager(o Options) *Manager {
 	return m
 }
 
-// Create starts a session. env holds explicit variables added to the
-// server's environment for this session only (see ValidateEnv). configID
-// records the saved launch config the session came from, empty for an explicit
-// command, so clients can apply that config's display settings.
-func (m *Manager) Create(cwd string, cmd []string, name string, env map[string]string, configID string) (*Session, error) {
+// CreateInput is the resolved start request. Cmd and Env may come from the
+// saved launch config named by ConfigID; the workspace layer validates that
+// client input does not combine the two forms.
+type CreateInput struct {
+	Cwd      string
+	Cmd      []string
+	Name     string
+	Env      map[string]string
+	ConfigID string
+}
+
+// Create starts a session. Env holds explicit variables added to the server's
+// environment for this session only (see ValidateEnv). ConfigID records the
+// saved launch config the session came from, empty for an explicit command, so
+// clients can apply that config's display settings.
+func (m *Manager) Create(in CreateInput) (*Session, error) {
 	if m.initErr != nil {
 		return nil, fmt.Errorf("process reaper: %w", m.initErr)
 	}
-	if err := ValidateEnv(env); err != nil {
-		return nil, err
+	if err := ValidateEnv(in.Env); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
+	cwd := in.Cwd
 	if cwd == "" {
 		cwd = m.options.DefaultCwd
 	}
 	cwd, err := pathutil.Expand(cwd)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	stat, err := os.Stat(cwd)
 	if err != nil {
-		return nil, fmt.Errorf("directory: %w", err)
+		return nil, fmt.Errorf("%w: directory: %w", ErrInvalid, err)
 	}
 	if !stat.IsDir() {
-		return nil, errors.New("path is not a directory")
+		return nil, fmt.Errorf("%w: path is not a directory", ErrInvalid)
 	}
-	if len(cmd) == 0 || cmd[0] == "" {
-		return nil, errors.New("command requires an executable")
+	if len(in.Cmd) == 0 || in.Cmd[0] == "" {
+		return nil, fmt.Errorf("%w: command requires an executable", ErrInvalid)
 	}
 	var raw [5]byte
 	if _, err = rand.Read(raw[:]); err != nil {
 		return nil, err
 	}
 	id := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw[:]))
+	// Serialize creates, but run fork/exec and its bounded cleanup outside mu.
+	m.createMu.Lock()
+	defer m.createMu.Unlock()
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.stopped {
-		return nil, errors.New("server is shutting down")
+	stopped := m.stopped
+	m.mu.Unlock()
+	if stopped {
+		return nil, ErrShuttingDown
 	}
-	s, err := start(id, cwd, name, cmd, m.options.ScrollbackBytes, startOptions{
+	s, err := start(id, cwd, in.Name, in.Cmd, m.options.ScrollbackBytes, startOptions{
 		agentProtocol: !m.options.DisableAgentProtocol,
 		bellAttention: !m.options.DisableBellAttention,
 		programStatus: !m.options.DisableProgramStatus,
-		env:           env,
-		configID:      configID,
+		env:           in.Env,
+		configID:      in.ConfigID,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	m.mu.Lock()
+	if m.stopped {
+		m.mu.Unlock()
+		s.Close()
+		// Shutdown waits for createMu, so finish cleanup before it snapshots.
+		<-s.Done()
+		return nil, ErrShuttingDown
 	}
 	m.sessions[id] = s
 	info := s.Info()
 	m.publishLocked(Event{Type: "created", Session: &info})
+	m.mu.Unlock()
 	slog.Info("session created", "id", id)
 	return s, nil
 }
@@ -261,11 +293,17 @@ func (m *Manager) updates() {
 func (m *Manager) Shutdown(ctx context.Context) {
 	m.mu.Lock()
 	m.stopped = true
+	m.mu.Unlock()
+	// Wait for an in-flight create to either register or clean up its process
+	// before taking the list Shutdown will close.
+	m.createMu.Lock()
+	m.mu.Lock()
 	list := make([]*Session, 0, len(m.sessions))
 	for _, s := range m.sessions {
 		list = append(list, s)
 	}
 	m.mu.Unlock()
+	m.createMu.Unlock()
 	for _, s := range list {
 		s.Close()
 	}

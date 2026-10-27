@@ -204,7 +204,7 @@ func TestRealSessionAnswersProbeWithoutClients(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", script}, "", nil, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/bash", "-c", script}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestReplayDoesNotAnswerProbeAgain(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", script}, "", nil, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/bash", "-c", script}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

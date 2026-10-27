@@ -92,9 +92,9 @@ func TestShutdownDuringRepeatedPreviewControls(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", []string{"/bin/sh", "-c",
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/sh", "-c",
 		`while :; do printf '\033[100000Smarker\n'; sleep 0.01; done`,
-	}, "", nil, "")
+	}, Name: "", Env: nil, ConfigID: ""})
 
 	if err != nil {
 		t.Fatal(err)

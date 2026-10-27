@@ -87,11 +87,11 @@ func TestWSLServiceStatusAndWatch(t *testing.T) {
 		}
 	}
 	expect(0)
-	first, err := m.Create(dir, []string{"cat"}, "", nil, "")
+	first, err := m.Create(session.CreateInput{Cwd: dir, Cmd: []string{"cat"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Create(dir, []string{"cat"}, "", nil, ""); err != nil {
+	if _, err := m.Create(session.CreateInput{Cwd: dir, Cmd: []string{"cat"}, Name: "", Env: nil, ConfigID: ""}); err != nil {
 		t.Fatal(err)
 	}
 	expect(2)

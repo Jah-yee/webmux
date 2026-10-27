@@ -3,12 +3,13 @@ package statefile
 import (
 	"encoding/json"
 	"errors"
-	"github.com/rainchan/webmux/internal/jsonutil"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"syscall"
+
+	"github.com/rainchan/webmux/internal/jsonutil"
 )
 
 // Handle owns one registered file and its lifetime lock. Values belong to the

@@ -6,6 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+
 	"github.com/coder/websocket"
 	"github.com/rainchan/webmux/internal/codeview"
 	"github.com/rainchan/webmux/internal/config"
@@ -18,12 +25,6 @@ import (
 	"github.com/rainchan/webmux/internal/settings"
 	"github.com/rainchan/webmux/internal/wire"
 	"github.com/rainchan/webmux/internal/workspace"
-	"io"
-	"log/slog"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
 )
 
 // Deps are the services the handlers call. cmd/ constructs every service;
@@ -119,7 +120,12 @@ func reply(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 func failure(w http.ResponseWriter, status int, err error) {
-	reply(w, status, contract.ErrorResponse{Error: err.Error()})
+	message := err.Error()
+	if status == http.StatusInternalServerError {
+		slog.Error("request failed", "status", status, "error", err)
+		message = http.StatusText(status)
+	}
+	reply(w, status, contract.ErrorResponse{Error: message})
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 65536)

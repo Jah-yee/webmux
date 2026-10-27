@@ -7,7 +7,7 @@ import (
 )
 
 func TestPersistenceScanRules(t *testing.T) {
-	cases := []struct {
+	tests := []struct {
 		name, source, key string
 		count             int
 		fail              bool
@@ -23,7 +23,7 @@ func TestPersistenceScanRules(t *testing.T) {
 		{"invalid syntax", `package`, "", 0, true},
 		{"comment ignored", `package p; // os.WriteFile("ignored.json",nil,0600)`, "", 0, false},
 	}
-	for _, tt := range cases {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := persistenceScan(fstest.MapFS{"internal/p/a.go": {Data: []byte(tt.source)}})
 			if (err != nil) != tt.fail {
@@ -77,7 +77,7 @@ func TestPersistenceInventoryRules(t *testing.T) {
 	if errs := checkPersistence(tree(), actual(), catalog()); len(errs) != 0 {
 		t.Fatal(errs)
 	}
-	cases := []struct {
+	tests := []struct {
 		name, want string
 		mutate     func(fstest.MapFS, map[string]int, *persistenceInventory)
 	}{
@@ -113,7 +113,7 @@ func TestPersistenceInventoryRules(t *testing.T) {
 			f["docs/persistence.md"].Data = []byte("no table")
 		}},
 	}
-	for _, tt := range cases {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f, a, c := tree(), actual(), catalog()
 			tt.mutate(f, a, &c)

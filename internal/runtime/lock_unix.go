@@ -7,10 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/rainchan/webmux/internal/statefile"
 	"net"
 	"os"
 	"path/filepath"
+
+	"github.com/rainchan/webmux/internal/statefile"
 )
 
 // ErrLocked means another live instance owns the runtime directory.

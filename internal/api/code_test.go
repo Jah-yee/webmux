@@ -5,10 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/rainchan/webmux/internal/codeview"
-	"github.com/rainchan/webmux/internal/config"
-	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/session"
 	"image"
 	"image/png"
 	"io"
@@ -22,6 +18,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/codeview"
+	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/session"
 )
 
 func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
@@ -41,7 +42,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	item, e := m.Create(c.DefaultCwd, []string{"/bin/sh"}, "", nil, "")
+	item, e := m.Create(session.CreateInput{Cwd: c.DefaultCwd, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -98,7 +99,7 @@ func TestCodeAPIReadOnlyAndSessionSecurity(t *testing.T) {
 	if e != nil || string(data) != "unchanged code\n" {
 		t.Fatal("read changed file")
 	}
-	other, e := m.Create(c.DefaultCwd, []string{"/bin/sh"}, "", nil, "")
+	other, e := m.Create(session.CreateInput{Cwd: c.DefaultCwd, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -122,7 +123,7 @@ func TestCodeRawBytesHeadersAndStreaming(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	item, e := m.Create(c.DefaultCwd, []string{"/bin/sh"}, "", nil, "")
+	item, e := m.Create(session.CreateInput{Cwd: c.DefaultCwd, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}

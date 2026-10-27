@@ -41,7 +41,7 @@ func sessionEnv(stdout, stderr io.Writer) sessioncmd.Env {
 		},
 		Stdout:         stdout,
 		Stderr:         stderr,
-		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole() },
+		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
 		OpenBrowser:    openBrowser,
 		ResolveCwd:     resolveCwd,
 		NotRunningHint: "start it with `webmux serve` (or your service manager)",

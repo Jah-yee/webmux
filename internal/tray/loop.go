@@ -71,7 +71,13 @@ func snapshotKey(s Snapshot) string {
 	if s.Running != nil {
 		running = s.Running.String()
 	}
-	return fmt.Sprintf("%s|%s|%v|%d|%s|%v|%v|%s|%s|%v|%v|%q|%v|%s|%v|%s|%s|%s|%v|%v", s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable, s.HasStatus, s.Status.State, s.Status.Version, s.Status.Drift, s.Status.Config, s.Status.URLs, s.Settings, s.Blocker, s.Installed, s.Compat, running, s.RunningCompat, s.Degraded, tunnelKey(s.Status.Tunnel))
+	return fmt.Sprintf(
+		"%s|%s|%v|%d|%s|%v|%v|%s|%s|%v|%v|%q|%v|%s|%v|%s|%s|%s|%v|%v",
+		s.State, s.Mode, s.Detection, s.Sessions, s.Reason, s.Reachable,
+		s.HasStatus, s.Status.State, s.Status.Version, s.Status.Drift,
+		s.Status.Config, s.Status.URLs, s.Settings, s.Blocker, s.Installed,
+		s.Compat, running, s.RunningCompat, s.Degraded, tunnelKey(s.Status.Tunnel),
+	)
 }
 
 func tunnelKey(t *contract.TunnelStatus) string {

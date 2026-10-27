@@ -60,7 +60,7 @@ func (e Env) Fail(err error) int {
 	return contract.ExitError
 }
 
-func (e Env) usage(flags *flag.FlagSet, format string, args ...any) int {
+func (e Env) usagef(flags *flag.FlagSet, format string, args ...any) int {
 	_, _ = fmt.Fprintf(e.Stderr, "webmux %s: %s\n", flags.Name(), fmt.Sprintf(format, args...))
 	flags.Usage()
 	return contract.ExitUsage
@@ -113,7 +113,7 @@ func Run(ctx context.Context, e Env, args []string) int {
 	}
 	argv := flags.Args()
 	if len(argv) == 0 || argv[0] == "" {
-		return e.usage(flags, "a command is required after --")
+		return e.usagef(flags, "a command is required after --")
 	}
 	client, code := e.connect()
 	if client == nil {
@@ -170,7 +170,7 @@ func Attach(ctx context.Context, e Env, args []string) int {
 		return contract.ExitUsage
 	}
 	if flags.NArg() != 1 {
-		return e.usage(flags, "exactly one session ID is required")
+		return e.usagef(flags, "exactly one session ID is required")
 	}
 	client, code := e.connect()
 	if client == nil {
@@ -219,7 +219,7 @@ func List(ctx context.Context, e Env, args []string) int {
 		return contract.ExitUsage
 	}
 	if flags.NArg() > 0 {
-		return e.usage(flags, "unexpected argument %q", flags.Arg(0))
+		return e.usagef(flags, "unexpected argument %q", flags.Arg(0))
 	}
 	client, code := e.connect()
 	if client == nil {
@@ -260,7 +260,7 @@ func Open(ctx context.Context, e Env, args []string) int {
 		return contract.ExitUsage
 	}
 	if flags.NArg() != 1 {
-		return e.usage(flags, "exactly one session ID is required")
+		return e.usagef(flags, "exactly one session ID is required")
 	}
 	client, code := e.connect()
 	if client == nil {

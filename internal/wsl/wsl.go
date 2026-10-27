@@ -11,8 +11,10 @@ import (
 	"time"
 )
 
-const interopMarker = "/proc/sys/fs/binfmt_misc/WSLInterop"
-const releasePath = "/proc/sys/kernel/osrelease"
+const (
+	interopMarker = "/proc/sys/fs/binfmt_misc/WSLInterop"
+	releasePath   = "/proc/sys/kernel/osrelease"
+)
 
 // Detected reports whether this process runs inside WSL.
 func Detected() bool {

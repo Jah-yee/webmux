@@ -16,7 +16,7 @@ func TestPersistentPTY(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "--noprofile", "--norc", "-i"}, "", nil, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/bash", "--noprofile", "--norc", "-i"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestResizeFromRequiresTheControllingConnection(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/sleep", "30"}, "", nil, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/sleep", "30"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func newIdleSession(t *testing.T, cmd ...string) *Session {
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	s, err := m.Create("", cmd, "", nil, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: cmd, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

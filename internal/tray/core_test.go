@@ -117,7 +117,7 @@ func TestModeSelection(t *testing.T) {
 	systemd := scriptedRunner{"cat /proc/1/comm": {Stdout: []byte("systemd\n")}, "systemctl --user cat webmux.service": {}}
 	noUnit := scriptedRunner{"cat /proc/1/comm": {Stdout: []byte("systemd\n")}}
 	initd := scriptedRunner{"cat /proc/1/comm": {Stdout: []byte("init\n")}}
-	cases := []struct {
+	tests := []struct {
 		runner scriptedRunner
 		mode   Mode
 		want   Mode
@@ -130,17 +130,17 @@ func TestModeSelection(t *testing.T) {
 		{initd, ModeSystemd, "", "发行版未启用 systemd"},
 		{noUnit, ModeSystemd, "", "未安装 webmux 用户单元"},
 	}
-	for _, tc := range cases {
-		d := DetectSystemd(context.Background(), tc.runner, target)
-		got, err := Resolve(tc.mode, d)
-		if got != tc.want || (tc.reason == "") != (err == nil) || (err != nil && (!errors.Is(err, ErrSystemdUnavailable) || !strings.Contains(err.Error(), tc.reason))) {
-			t.Errorf("%v %s: %s %v", d, tc.mode, got, err)
+	for _, tt := range tests {
+		d := DetectSystemd(context.Background(), tt.runner, target)
+		got, err := Resolve(tt.mode, d)
+		if got != tt.want || (tt.reason == "") != (err == nil) || (err != nil && (!errors.Is(err, ErrSystemdUnavailable) || !strings.Contains(err.Error(), tt.reason))) {
+			t.Errorf("%v %s: %s %v", d, tt.mode, got, err)
 		}
 	}
 	running := func(record bool, launcher string) contract.StatusV1 {
 		return contract.StatusV1{State: contract.StateRunning, Record: record, Launcher: launcher}
 	}
-	for _, tc := range []struct {
+	for _, tt := range []struct {
 		status     contract.StatusV1
 		configured Mode
 		mode       Mode
@@ -154,8 +154,8 @@ func TestModeSelection(t *testing.T) {
 		{running(true, "manual"), ModeAuto, "", false},
 		{running(false, "windows-tray"), ModeAuto, "", false},
 	} {
-		if mode, managed := ManagedMode(tc.status, tc.configured); mode != tc.mode || managed != tc.managed {
-			t.Errorf("%+v under %s: %s %v", tc.status, tc.configured, mode, managed)
+		if mode, managed := ManagedMode(tt.status, tt.configured); mode != tt.mode || managed != tt.managed {
+			t.Errorf("%+v under %s: %s %v", tt.status, tt.configured, mode, managed)
 		}
 	}
 }

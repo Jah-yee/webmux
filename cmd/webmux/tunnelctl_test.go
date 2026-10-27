@@ -311,7 +311,11 @@ func TestTunnelControllerStopCancelsLocate(t *testing.T) {
 	cfg := config.TunnelConfig{Token: "named-credential", Hostname: "webmux.example.com"}
 	store := tunnelsettings.Open(t.TempDir(), cfg)
 	t.Cleanup(store.Close)
-	tc := newTunnelController(cfg, store, "http://127.0.0.1:1", tunnelTestToken, public, locate, io.Discard, slog.New(slog.DiscardHandler))
+	tc := newTunnelController(tunnelControllerOptions{
+		Cfg: cfg, Store: store, Local: "http://127.0.0.1:1", Token: tunnelTestToken,
+		Public: public, Locate: locate, Out: io.Discard,
+		Logger: slog.New(slog.DiscardHandler),
+	})
 	status, err := tc.SetEnabled(true)
 	if err != nil || status.State != contract.TunnelStarting || !status.Named {
 		t.Fatalf("start %+v %v", status, err)

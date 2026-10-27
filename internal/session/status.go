@@ -80,12 +80,26 @@ func (s *Session) statusInputLocked(now time.Time, idleAfter time.Duration, patt
 
 func (s *Session) evaluate(now time.Time, snapshot processSnapshot, idleAfter time.Duration, patterns []*regexp.Regexp) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	in := s.statusInputLocked(now, idleAfter, patterns)
-	if !in.exited && in.program == nil && !in.attention && !in.structured && now.Sub(in.last) >= 2*time.Second {
-		in.blocked = snapshot.awaitingInput(s.cmd.Process.Pid)
+	// Flush a throttled preview so the final chunk of a burst is not lost.
+	if s.preview.dirty {
+		s.info.Preview = s.preview.refresh(true)
 	}
-	s.info.Status = classify(in)
+	in := s.statusInputLocked(now, idleAfter, patterns)
+	pid := s.cmd.Process.Pid
+	s.mu.Unlock()
+	// Reading /proc must not hold the session lock while output is flowing.
+	if !in.exited && in.program == nil && !in.attention && !in.structured && now.Sub(in.last) >= 2*time.Second {
+		in.blocked = snapshot.awaitingInput(pid)
+	}
+	s.mu.Lock()
+	switch {
+	case s.info.ExitCode != nil:
+		s.info.Status = StatusExited
+	case !s.info.LastActiveAt.After(in.last):
+		// Output arrived while /proc was read; keep its running status.
+		s.info.Status = classify(in)
+	}
+	s.mu.Unlock()
 }
 
 // outputStatusLocked is the status right after PTY output: the output window
@@ -93,7 +107,10 @@ func (s *Session) evaluate(now time.Time, snapshot processSnapshot, idleAfter ti
 // matter.
 func (s *Session) outputStatusLocked() Status {
 	now := time.Now()
-	return classify(statusInput{now: now, last: now, program: s.program, attention: s.info.Attention != nil, idleAfter: time.Hour})
+	return classify(statusInput{
+		now: now, last: now, program: s.program,
+		attention: s.info.Attention != nil, idleAfter: time.Hour,
+	})
 }
 
 func (s *Session) publishState() {
@@ -104,7 +121,11 @@ func (s *Session) publishState() {
 	}
 }
 func sameDisplay(a, b Info) bool {
-	return a.Title == b.Title && a.Status == b.Status && a.Preview == b.Preview && a.LastActiveAt.Equal(b.LastActiveAt) && a.Cols == b.Cols && a.Rows == b.Rows && a.Clients == b.Clients && sameExit(a.ExitCode, b.ExitCode) && sameWorkspace(a.Workspace, b.Workspace) && sameAttention(a.Attention, b.Attention) && sameReportedCwd(a.ReportedCwd, b.ReportedCwd)
+	return a.Title == b.Title && a.Status == b.Status && a.Preview == b.Preview &&
+		a.LastActiveAt.Equal(b.LastActiveAt) && a.Cols == b.Cols && a.Rows == b.Rows &&
+		a.Clients == b.Clients && sameExit(a.ExitCode, b.ExitCode) &&
+		sameWorkspace(a.Workspace, b.Workspace) && sameAttention(a.Attention, b.Attention) &&
+		sameReportedCwd(a.ReportedCwd, b.ReportedCwd)
 }
 func sameExit(a, b *int) bool {
 	if a == nil || b == nil {

@@ -3,14 +3,15 @@ package api
 import (
 	"context"
 	"errors"
-	"github.com/rainchan/webmux/internal/codeview"
-	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/wire"
 	"mime"
 	"net/http"
 	"strconv"
 	"time"
 	"unicode/utf8"
+
+	"github.com/rainchan/webmux/internal/codeview"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/wire"
 )
 
 // serveCode answers one code view JSON route within the 10 s bound. Each

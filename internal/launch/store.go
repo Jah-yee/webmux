@@ -199,7 +199,7 @@ func (s *Service) Create(in Input) (Config, error) {
 	}
 	defer s.mu.Unlock()
 	if len(s.configs) >= MaxConfigs {
-		return Config{}, invalid("最多保存 %d 条启动配置", MaxConfigs)
+		return Config{}, invalidf("最多保存 %d 条启动配置", MaxConfigs)
 	}
 	if s.nameTakenLocked(in.Name, "") {
 		return Config{}, ErrDuplicate

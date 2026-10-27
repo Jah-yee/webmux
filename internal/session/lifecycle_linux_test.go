@@ -22,7 +22,7 @@ func TestAdoptedZombieReapedWhileLeaderLives(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", `setsid /bin/bash -c 'sleep 0.05 & printf "DAEMON_CHILD=%s\n" "$!"'; read -r stop; exit 23`}, "", nil, "")
+	s, err := m.Create(CreateInput{Cwd: "", Cmd: []string{"/bin/bash", "-c", `setsid /bin/bash -c 'sleep 0.05 & printf "DAEMON_CHILD=%s\n" "$!"'; read -r stop; exit 23`}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rainchan/webmux/internal/workspace"
 	"io"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/rainchan/webmux/internal/workspace"
 )
 
 // ErrChanged reports that a source changed after streaming started; callers
@@ -36,7 +37,7 @@ func (s *Service) Raw(ctx context.Context, id, sid, side string) (*Transfer, err
 	select {
 	case s.transfers <- struct{}{}:
 	default:
-		return nil, problem(ErrBusy, "下载并发已满，请稍后重试")
+		return nil, problemf(ErrBusy, "下载并发已满，请稍后重试")
 	}
 	done := func() { <-s.transfers }
 	t, e := s.openRaw(ctx, id, sid, side)
@@ -61,39 +62,39 @@ func (s *Service) openRaw(ctx context.Context, id, sid, side string) (*Transfer,
 		} else if side == "new" {
 			d = v.diff.New
 		} else {
-			return nil, problem(ErrInvalid, "请选择 old/new 来源")
+			return nil, problemf(ErrInvalid, "请选择 old/new 来源")
 		}
 		if d.Source == "empty" {
-			return nil, problem(ErrNotFound, "此侧内容不存在")
+			return nil, problemf(ErrNotFound, "此侧内容不存在")
 		}
 		if d.Size > MaxDownloadBytes {
-			return nil, problem(ErrTooLarge, "超过 100 MiB 下载上限")
+			return nil, problemf(ErrTooLarge, "超过 100 MiB 下载上限")
 		}
 		if !d.Downloadable {
-			return nil, problem(ErrNotFound, "此来源不是可下载的常规文件")
+			return nil, problemf(ErrNotFound, "此来源不是可下载的常规文件")
 		}
 		t := &Transfer{Name: path.Base(d.rawPath), MediaType: d.MediaType, Size: d.Size, binding: b, path: d.rawPath}
 		if d.Source == "worktree" {
 			if d.identity == nil {
-				return nil, problem(ErrConflict, "内容已变化，请刷新")
+				return nil, problemf(ErrConflict, "内容已变化，请刷新")
 			}
 			f, e := b.open(d.rawPath)
 			if e != nil {
 				if errors.Is(e, os.ErrNotExist) {
-					return nil, problem(ErrConflict, "内容已变化，请刷新")
+					return nil, problemf(ErrConflict, "内容已变化，请刷新")
 				}
 				return nil, e
 			}
 			info, e := f.Stat()
 			if e != nil || !info.Mode().IsRegular() || *fileIdentity(info) != *d.identity {
 				_ = f.Close()
-				return nil, problem(ErrConflict, "内容已变化，请刷新")
+				return nil, problemf(ErrConflict, "内容已变化，请刷新")
 			}
 			t.file, t.identity = f, d.identity
 			return t, nil
 		}
 		if d.Source != "index" && d.Source != "head" {
-			return nil, problem(ErrInvalid, "无效文件来源")
+			return nil, problemf(ErrInvalid, "无效文件来源")
 		}
 		raw, e := git(ctx, b.Root, "cat-file", "-s", d.OID)
 		if e != nil {
@@ -101,7 +102,7 @@ func (s *Service) openRaw(ctx context.Context, id, sid, side string) (*Transfer,
 		}
 		size, e := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
 		if e != nil || size != d.Size {
-			return nil, problem(ErrConflict, "内容已变化，请刷新")
+			return nil, problemf(ErrConflict, "内容已变化，请刷新")
 		}
 		t.oid = d.OID
 		return t, nil

@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -77,22 +74,38 @@ type tailscaleController struct {
 	done          chan struct{}
 }
 
-// newTailscaleController takes the effective settings from store; a nil store
-// keeps cfg and rejects web updates.
-func newTailscaleController(cfg config.TailscaleConfig, store *tailscalesettings.Service, svc *tailscale.Service, stateDir string, public *api.PublicOrigins, token string, tokenGenerated bool, out io.Writer, logger *slog.Logger, isWSL func() bool, networkingMode func(context.Context) string) *tailscaleController {
-	web := false
-	if store != nil {
-		cfg, web = store.Effective()
+// tailscaleControllerOptions are the launch-time inputs; Store supplies the
+// effective settings and a nil Store keeps Cfg and rejects web updates.
+type tailscaleControllerOptions struct {
+	Cfg            config.TailscaleConfig
+	Store          *tailscalesettings.Service
+	Service        *tailscale.Service
+	StateDir       string
+	Public         *api.PublicOrigins
+	Token          string
+	TokenGenerated bool
+	Out            io.Writer
+	Logger         *slog.Logger
+	IsWSL          func() bool
+	NetworkingMode func(context.Context) string
+}
+
+// newTailscaleController takes the effective settings from Store; a nil Store
+// keeps o.Cfg and rejects web updates.
+func newTailscaleController(o tailscaleControllerOptions) *tailscaleController {
+	cfg, web := o.Cfg, false
+	if o.Store != nil {
+		cfg, web = o.Store.Effective()
 	}
 	state := contract.TailscaleOff
 	if cfg.Enabled() {
 		state = contract.TailscaleStarting
 	}
 	return &tailscaleController{
-		cfg: cfg, web: web, store: store, svc: svc, public: public, dir: stateDir,
-		path: filepath.Join(stateDir, tailscaleStateFile), lockPath: filepath.Join(stateDir, tailscaleLockFile),
-		token: token, tokenGenerated: tokenGenerated, out: out, logger: logger,
-		isWSL: isWSL, networkingMode: networkingMode,
+		cfg: cfg, web: web, store: o.Store, svc: o.Service, public: o.Public, dir: o.StateDir,
+		path: filepath.Join(o.StateDir, tailscaleStateFile), lockPath: filepath.Join(o.StateDir, tailscaleLockFile),
+		token: o.Token, tokenGenerated: o.TokenGenerated, out: o.Out, logger: o.Logger,
+		isWSL: o.IsWSL, networkingMode: o.NetworkingMode,
 		state: state,
 	}
 }
@@ -135,7 +148,7 @@ func (tc *tailscaleController) updateSettings(in contract.TailscaleSettingsUpdat
 		return err
 	}
 	if next.Provider == "windows" && !tc.isWSL() {
-		return fmt.Errorf("%w: provider \"windows\" is only valid inside WSL", tailscalesettings.ErrInvalid)
+		return fmt.Errorf(`%w: provider "windows" is only valid inside WSL`, tailscalesettings.ErrInvalid)
 	}
 	if next.Mode == config.TailscaleFunnel && current.Mode != config.TailscaleFunnel && !in.ConfirmFunnel {
 		return tailscalesettings.ErrFunnelUnconfirmed
@@ -188,7 +201,7 @@ func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error
 		return err
 	}
 	if tc.cfg.Provider == "windows" && !tc.isWSL() {
-		return errors.New("tailscale.provider \"windows\" is only valid inside WSL")
+		return errors.New(`tailscale.provider "windows" is only valid inside WSL`)
 	}
 	hasState := false
 	if _, err := os.Lstat(tc.path); !errors.Is(err, os.ErrNotExist) {
@@ -242,499 +255,6 @@ func (tc *tailscaleController) Prepare(ctx context.Context, listen string) error
 		}
 	}
 	return nil
-}
-
-// recordStale reports whether cfg no longer keeps the recorded entry, so the
-// exact recorded target must be closed before cfg applies.
-func recordStale(record *tailscaleState, cfg config.TailscaleConfig, target string, targetOK bool) bool {
-	if !cfg.Enabled() || record.Mode != cfg.Mode || !targetOK || record.Target != target {
-		return true
-	}
-	if cfg.Port == 0 {
-		// Automatic selection cannot keep a previously explicit custom
-		// port; remove that exact entry before choosing a candidate.
-		if !autoCandidate(record.Port) {
-			return true
-		}
-	} else if record.Port != cfg.Port {
-		return true
-	}
-	// An explicit provider change closes the old entry through the recorded
-	// provider first. "auto" keeps a native record because detection may
-	// legitimately change, but never keeps a Windows record: auto does not
-	// manage the Windows node.
-	if cfg.Provider == "auto" {
-		return record.Provider == tailscale.ProviderWindows
-	}
-	return providerFamily(record.Provider) != cfg.Provider
-}
-
-func validateOwnership(r tailscaleState) error {
-	if r.V != tailscaleStateVersion || r.Provider == "" || r.DNSName == "" || r.Target == "" || r.Port < 1 || r.Port > 65535 || (r.Status != "pending" && r.Status != "active") || (r.Mode != config.TailscaleServe && r.Mode != config.TailscaleFunnel) {
-		return errors.New("invalid ownership record")
-	}
-
-	return nil
-}
-func (tc *tailscaleController) openLock() error {
-	if tc.ownership != nil {
-		return tc.ownership.Err()
-	}
-	var err error
-	tc.ownership, _, err = statefile.Open[tailscaleState](tc.dir, statefile.TailscaleOwnership, validateOwnership)
-	if statefile.IsKind(err, statefile.Missing) {
-		return nil
-	}
-	return err
-}
-func (tc *tailscaleController) loadState() (*tailscaleState, error) {
-	r, err := statefile.ReadSnapshot[tailscaleState](tc.dir, statefile.TailscaleOwnership, validateOwnership)
-	if statefile.IsKind(err, statefile.Missing) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &r, nil
-}
-func (tc *tailscaleController) saveRecord(record tailscaleState) error {
-	if err := tc.openLock(); err != nil {
-		return err
-	}
-	return tc.ownership.Commit(record)
-}
-func (tc *tailscaleController) deleteRecord() error {
-	if tc.ownership == nil {
-		return errors.New("ownership store unavailable")
-	}
-	return tc.ownership.Remove()
-}
-
-func (tc *tailscaleController) removeRecord(ctx context.Context, record *tailscaleState) error {
-	if err := tc.removeVerified(ctx, record); err != nil {
-		// Never leave an unverified record in memory: Close must not retry a
-		// deletion that this process could not prove it owns.
-		tc.clearRecord()
-		return err
-	}
-	if err := tc.deleteRecord(); err != nil {
-		return err
-	}
-	tc.clearRecord()
-	return nil
-}
-
-// removeVerified deletes the exact recorded entry only when the live Serve
-// status proves the same provider, DNS/port and proxy target. An unreadable
-// status fails closed and removes nothing. A port that is empty or now
-// proxies elsewhere no longer holds this record's entry: the record is stale,
-// the foreign entry stays untouched, and the caller may drop the record.
-func (tc *tailscaleController) removeVerified(ctx context.Context, record *tailscaleState) error {
-	tc.public.Clear("tailscale")
-	node := tc.svc.Inspect(ctx, providerFamily(record.Provider))
-	status := node.Status
-	if node.ServeErr != nil {
-		return fmt.Errorf("无法确认 Tailscale 入口所有权: %w；%s", node.ServeErr, tc.staleHint(record.Port))
-	}
-	if status.Provider == tailscale.ProviderNone || !providerMatches(record.Provider, status.Provider) {
-		return fmt.Errorf("无法确认上次运行的 Tailscale 入口所有权（recorded provider %q, detected %q）；%s", record.Provider, status.Provider, tc.staleHint(record.Port))
-	}
-	info, exists := node.Serve.Lookup(record.DNSName, record.Port)
-	if !exists && status.DNSName != "" && status.DNSName != record.DNSName {
-		info, exists = node.Serve.Lookup(status.DNSName, record.Port)
-	}
-	if !exists {
-		return nil
-	}
-	if info.Proxy != record.Target {
-		tc.logger.Warn("tailscale record is stale; the entry on its port belongs to another target and is left untouched", "port", record.Port)
-		return nil
-	}
-	if err := node.Remove(ctx, record.Port); err != nil {
-		return fmt.Errorf("无法移除上次运行的 Tailscale 入口；请先手工执行 `tailscale serve --https=%d off`：%s", record.Port, tailscaleReason(err, providerFamily(record.Provider)))
-	}
-	return nil
-}
-
-// staleHint names the manual recovery when ownership cannot be read.
-func (tc *tailscaleController) staleHint(port int) string {
-	return fmt.Sprintf("确认 Tailscale 可用后重试；若端口 %d 的入口已手工移除或 Tailscale 已卸载，请删除 %s", port, tc.path)
-}
-
-func providerFamily(provider string) string {
-	if provider == tailscale.ProviderWSLNative {
-		return "linux"
-	}
-	if provider == "" {
-		return "auto"
-	}
-	return provider
-}
-
-func providerMatches(recorded, detected string) bool {
-	if recorded == detected {
-		return true
-	}
-	recorded, detected = providerFamily(recorded), providerFamily(detected)
-	return recorded == detected
-}
-
-func (tc *tailscaleController) refuseUnownedTarget(ctx context.Context, target string, port int) error {
-	status := tc.svc.Detect(ctx)
-	if status.DNSName == "" {
-		return nil
-	}
-	serve, err := tc.svc.ServeStatus(ctx)
-	if err != nil {
-		return nil
-	}
-	if entry, ok := serve.Lookup(status.DNSName, port); ok && entry.Proxy == target {
-		return fmt.Errorf("tailscale-ownership.json 缺失，但 %d 端口已有指向 %s 的入口；无法确认所有权，拒绝启动", port, target)
-	}
-	return nil
-}
-
-// entryPointsTo reports whether any Serve entry already proxies to target.
-func (tc *tailscaleController) entryPointsTo(ctx context.Context, target string) bool {
-	status := tc.svc.Detect(ctx)
-	if status.DNSName == "" {
-		return false
-	}
-	serve, err := tc.svc.ServeStatus(ctx)
-	if err != nil {
-		return false
-	}
-	for _, entry := range serve.Entries {
-		if info, ok := serve.Lookup(status.DNSName, entry.Port); ok && info.Proxy == target {
-			return true
-		}
-	}
-	return false
-}
-
-// Start records the bound listener and applies the configured entry. Web
-// updates later reuse the same listener facts.
-func (tc *tailscaleController) Start(ctx context.Context, local string) {
-	tc.mu.Lock()
-	if tc.closed {
-		tc.mu.Unlock()
-		return
-	}
-	tc.baseCtx = ctx
-	port, ok := localPort(local)
-	if ok {
-		tc.localPort = port
-	} else {
-		tc.listenBlocked = "托管 Tailscale 需要监听 127.0.0.1 或 0.0.0.0；请把 listen 改为 127.0.0.1:<port> 或 0.0.0.0:<port>"
-	}
-	tc.mu.Unlock()
-	if ok {
-		probe, cancelProbe := context.WithTimeout(ctx, time.Second)
-		conn, err := (&net.Dialer{}).DialContext(probe, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
-		cancelProbe()
-		if err != nil {
-			tc.mu.Lock()
-			tc.listenBlocked = "127.0.0.1 无法访问当前监听端口；托管 Tailscale 需要 IPv4 回环可达"
-			tc.mu.Unlock()
-		} else {
-			_ = conn.Close()
-		}
-	}
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-	if tc.closed || !tc.cfg.Enabled() {
-		return
-	}
-	tc.launchLocked()
-}
-
-// launchLocked supersedes the running worker with one for tc.cfg. The new
-// worker joins its predecessor, revokes any origin it may have published,
-// closes the recorded entry when tc.cfg no longer keeps it, and only then
-// applies tc.cfg. Callers hold tc.mu; the request never waits for the CLI.
-func (tc *tailscaleController) launchLocked() {
-	if tc.cancel != nil {
-		tc.cancel()
-	}
-	previous := tc.done
-	base := tc.baseCtx
-	if base == nil {
-		base = context.Background()
-	}
-	ctx, cancel := context.WithCancel(base)
-	done := make(chan struct{})
-	tc.cancel, tc.done = cancel, done
-	cfg := tc.cfg
-	tc.resetStateLocked(cfg)
-	go func() {
-		defer close(done)
-		if previous != nil {
-			<-previous
-		}
-		if ctx.Err() != nil {
-			return
-		}
-		tc.mu.Lock()
-		tc.resetStateLocked(cfg)
-		tc.mu.Unlock()
-		if !tc.reconcile(cfg) {
-			return
-		}
-		tc.svc.Configure(cfg.Provider)
-		if !cfg.Enabled() {
-			tc.mu.Lock()
-			if ctx.Err() == nil {
-				tc.state = contract.TailscaleOff
-			}
-			tc.mu.Unlock()
-			return
-		}
-		if err := tc.openLock(); err != nil {
-			tc.mu.Lock()
-			tc.storageErr = err
-			tc.mu.Unlock()
-		}
-		tc.mu.Lock()
-		storageErr, blocked := tc.storageErr, tc.listenBlocked
-		if storageErr != nil {
-			tc.failLocked(storageErr.Error(), false)
-		} else if blocked != "" {
-			tc.blockLocked(blocked)
-		}
-		tc.mu.Unlock()
-		if storageErr == nil && blocked == "" {
-			tc.apply(ctx)
-		}
-	}()
-}
-
-// resetStateLocked revokes the origin and reports the intent of cfg. Closing
-// a recorded entry is still work in progress, so it reports starting until
-// the worker has removed it.
-func (tc *tailscaleController) resetStateLocked(cfg config.TailscaleConfig) {
-	tc.public.Clear("tailscale")
-	tc.state, tc.url, tc.reason, tc.blocked = contract.TailscaleOff, "", "", ""
-	if cfg.Enabled() || tc.record != nil {
-		tc.state = contract.TailscaleStarting
-	}
-}
-
-// reconcile closes the recorded entry when cfg no longer keeps it. A failed
-// removal keeps the record for a later attempt and leaves cfg unapplied.
-func (tc *tailscaleController) reconcile(cfg config.TailscaleConfig) bool {
-	tc.mu.Lock()
-	record, port := tc.record, tc.localPort
-	tc.mu.Unlock()
-	if record == nil {
-		return true
-	}
-	target := fmt.Sprintf("http://127.0.0.1:%d", port)
-	if !recordStale(record, cfg, target, port != 0) {
-		return true
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := tc.removeVerified(ctx, record); err != nil {
-		tc.fail(fmt.Errorf("未能关闭上一个 Tailscale 入口，新设置尚未应用：%s", err.Error()), true)
-		return false
-	}
-	if err := tc.deleteRecord(); err != nil {
-		tc.fail(err, true)
-		return false
-	}
-	tc.clearRecord()
-	// Entries in the cached detection predate the removal.
-	tc.svc.Refresh()
-	return true
-}
-
-func (tc *tailscaleController) apply(ctx context.Context) {
-	status := tc.svc.Detect(ctx)
-	tc.mu.Lock()
-	tc.blocked = ""
-	provider := status.Provider
-	if tc.cfg.Provider == "windows" {
-		if !tc.isWSL() {
-			tc.failLocked("tailscale.provider \"windows\" 只能在 WSL 中使用", false)
-			tc.mu.Unlock()
-			return
-		}
-		if tc.networkingMode(ctx) != "mirrored" {
-			tc.blockLocked("WSL NAT 模式无法托管 Windows Tailscale：可改用 mirrored 网络、在 WSL 内安装 Tailscale，或继续用 Windows 托盘转发并手工配置 Serve")
-			tc.mu.Unlock()
-			return
-		}
-	}
-	if tc.cfg.Provider == "auto" && tc.isWSL() && provider == tailscale.ProviderWindows {
-		tc.blockLocked("检测到 Windows Tailscale；如需托管，请显式设置 tailscale.provider = \"windows\"（auto 永不代管 Windows）")
-		tc.mu.Unlock()
-		return
-	}
-	switch {
-	case provider == tailscale.ProviderNone:
-		tc.failLocked("未找到可用的 Tailscale CLI", false)
-		tc.mu.Unlock()
-		return
-	case status.BackendState != tailscale.BackendRunning:
-		tc.failLocked("Tailscale 后端状态为 "+status.BackendState+"，请先登录或启动 Tailscale", false)
-		tc.mu.Unlock()
-		return
-	case status.DNSName == "":
-		tc.failLocked("Tailscale 未报告节点 DNS 名", false)
-		tc.mu.Unlock()
-		return
-	case !status.HTTPSReady:
-		tc.failLocked("Tailscale HTTPS 证书尚未就绪，请先在 Tailscale 管理台启用 HTTPS", false)
-		tc.mu.Unlock()
-		return
-	}
-	localPort := tc.localPort
-	cfg := tc.cfg
-	tc.mu.Unlock()
-
-	serve, err := tc.svc.ServeStatus(ctx)
-	if err != nil {
-		tc.fail(err, false)
-		return
-	}
-	target := fmt.Sprintf("http://127.0.0.1:%d", localPort)
-	port := cfg.Port
-	if port == 0 {
-		tc.mu.Lock()
-		rec := tc.record
-		tc.mu.Unlock()
-		if rec != nil && rec.Mode == cfg.Mode && rec.Target == target && autoCandidate(rec.Port) {
-			if info, exists := serve.Lookup(status.DNSName, rec.Port); exists {
-				if tc.canReuse(info, target, rec.Port, status.DNSName, cfg.Mode) {
-					tc.ready(ctx, status, rec.Port, target, false)
-					return
-				}
-				tc.clearRecord()
-				tc.fail(fmt.Errorf("端口 %d 的现有入口与记录不匹配；WebMux 不会覆盖，请先手工移除", rec.Port), false)
-				return
-			}
-			port = rec.Port
-		}
-		if port == 0 {
-			port = choosePort(serve)
-			if port == 0 {
-				tc.fail(errors.New("443、8443 与 10000 都已有入口；请为 Serve 显式指定其他空闲端口"), false)
-				return
-			}
-		}
-	}
-	if info, exists := serve.Lookup(status.DNSName, port); exists {
-		if tc.canReuse(info, target, port, status.DNSName, cfg.Mode) {
-			tc.ready(ctx, status, port, target, false)
-			return
-		}
-		tc.clearRecord()
-		tc.fail(fmt.Errorf("端口 %d 已被其他 Tailscale 入口占用，WebMux 不会覆盖", port), false)
-		return
-	}
-	record := tailscaleState{
-		V: tailscaleStateVersion, Provider: status.Provider, DNSName: status.DNSName,
-		Mode: cfg.Mode, Port: port, Target: target, Status: "pending",
-		Public: cfg.Mode == config.TailscaleFunnel,
-	}
-	tc.mu.Lock()
-	tc.record = &record
-	tc.mu.Unlock()
-	if err := tc.saveRecord(record); err != nil {
-		tc.clearRecord()
-		tc.fail(fmt.Errorf("无法写入 tailscale-ownership.json: %w", err), false)
-		return
-	}
-	if err := tc.svc.Apply(ctx, cfg.Mode, port, localPort); err != nil {
-		tc.cleanupFailed(ctx, record, err)
-		return
-	}
-	after, err := tc.svc.ServeStatus(ctx)
-	if err != nil {
-		tc.cleanupFailed(ctx, record, fmt.Errorf("无法回读 Tailscale 状态: %w", err))
-		return
-	}
-	info, ok := after.Lookup(status.DNSName, port)
-	wantPublic := cfg.Mode == config.TailscaleFunnel
-	if !ok || info.Handlers != 1 || info.Proxy != target || info.Public != wantPublic {
-		tc.cleanupFailed(ctx, record, errors.New("执行 Tailscale 命令已结束，但回读的入口与预期不符"))
-		return
-	}
-	tc.ready(ctx, status, port, target, true)
-}
-
-func (tc *tailscaleController) canReuse(info tailscale.HandlerInfo, target string, port int, dns, mode string) bool {
-	tc.mu.Lock()
-	defer tc.mu.Unlock()
-	record := tc.record
-	if record == nil || record.Port != port || record.Target != target || record.Mode != mode {
-		return false
-	}
-	if info.Handlers != 1 || info.Proxy != target {
-		return false
-	}
-	return info.Public == (mode == config.TailscaleFunnel)
-}
-
-// ready publishes the origin only while ctx is current: launchLocked cancels
-// a superseded worker under tc.mu, so a stale apply cannot authorize its URL.
-func (tc *tailscaleController) ready(ctx context.Context, status tailscale.Status, port int, target string, announce bool) {
-	// Entries in the cached detection predate the apply; refresh before the
-	// ready state ends the page's polling.
-	tc.svc.Refresh()
-	url := tailscale.PublicURL(status.DNSName, port)
-	tc.mu.Lock()
-	if ctx.Err() != nil {
-		tc.mu.Unlock()
-		return
-	}
-	if err := tc.public.Set("tailscale", url); err != nil {
-		tc.mu.Unlock()
-		tc.fail(fmt.Errorf("无法登记 Tailscale 来源: %w", err), true)
-		return
-	}
-	tc.state, tc.url, tc.reason = contract.TailscaleReady, url, ""
-	var persist *tailscaleState
-	if record := tc.record; record != nil && record.Status != "active" {
-		record.Status = "active"
-		saved := *record
-		persist = &saved
-	}
-	tc.mu.Unlock()
-	if persist != nil {
-		if err := tc.saveRecord(*persist); err != nil {
-			tc.logger.Warn("tailscale state not marked active", "error", err)
-		}
-	}
-	if announce {
-		link := url
-		if tc.tokenGenerated {
-			link = contract.AccessURL(url, tc.token)
-		}
-		_, _ = fmt.Fprintln(tc.out, "WebMux tailscale: "+link)
-	}
-}
-
-func (tc *tailscaleController) cleanupFailed(ctx context.Context, record tailscaleState, cause error) {
-	if err := tc.removeVerified(ctx, &record); err != nil {
-		tc.fail(fmt.Errorf("%s；本次入口可能仍存在，请手工执行 `tailscale serve --https=%d off`：%s", tailscaleReason(cause, providerFamily(record.Provider)), record.Port, err), false)
-		return
-	}
-	if err := tc.deleteRecord(); err != nil {
-		tc.fail(err, false)
-		return
-	}
-	tc.clearRecord()
-	tc.fail(cause, false)
-}
-
-// tailscaleReason maps only genuine CLI errors to user-facing guidance.
-func tailscaleReason(err error, provider string) string {
-	var cliErr *tailscale.CLIError
-	if errors.As(err, &cliErr) {
-		return classifyTailscaleError(cliErr, provider)
-	}
-	return err.Error()
 }
 
 func (tc *tailscaleController) fail(err error, revoke bool) {
@@ -854,87 +374,4 @@ func (tc *tailscaleController) Status() contract.TailscaleStatus {
 		out.State = contract.TailscaleFailed
 	}
 	return out
-}
-
-func choosePort(serve tailscale.ServeStatus) int {
-	for _, port := range []int{443, 8443, 10000} {
-		if !hasPort(serve, port) {
-			return port
-		}
-	}
-	return 0
-}
-
-func autoCandidate(port int) bool {
-	return port == 443 || port == 8443 || port == 10000
-}
-
-func hasPort(serve tailscale.ServeStatus, port int) bool {
-	for _, entry := range serve.Entries {
-		if entry.Port == port {
-			return true
-		}
-	}
-	return false
-}
-
-func targetFromListen(listen string) (string, bool) {
-	host, portText, err := net.SplitHostPort(listen)
-	if err != nil {
-		return "", false
-	}
-	port, err := strconv.Atoi(portText)
-	if err != nil || port < 1 || port > 65535 {
-		return "", false
-	}
-	if host == "" {
-		host = "0.0.0.0"
-	}
-	if strings.EqualFold(host, "localhost") {
-		return fmt.Sprintf("http://127.0.0.1:%d", port), true
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsUnspecified() && !ip.Equal(net.IPv4(127, 0, 0, 1)) {
-		return "", false
-	}
-	return fmt.Sprintf("http://127.0.0.1:%d", port), true
-}
-
-func portFromTarget(target string) int {
-	_, port, err := net.SplitHostPort(strings.TrimPrefix(target, "http://"))
-	if err != nil {
-		return 0
-	}
-	value, _ := strconv.Atoi(port)
-	return value
-}
-
-func localPort(local string) (int, bool) {
-	host, portText, err := net.SplitHostPort(strings.TrimPrefix(local, "http://"))
-	if err != nil || host != "127.0.0.1" {
-		return 0, false
-	}
-	port, err := strconv.Atoi(portText)
-	return port, err == nil && port > 0
-}
-
-func classifyTailscaleError(err error, provider string) string {
-	lower := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(lower, "access denied"), strings.Contains(lower, "permission"), strings.Contains(lower, "operator"):
-		if provider == "windows" {
-			return "Tailscale 权限不足；请在 Windows 管理员终端执行一次 `tailscale set --operator=<Windows 用户>`"
-		}
-		return "Tailscale 权限不足；请执行一次 `tailscale set --operator=$USER`"
-	case strings.Contains(lower, "funnel") && (strings.Contains(lower, "not available") || strings.Contains(lower, "attribute") || strings.Contains(lower, "does not")):
-		return "Tailscale 节点缺少 funnel 属性；请在 Tailscale 管理台为节点启用 Funnel"
-	case strings.Contains(lower, "certificate"), strings.Contains(lower, "https"):
-		return "Tailscale HTTPS 证书未就绪；请先在 Tailscale 管理台启用 HTTPS"
-	case strings.Contains(lower, "in use"), strings.Contains(lower, "conflict"), strings.Contains(lower, "already"):
-		return "Tailscale 端口冲突；请换一个空闲端口或先移除冲突入口"
-	case strings.Contains(lower, "timed out"), strings.Contains(lower, "deadline"):
-		return "Tailscale 命令超时；请检查 Tailscale 状态后重试"
-	default:
-		return "Tailscale 命令失败；请查看服务日志并确认 Tailscale 状态"
-	}
 }
