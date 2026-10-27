@@ -96,6 +96,7 @@
     variant="ghost"
     size="icon-sm"
     aria-label="返回会话列表"
+    title="返回会话列表"
     onclick={() => navigate("/")}
   >
     <IconArrowLeft class="size-4" aria-hidden="true" />
@@ -205,7 +206,8 @@
           {...props}
           variant="ghost"
           size="icon-sm"
-          aria-label="终端菜单">⋯</Button
+          aria-label="终端菜单"
+          title="终端菜单">⋯</Button
         >{/snippet}
     </DropdownMenu.Trigger>
     <DropdownMenu.Content

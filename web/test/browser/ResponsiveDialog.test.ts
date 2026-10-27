@@ -84,3 +84,15 @@ test("busy blocks drawer dismissal until the work ends", async () => {
   await userEvent.keyboard("{Escape}");
   await vi.waitFor(() => expect(onclose).toHaveBeenCalledOnce());
 });
+
+test("desktop dialog sets initial focus and traps Tab in both directions", async () => {
+  render(Harness, { onclose: () => {} });
+  await expect.element(body()).toHaveFocus();
+  const close = page.getByRole("button", { name: "Close", exact: true });
+  await userEvent.keyboard("{Tab}");
+  await expect.element(close).toHaveFocus();
+  await userEvent.keyboard("{Tab}");
+  await expect.element(body()).toHaveFocus();
+  await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+  await expect.element(close).toHaveFocus();
+});

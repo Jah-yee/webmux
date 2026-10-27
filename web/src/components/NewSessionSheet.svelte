@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { untrack } from "svelte";
   import {
     api,
@@ -13,6 +14,8 @@
   import { launchConfigIcon, type LaunchConfigsState } from "../launchConfigs";
   import LaunchConfigIcon from "./LaunchConfigIcon.svelte";
   import {
+    CreateSessionRequestSchema,
+    CreateWorktreeRequestSchema,
     NoContentSchema,
     SessionInfoSchema,
     WorktreeSchema,
@@ -115,8 +118,9 @@
   let branchMode = $state<"new" | "existing">("new");
   let branch = $state("");
   let base = $state("");
-  let worktreeReady = $state(false);
+  let worktreeFields = $state<WorktreeCreateFields>();
   let createdTree = $state<import("../schemas").Worktree | null>(null);
+  const worktreeReady = $derived(worktreeFields?.isReady() ?? false);
   const repository = $derived(repositories.find((r) => r.id === repositoryId));
   const worktree = $derived(
     createdTree?.id === worktreeId
@@ -140,6 +144,7 @@
   );
 
   async function create(makeDirectory = false, treeOnly = false) {
+    if (busy) return;
     if (!treeOnly && !commandReady) {
       error = "请选择有效启动配置，或输入可执行程序及参数。";
       return;
@@ -166,6 +171,8 @@
             branch,
             ...(branchMode === "new" ? { base } : {}),
           },
+          undefined,
+          CreateWorktreeRequestSchema,
         );
         createdTree = tree;
         worktreeId = tree.id;
@@ -196,6 +203,8 @@
         SessionInfoSchema,
         "POST",
         payload,
+        undefined,
+        CreateSessionRequestSchema,
       );
       store(
         "recentDirs",
@@ -221,7 +230,7 @@
       ) {
         mkdirMounted = true;
         mkdirOpen = true;
-      } else error = (err as Error).message;
+      } else error = errorMessage(err);
     } finally {
       busy = false;
     }
@@ -367,13 +376,13 @@
             {@render repositoryPicker("session-repository-new", mode === "new")}
             {#if newPanelMounted && repository}
               {#key repository.id}<WorktreeCreateFields
+                  bind:this={worktreeFields}
                   {repository}
                   disabled={busy || mode !== "new"}
                   bind:path={newPath}
                   bind:mode={branchMode}
                   bind:branch
                   bind:base
-                  bind:ready={worktreeReady}
                 />{/key}
             {/if}
           </fieldset>

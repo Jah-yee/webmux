@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { untrack } from "svelte";
   import IconEye from "~icons/tabler/eye";
   import IconEyeOff from "~icons/tabler/eye-off";
@@ -137,7 +138,7 @@
           })
           .catch((err: unknown) => {
             if (!controller.signal.aborted)
-              loadError = `无法读取启动配置：${(err as Error).message}`;
+              loadError = `无法读取启动配置：${errorMessage(err)}`;
           })
           .finally(() => {
             if (!controller.signal.aborted) loading = false;
@@ -164,7 +165,7 @@
       error =
         err instanceof APIError && err.status === 409
           ? `已有同名启动配置“${draft.value.name}”，请换一个名称。`
-          : (err as Error).message;
+          : errorMessage(err);
     } finally {
       busy = false;
     }

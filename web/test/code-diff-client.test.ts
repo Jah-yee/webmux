@@ -29,18 +29,18 @@ test("cancels obsolete work, validates the snapshot and terminates each Worker",
   const first = new AbortController();
   const job = calculateDiff("old", "a", "b", first.signal);
   const rejected = expect(job).rejects.toMatchObject({ name: "AbortError" });
-  const previous = FakeWorker.instances[0];
+  const previous = FakeWorker.instances[0]!;
   first.abort();
   await rejected;
   const latest = calculateDiff("new", "c", "d", new AbortController().signal);
-  const worker = FakeWorker.instances[1];
+  const worker = FakeWorker.instances[1]!;
   previous.reply("old");
   worker.reply("new");
   expect(await latest).toEqual(computeDiff("", ""));
   expect(previous.terminate).toHaveBeenCalledTimes(1);
   expect(worker.terminate).toHaveBeenCalledTimes(1);
   const wrong = calculateDiff("expected", "", "", new AbortController().signal);
-  FakeWorker.instances[2].reply("another snapshot");
+  FakeWorker.instances[2]!.reply("another snapshot");
   await expect(wrong).rejects.toThrow("快照不匹配");
 });
 
@@ -50,7 +50,7 @@ test("reports a stalled or unavailable Worker and releases it", async () => {
   const job = calculateDiff("s", "a", "b", new AbortController().signal);
   await vi.advanceTimersByTimeAsync(10000);
   expect(await job).toMatchObject({ kind: "limited" });
-  expect(FakeWorker.instances[0].terminate).toHaveBeenCalledTimes(1);
+  expect(FakeWorker.instances[0]!.terminate).toHaveBeenCalledTimes(1);
   vi.stubGlobal(
     "Worker",
     class {

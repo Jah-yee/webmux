@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteMap } from "svelte/reactivity";
   import { untrack } from "svelte";
   import { apiBlob } from "../api";
   import type { CodeDocument } from "../schemas";
@@ -134,7 +135,7 @@
   $effect(() => {
     const element = viewport;
     if (!element) return;
-    const pointers = new Map<number, { x: number; y: number }>();
+    const pointers = new SvelteMap<number, { x: number; y: number }>();
     let pinch:
       | {
           distance: number;
@@ -150,17 +151,19 @@
     };
     const pair = () => {
       const [a, b] = [...pointers.values()];
+      if (!a || !b) return;
       return {
         distance: Math.hypot(a.x - b.x, a.y - b.y),
         mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
       };
     };
     const startPinch = () => {
-      if (pointers.size < 2) {
+      const current = pointers.size >= 2 ? pair() : undefined;
+      if (!current) {
         pinch = undefined;
         return;
       }
-      const { distance, mid } = pair();
+      const { distance, mid } = current;
       pinch = { distance: distance || 1, scale, mid, x, y };
     };
     const down = (event: PointerEvent) => {
@@ -183,8 +186,9 @@
       event.preventDefault();
       const point = local(event);
       pointers.set(event.pointerId, point);
-      if (pinch) {
-        const { distance, mid } = pair();
+      const current = pair();
+      if (pinch && current) {
+        const { distance, mid } = current;
         const target = clamp((pinch.scale * distance) / pinch.distance);
         x = mid.x - ((pinch.mid.x - pinch.x) * target) / pinch.scale;
         y = mid.y - ((pinch.mid.y - pinch.y) * target) / pinch.scale;

@@ -567,3 +567,34 @@ test("the mobile dropdown and drawer fit long names and commands without horizon
     await page.viewport(1024, 900);
   }
 });
+
+test.each(["double-click", "enter"] as const)(
+  "%s submission creates only one session while the response is pending",
+  async (interaction) => {
+    const server = globalThis.fetch;
+    const response = Promise.withResolvers<Response>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>((input, init) => {
+        const path = new URL(String(input), location.href).pathname;
+        if (path === "/api/sessions" && init?.method === "POST") {
+          created.push(JSON.parse(String(init.body)));
+          return response.promise;
+        }
+        return server(input, init);
+      }),
+    );
+    open({ status: "ready", configs: [config] });
+    await expect.element(submit()).toBeEnabled();
+    if (interaction === "double-click")
+      await page.elementLocator(submit().element()).dblClick();
+    else {
+      submit().element().focus();
+      await userEvent.keyboard("{Enter}{Enter}{Enter}");
+    }
+    await vi.waitFor(() => expect(created).toHaveLength(1));
+    expect(created).toHaveLength(1);
+    response.resolve(Response.json(session, { status: 201 }));
+    await vi.waitFor(() => expect(location.pathname).toBe("/s/sessio23"));
+  },
+);

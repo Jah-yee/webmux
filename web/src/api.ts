@@ -97,8 +97,14 @@ export async function api<T extends z.ZodType>(
   method = "GET",
   body?: unknown,
   signal?: AbortSignal,
+  bodySchema?: z.ZodType,
 ): Promise<z.output<T>> {
-  const response = await request(path, method, body, signal);
+  const response = await request(
+    path,
+    method,
+    bodySchema ? bodySchema.parse(body) : body,
+    signal,
+  );
   return schema.parse(
     response.status === 204 ? undefined : await response.json(),
   );

@@ -54,7 +54,7 @@
 | 分层架构测试、线上 JSON 快照、必填数组 Zod 契约与重新录制                  | US-L05                                              |
 | 前端架构守卫：设计系统 lint、分层、重复代码、未使用代码与基线              | US-L06                                              |
 | Pullfrog 指定订阅模型与 GitHub Actions 密钥                                | US-L07                                              |
-| 前端代码质量基线、本地化条款与审查清单                                     | US-L09                                              |
+| 前端质量基线、类型感知与 Svelte lint、测试类型、wire 契约和失败路径回归    | US-L09                                              |
 | URL token 片段消费与 WebSocket 子协议认证                                  | US-A06                                              |
 | 桌面代码独立窗口与收回                                                     | US-I13                                              |
 | run、显式环境、attach/observe、输入取消/等待与信号中断重试、分离和控制交接 | US-M01–US-M04                                       |

@@ -37,7 +37,9 @@ const CLASS_PATTERNS = [
 
 function classStrings(source: string): string[] {
   return CLASS_PATTERNS.flatMap((pattern) =>
-    [...source.matchAll(pattern)].map((match) => match[1]),
+    [...source.matchAll(pattern)]
+      .map((match) => match[1])
+      .filter((value): value is string => value !== undefined),
   );
 }
 

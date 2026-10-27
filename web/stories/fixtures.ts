@@ -53,6 +53,7 @@ export const worktree = WorktreeSchema.parse({
 
 export const changes = ["unstaged", "staged", "untracked"].map((group, i) =>
   CodeChangeSchema.parse({
+    nodeId: `change-${i}`,
     changeId: `change-${i}`,
     group,
     oldPath: `${longPath}/old-${longToken}.ts`,

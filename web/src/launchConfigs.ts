@@ -1,3 +1,4 @@
+import { errorMessage } from "./error";
 import { joinArgs, parseArgs } from "./api";
 import type { LaunchConfigSummary, PreviewSettings } from "./schemas";
 
@@ -131,7 +132,7 @@ export function validateLaunchDraft(
     errors.preview = `跳过末尾行数须为 ${LAUNCH_PREVIEW_SKIP_MIN}–${LAUNCH_PREVIEW_SKIP_MAX} 的整数`;
   const trimmed = name.trim();
   if (!trimmed) errors.name = "请输入名称";
-  else if ([...trimmed].length > LAUNCH_NAME_MAX)
+  else if (Array.from(trimmed).length > LAUNCH_NAME_MAX)
     errors.name = `名称最多 ${LAUNCH_NAME_MAX} 个字符`;
 
   let cmd: string[] = [];
@@ -148,7 +149,7 @@ export function validateLaunchDraft(
         errors.command = `单个参数不能超过 ${LAUNCH_VALUE_BYTES} 字节`;
     }
   } catch (err) {
-    errors.command = (err as Error).message;
+    errors.command = errorMessage(err);
   }
 
   const env: Record<string, string> = {};

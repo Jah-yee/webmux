@@ -105,7 +105,10 @@ function fakeBrowser(permission: NotificationPermission = "granted") {
         subscription = null;
         return true;
       }),
-      toJSON: () => ({ endpoint: "https://push.example/x", keys: {} }),
+      toJSON: () => ({
+        endpoint: "https://push.example/x",
+        keys: { p256dh: "client-key", auth: "client-auth" },
+      }),
     };
     return subscription;
   });

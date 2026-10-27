@@ -60,8 +60,9 @@ pnpm --dir web dev    # http://127.0.0.1:5173
 | `make test-browser`         | Vitest 组件测试（无头 Chromium）                                                  |
 | `make test-e2e`             | Playwright 端到端测试（桌面 + Pixel 7）                                           |
 | `make format`               | gofmt + Oxfmt 格式化                                                              |
-| `pnpm --dir web lint`       | Oxlint 前端代码检查                                                               |
-| `pnpm --dir web check:arch` | 前端架构守卫：设计系统 lint、分层、重复与未使用代码、架构测试                     |
+| `pnpm --dir web lint`       | Oxlint 前端代码检查（含类型感知 Promise 规则）                                    |
+| `pnpm --dir web check:test` | `web/src` 与顶层 Node 测试的 Svelte/TypeScript 严格检查                           |
+| `pnpm --dir web check:arch` | 前端架构守卫：Svelte 推荐 lint、设计系统、分层、重复与未使用代码、架构测试        |
 | `make docs-check`           | 文档与 spec 的行数、体积、目录扇出与树状组织守卫                                  |
 | `make check`                | 类型检查、构建、格式检查、文档守卫、Oxlint、架构守卫、`go vet` 与 `golangci-lint` |
 
@@ -106,12 +107,12 @@ DeepSeek 直连的 `DEEPSEEK_API_KEY`。
 ## 代码规范
 
 - Go 使用 gofmt；前端使用 Oxfmt（80 列、两空格缩进、分号、尾随逗号）。提交前运行 `make format`。
-- 使用 `pnpm --dir web lint` 运行 Oxlint，`pnpm --dir web lint:fix` 应用自动修复。Oxlint 检查 JS/TS 和 Svelte 的脚本部分；Svelte 模板和类型检查继续由 `svelte-check` 负责。
+- 使用 `pnpm --dir web lint` 运行 Oxlint，`pnpm --dir web lint:fix` 应用自动修复。Oxlint 通过 `oxlint-tsgolint` 对 `.ts` 与 `.svelte.ts` 启用类型感知 Promise 规则，并检查 Svelte 的脚本部分；Oxlint 没有 Svelte 模板规则，也没有 `.svelte` 脚本的类型感知，模板事件处理器仍需按 [前端代码质量基线](docs/frontend-style.md) 第 6 条处理 rejection。`check:arch` 额外运行 Svelte 推荐模板规则；`check`、`build`、`check:test`、`check:storybook` 均拒绝 warning。
 - 使用 `pnpm --dir web check:arch` 检查组件复用、设计令牌与分层；基线已清空，任何违规都会失败；只有引入带存量违规的新规则时才记录基线，并在修复后运行 `pnpm --dir web arch:ratchet` 收紧。规则见 [前端架构守卫](docs/frontend-architecture.md)。
 - 文档与 OpenSpec 规格遵循 [文档治理](docs/doc-governance.md)：单个文件 20–400 行且不超过 48 KiB，`docs/` 与 `openspec/` 每一级直接子目录不超过 20 个；`make docs-check` 失败时会给出拆分、合并或重新分组的具体指令，按提示整理并更新引用。
 - 前端代码遵循 [前端代码质量基线](docs/frontend-style.md)：`$state` 只用于驱动界面更新，派生值用 `$derived`，`$effect` 只做副作用并清理，列表用稳定业务 ID 作 key，props 必须带类型，事件使用 Svelte 5 属性写法。
 - TypeScript 开启严格模式；HTTP 响应、WebSocket JSON 和本地设置必须经过 Zod 校验。
-- 修改后端 JSON 字段时，同步更新 `web/src/schemas.ts` 及其使用方。
+- 修改后端 JSON 字段时，同步更新 `web/src/schemas.ts` 及其使用方；`web/test/wire-contract.test.ts` 消费 Go wire 快照并检查必填字段，新增或变更快照映射时一并更新。
 - 命令以 argv 执行，不经 shell 展开。
 - 不要在持有会话 / 管理器锁时执行阻塞的网络或 PTY 操作。
 - 不在日志中记录终端输入输出，也不在配置响应中暴露 token。

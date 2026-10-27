@@ -2,6 +2,7 @@ import { api, store, stored } from "./api";
 import {
   NoContentSchema,
   PushStatusSchema,
+  PushSubscriptionRequestSchema,
   PushSubscriptionResultSchema,
   PushTestResultSchema,
   type PushReason,
@@ -95,6 +96,8 @@ async function register(subscription: PushSubscription): Promise<string> {
     PushSubscriptionResultSchema,
     "POST",
     subscription.toJSON(),
+    undefined,
+    PushSubscriptionRequestSchema,
   );
   store(SUBSCRIPTION_KEY, id);
   return id;

@@ -4,7 +4,7 @@ import { clipboardFiles } from "../src/clipboard";
 function item(entries: Record<string, string>): ClipboardItem {
   return {
     types: Object.keys(entries),
-    getType: async (type: string) => new Blob([entries[type]], { type }),
+    getType: async (type: string) => new Blob([entries[type]!], { type }),
   } as unknown as ClipboardItem;
 }
 
@@ -20,9 +20,9 @@ describe("clipboard files", () => {
       item({ "text/html": "<b>hi</b>", "image/png": "png-bytes" }),
     ]);
     expect(files).toHaveLength(1);
-    expect(files[0].name).toBe("clipboard-1700000000000-1.png");
-    expect(files[0].type).toBe("image/png");
-    expect(await files[0].text()).toBe("png-bytes");
+    expect(files[0]!.name).toBe("clipboard-1700000000000-1.png");
+    expect(files[0]!.type).toBe("image/png");
+    expect(await files[0]!.text()).toBe("png-bytes");
   });
 
   test("names extensions after the subtype with a jpg and bin fallback", async () => {

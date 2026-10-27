@@ -9,6 +9,7 @@ function file(n: number, version = "original") {
     snapshotId: `snapshot-${n}-${version}`,
     checkedAt: now,
     document: {
+      nodeId: btoa(`file-${n}.txt`),
       path: `file-${n}.txt`,
       absolutePath: `/root/file-${n}.txt`,
       source: "worktree",
@@ -810,4 +811,54 @@ test("a directory check from before refresh cannot restore a stale update warnin
   await expect
     .element(page.getByText("目录已更新或检测失败", { exact: true }))
     .not.toBeInTheDocument();
+});
+
+test("file tabs support roving focus, arrow keys and stable panel relationships", async () => {
+  serve();
+  render(Harness);
+  for (const n of [0, 1, 2])
+    await page
+      .getByRole("button", { name: `file-${n}.txt`, exact: true })
+      .click();
+  const tab = (n: number) =>
+    page.getByRole("tab", { name: `file-${n}.txt · worktree`, exact: true });
+  await expect.element(tab(2)).toHaveAttribute("aria-selected", "true");
+  tab(2).element().focus();
+  await userEvent.keyboard("{ArrowLeft}");
+  await expect.element(tab(1)).toHaveFocus();
+  await expect.element(tab(1)).toHaveAttribute("aria-selected", "true");
+  await userEvent.keyboard("{ArrowRight}");
+  await expect.element(tab(2)).toHaveFocus();
+  await userEvent.keyboard("{ArrowRight}");
+  await expect.element(tab(0)).toHaveFocus();
+  await userEvent.keyboard("{End}");
+  await expect.element(tab(2)).toHaveFocus();
+  await userEvent.keyboard("{Home}");
+  await expect.element(tab(0)).toHaveFocus();
+  const before = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[aria-label="文件标签"] [role="tab"]',
+    ),
+  ].map((element) => ({
+    id: element.id,
+    controls: element.getAttribute("aria-controls"),
+  }));
+  expect(new Set(before.map((item) => item.id)).size).toBe(3);
+  for (const item of before) {
+    expect(
+      document.getElementById(item.controls!)?.getAttribute("aria-labelledby"),
+    ).toBe(item.id);
+  }
+  await page.getByRole("button", { name: "刷新全部", exact: true }).click();
+  await expect.element(tab(0)).toHaveAttribute("id", before[0]!.id);
+  await expect
+    .element(
+      page.elementLocator(document.querySelector('[aria-label="文件标签"]')!),
+    )
+    .toMatchTextContent(/file-2/);
+  expect(
+    [
+      ...document.querySelectorAll('[aria-label="文件标签"] [role="tab"]'),
+    ].filter((element) => element.getAttribute("tabindex") === "0"),
+  ).toHaveLength(1);
 });

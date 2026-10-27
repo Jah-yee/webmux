@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { api } from "../api";
   import { suggestWorktreeBranch } from "../branchName";
   import { BranchesSchema, type Repository } from "../schemas";
@@ -14,7 +15,6 @@
     mode = $bindable<"new" | "existing">("new"),
     branch = $bindable(""),
     base = $bindable(""),
-    ready = $bindable(false),
     disabled = false,
   }: {
     repository: Repository;
@@ -22,7 +22,6 @@
     mode: "new" | "existing";
     branch: string;
     base: string;
-    ready: boolean;
     disabled?: boolean;
   } = $props();
   let data = $state<z.infer<typeof BranchesSchema> | null>(null);
@@ -62,7 +61,7 @@
         fillSuggestedBranch();
       })
       .catch((err) => {
-        if (active) error = (err as Error).message;
+        if (active) error = errorMessage(err);
       })
       .finally(() => {
         if (active) loading = false;
@@ -77,14 +76,12 @@
         ? `${data.defaultParent}/${branch.split("/").at(-1) || ""}`
         : "";
   });
-  $effect(() => {
-    ready =
-      !!data &&
-      !loading &&
-      !!branch &&
-      !!path &&
-      (mode === "existing" || !!base);
-  });
+  const ready = $derived(
+    !!data && !loading && !!branch && !!path && (mode === "existing" || !!base),
+  );
+  export function isReady() {
+    return ready;
+  }
 </script>
 
 <div class="space-y-4 rounded-lg border p-3">
@@ -164,7 +161,7 @@
         spellcheck={false}
       />
       <datalist id="worktree-bases"
-        >{#each data?.bases || [] as item}<option value={item.name}
+        >{#each data?.bases || [] as item (item.name)}<option value={item.name}
             >{item.head.slice(0, 12)}</option
           >{/each}</datalist
       >

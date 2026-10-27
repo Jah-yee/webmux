@@ -179,6 +179,7 @@
             size="icon-sm"
             class="size-9 sm:size-11"
             aria-label={`会话菜单 ${session.title}`}
+            title={`会话菜单 ${session.title}`}
             ><IconDots class="size-4" aria-hidden="true" /></Button
           >
         {/snippet}

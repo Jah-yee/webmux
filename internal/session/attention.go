@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/rainchan/webmux/internal/attentionkind"
+	"github.com/rainchan/webmux/internal/contract"
 )
 
-type AttentionSource string
+type AttentionSource = contract.AttentionSource
 
 const (
-	SourceAgent    AttentionSource = "agent"
-	SourceTerminal AttentionSource = "terminal"
+	SourceAgent    = contract.AttentionSourceAgent
+	SourceTerminal = contract.AttentionSourceTerminal
 )
 
 // bellQuietPeriod ignores bells that answer a keystroke, such as shell completion.

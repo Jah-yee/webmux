@@ -22,7 +22,7 @@ export function applySessionEvent(
   }
   const next = [...sessions];
   if (index !== -1) {
-    if (sessions[index].createdAt === event.session.createdAt) {
+    if (sessions[index]!.createdAt === event.session.createdAt) {
       next[index] = event.session;
       return next;
     }

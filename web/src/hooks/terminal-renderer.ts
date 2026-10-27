@@ -107,6 +107,7 @@ export function createTerminalRenderer(
       // backing canvas without updating its render dimensions. DOM rendering
       // avoids that incompatible measurement; allow normal pixel rounding.
       if (
+        css &&
         pixels &&
         css.width > 0 &&
         css.height > 0 &&

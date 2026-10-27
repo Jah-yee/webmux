@@ -1,3 +1,4 @@
+import { SvelteMap } from "svelte/reactivity";
 import { previewSettings } from "./previewSettings.svelte";
 import type { PreviewSettings } from "./schemas";
 
@@ -11,7 +12,7 @@ export function setLaunchPreviews(
     preview?: PreviewSettings | null;
   }[],
 ): void {
-  byConfig = new Map(
+  byConfig = new SvelteMap(
     configs.flatMap((config) =>
       config.preview ? [[config.id, config.preview] as const] : [],
     ),

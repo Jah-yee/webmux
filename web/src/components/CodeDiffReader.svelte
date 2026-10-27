@@ -139,7 +139,9 @@
     const next = stepMatch(cursor, matches, direction);
     if (!next) return;
     cursor = next;
-    scrollToLine(matches[next.index]);
+    const line = matches[next.index];
+    if (line === undefined) return;
+    scrollToLine(line);
   }
   function goto(value: string) {
     const match = /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(value.trim());

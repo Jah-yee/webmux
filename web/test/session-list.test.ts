@@ -58,7 +58,7 @@ test("output updates preserve order, untouched row identity and previous snapsho
   expect(result).toEqual([first, updated]);
   expect(result[0]).toBe(first);
   expect(input[1]).toBe(second);
-  expect(input[1].preview).toBe("");
+  expect(input[1]!.preview).toBe("");
 });
 
 test("creation and an update for an unknown ID insert into creation order", () => {

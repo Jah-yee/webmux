@@ -112,7 +112,8 @@
             {...props}
             variant="ghost"
             size="icon-sm"
-            aria-label={`仓库菜单 ${repo.name}`}>⋯</Button
+            aria-label={`仓库菜单 ${repo.name}`}
+            title={`仓库菜单 ${repo.name}`}>⋯</Button
           >{/snippet}</DropdownMenu.Trigger
       >
       <DropdownMenu.Content align="end"

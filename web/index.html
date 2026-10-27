@@ -15,6 +15,22 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      // Apply the saved theme before the application module and its CSS load.
+      (() => {
+        let saved = null;
+        try {
+          saved = localStorage.getItem("webmux.theme");
+        } catch {
+          // Storage can be unavailable in private browsing; system theme remains usable.
+        }
+        const dark =
+          saved === "dark" ||
+          (saved !== "light" &&
+            !matchMedia("(prefers-color-scheme: light)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+      })();
+    </script>
     <!-- font-preload:start -->
     <link
       rel="preload"

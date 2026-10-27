@@ -35,32 +35,33 @@ WebMux is a single-user Linux/macOS web terminal for persistent PTY sessions, in
 
 Run from the repository root:
 
-| Command                                    | Purpose                                                                                                               |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                                                                 |
-| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`.                                             |
-| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.                                                   |
-| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                                                              |
-| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                                                          |
-| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                                                                  |
-| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                                                             |
-| `make check`                               | Build frontend, check formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint`.    |
-| `make docs-check`                          | Run the documentation/spec size and tree-layout guard (`internal/docguard`).                                          |
-| `pnpm --dir web lint`                      | Run Oxlint on frontend code.                                                                                          |
-| `pnpm --dir web check:arch`                | Run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test). |
-| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                                                                    |
+| Command                                    | Purpose                                                                                                                           |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --dir web install --frozen-lockfile` | Install locked frontend dependencies.                                                                                             |
+| `make web`                                 | Install dependencies, run Svelte/TypeScript checks, and build `web/dist`.                                                         |
+| `make build`                               | Build frontend first, then the embedded Go executable `bin/webmux`.                                                               |
+| `make release`                             | Build Linux and macOS (darwin) amd64 and arm64 binaries.                                                                          |
+| `./bin/webmux --listen 127.0.0.1:7681`     | Run the backend and embedded production app.                                                                                      |
+| `pnpm --dir web dev`                       | Run Vite at `http://127.0.0.1:5173`.                                                                                              |
+| `pnpm --dir web check`                     | Check Svelte/TypeScript without building.                                                                                         |
+| `pnpm --dir web check:test`                | Type-check `web/src` and top-level `web/test/*.test.ts` with Svelte support.                                                      |
+| `make check`                               | Build frontend, check test types and formatting, run the doc guard, Oxlint, the architecture guard, `go vet` and `golangci-lint`. |
+| `make docs-check`                          | Run the documentation/spec size and tree-layout guard (`internal/docguard`).                                                      |
+| `pnpm --dir web lint`                      | Run Oxlint, including type-aware Promise rules, on frontend code.                                                                 |
+| `pnpm --dir web check:arch`                | Run the frontend architecture guard (ESLint design-system rules, dependency-cruiser, jscpd, knip, architecture test).             |
+| `make format` / `make format-check`        | Apply/check gofmt and Oxfmt on configured targets.                                                                                |
 
 Vite proxies `/api` and `/ws` to backend port 7681. Run the backend separately and add `allowed_origins = ["http://127.0.0.1:5173"]` to its development TOML; otherwise browser write requests are rejected. Configuration defaults to `~/.config/webmux/config.toml`; `-config`, `-listen`, and `-token` override startup settings.
 
 ## Code Conventions & Common Patterns
 
 - Go follows [the Go quality baseline](docs/go-style.md), based on the Uber Go Style Guide with documented local exceptions. New Go code must add no lint warnings; use the pinned golangci-lint release and `make go-lint`.
-- Go uses gofmt. Frontend files use Oxfmt with an 80-column print width, two spaces, semicolons, trailing commas, and Svelte formatting enabled. Oxlint checks JS/TS and Svelte script blocks; keep `svelte-check` for Svelte template and type diagnostics. TypeScript is strict; `$lib` aliases `web/src/lib`.
+- Go uses gofmt. Frontend files use Oxfmt with an 80-column print width, two spaces, semicolons, trailing commas, and Svelte formatting enabled. Oxlint checks JS/TS and Svelte script blocks, with type-aware Promise rules for `.ts` and `.svelte.ts`; keep `svelte-check` for Svelte template and type diagnostics. TypeScript is strict with `noUncheckedIndexedAccess`; `$lib` aliases `web/src/lib`.
 - Before writing UI, look for an existing component in `web/src/lib/components/ui/`, then `web/src/components/`, then the shadcn-svelte registry; give design-system components a new variant or size instead of restyling them with `class`. Run `pnpm --dir web check:arch` before finishing frontend work. The committed baselines are empty, so any violation fails; fix it rather than adding `eslint-disable`/`jscpd:ignore` or growing a baseline. A baseline is only for adopting a new rule that has existing violations, followed by `pnpm --dir web arch:ratchet` as they are fixed. See [Frontend Architecture Guard](docs/frontend-architecture.md).
 - Follow existing names: PascalCase Svelte components, camelCase TypeScript functions, `*Schema` Zod contracts, `*.svelte.ts` rune-bearing hooks, Go `*_test.go`, and Playwright `*.spec.ts`.
 - Use Iconify for new or changed UI icons, preferring the `tabler` collection for visual consistency. Bundle the required icon data locally so icons work without a public icon API. Migrate existing direct icon-library imports when updating the related UI. Icon-only controls must have an accessible name and a visible tooltip; decorative icons use `aria-hidden="true"`. See [Icons](docs/design-system.md#icons).
 - Use Svelte 5 `$state`/`$derived` for local reactive state and lifecycle cleanup for sockets, xterm, listeners, and observers. Reuse `api.ts` and `ws.ts`; do not add parallel request or reconnect conventions. The frontend baseline is [Frontend Code Quality](docs/frontend-style.md): `$state` only for state that drives rendering, `$derived` for computed values, `$effect` only for side effects with cleanup, stable business IDs for keyed lists, typed `$props()`, and Svelte 5 event attributes (`onclick`) rather than `on:` directives.
-- Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. PTY data stays binary, not JSON or decoded text.
+- Validate HTTP responses, WebSocket JSON, and local settings with Zod before updating state; derive types with `z.infer`. High-risk request bodies use the optional body schema in `api()` and are validated before any network request. PTY data stays binary, not JSON or decoded text.
 - Return contextual Go errors and API JSON errors with meaningful HTTP statuses. Services report sentinel error kinds (for example `workspace.ErrConflict`); only `internal/api/errors.go` maps them to statuses. Frontend failures use `APIError`; HTTP 401 triggers `webmux:auth`. Preserve cancellation/deadlines for PTY writes and join spawned connection goroutines.
 - Protect manager/session state with existing locks; do not hold them across blocking network or PTY operations. Shared output chunks stay immutable. Exit publication follows PTY drain and process cleanup.
 - Execute commands as argv, not shell-expanded strings. Session creation takes either a saved custom launch `configId` or an explicit full `cmd`/`env`; they are mutually exclusive. There are no built-in launch presets or implicit shell wrappers. Loading `.bashrc` requires an explicit command such as `bash -ic 'exec opencode "$@"' opencode`. Preserve authentication and Origin checks on API/WebSocket paths; never log terminal input/output or expose tokens through configuration responses.

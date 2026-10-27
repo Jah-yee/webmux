@@ -21,7 +21,7 @@
           ? "整理测试结果\n记录失败用例、复现步骤和可能的原因。"
           : "更新使用说明\n补充草稿恢复与暂存的操作示例，确认手机端也能顺利完成。",
       );
-      draft.scratch[i].updatedAt = 1792721400000;
+      draft.scratch[i]!.updatedAt = 1792721400000;
     }
     if (pending) drafts.beginSubmission(draft, "s-00000001");
   });

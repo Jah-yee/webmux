@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { onMount, type Snippet } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import CodeNavigator from "./CodeNavigator.svelte";
   import { api } from "../api";
   import {
@@ -27,6 +29,7 @@
   import IconPictureInPictureOn from "~icons/tabler/picture-in-picture-on";
   import IconRefresh from "~icons/tabler/refresh";
   import IconDots from "~icons/tabler/dots";
+  import IconX from "~icons/tabler/x";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { EditorView } from "@codemirror/view";
   import CodeDocumentView from "./CodeDocumentView.svelte";
@@ -55,6 +58,7 @@
     diff?: CodeDiff;
     status: string;
     sequence: number;
+    domId: number;
     comparison?: CodeDiff;
     // Narrow-screen menu content supplied by the tab's document view.
     menu?: Snippet;
@@ -118,7 +122,7 @@
         },
       });
     } catch (e) {
-      error = (e as Error).message;
+      error = errorMessage(e);
     } finally {
       popping = false;
     }
@@ -162,7 +166,7 @@
   let navStatus = $state("");
   let pending = $state(false);
   let controller: AbortController | undefined;
-  const controllers = new Map<string, AbortController>();
+  const controllers = new SvelteMap<string, AbortController>();
   let navSequence = 0;
   let mounted = false;
   let checkController: AbortController | undefined;
@@ -256,7 +260,7 @@
       if (seq === navSequence) navStatus = "";
     } catch (e) {
       if (!aborted(e) && mounted && seq === navSequence) {
-        error = (e as Error).message;
+        error = errorMessage(e);
         if (nav === "changes") changesError = error;
       }
     } finally {
@@ -280,15 +284,35 @@
     return value;
   }
   let selectionSequence = 0;
+  let tabDomSequence = 0;
   const beginOpen = () => ++selectionSequence;
   function activate(key: string) {
     beginOpen();
     active = key;
   }
+  function tabKeydown(event: KeyboardEvent, key: string) {
+    const index = tabs.findIndex((tab) => tab.key === key);
+    if (index < 0) return;
+    let next: number;
+    if (event.key === "ArrowLeft")
+      next = (index + tabs.length - 1) % tabs.length;
+    else if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+    const target = tabs[next];
+    if (!target) return;
+    event.preventDefault();
+    activate(target.key);
+    const tablist = (event.currentTarget as HTMLElement).closest(
+      '[role="tablist"]',
+    );
+    tablist?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  }
   function install(file?: CodeFile, diff?: CodeDiff, shouldActivate = true) {
     const d = file?.document ?? diff?.new;
     if (!context || !d) return;
-    const key = `${context.contextId}:${d.nodeId ?? nodeId(d.path)}:${diff ? "diff:" + diff.change.group : d.source}`;
+    const key = `${context.contextId}:${d.nodeId}:${diff ? "diff:" + diff.change.group : d.source}`;
     const existing = tabs.find((t) => t.key === key);
     if (existing) {
       if (shouldActivate) active = key;
@@ -306,7 +330,14 @@
       error = "最多打开 20 个标签，请先关闭一个";
       return;
     }
-    tabs.push({ key, file, diff, status: "unchanged", sequence: 0 });
+    tabs.push({
+      key,
+      file,
+      diff,
+      status: "unchanged",
+      sequence: 0,
+      domId: ++tabDomSequence,
+    });
     if (shouldActivate) {
       active = key;
       closeOverlayNav();
@@ -344,7 +375,7 @@
   async function openDiff(change: CodeChange) {
     if (!context) return;
     await openTab(
-      `${context.contextId}:${change.nodeId ?? nodeId(change.newPath)}:diff:${change.group}`,
+      `${context.contextId}:${change.nodeId}:diff:${change.group}`,
       `${base}/diff?${params({ changeId: change.changeId })}`,
       CodeDiffSchema,
       (value, activate) => install(undefined, value, activate),
@@ -385,7 +416,7 @@
       if (mounted && !c.signal.aborted && controllers.get(key) === c)
         done(value);
     } catch (e) {
-      if (mounted && !aborted(e)) error = (e as Error).message;
+      if (mounted && !aborted(e)) error = errorMessage(e);
     } finally {
       if (controllers.get(key) === c) controllers.delete(key);
     }
@@ -404,7 +435,7 @@
         const signal = controllers.get(tab.key)?.signal;
         if (tab.diff) {
           const next = await api(
-            `${base}/changes?${params({ nodeId: tab.diff.change.nodeId ?? nodeId(tab.diff.change.newPath) })}`,
+            `${base}/changes?${params({ nodeId: tab.diff.change.nodeId })}`,
             CodeChangesSchema,
             "GET",
             undefined,
@@ -429,7 +460,7 @@
         if (!tab.file) throw new Error("文件不可用");
         return {
           file: await api(
-            `${base}/file?${params({ nodeId: tab.file.document.nodeId ?? nodeId(tab.file.document.path), source: tab.file.document.source })}`,
+            `${base}/file?${params({ nodeId: tab.file.document.nodeId, source: tab.file.document.source })}`,
             CodeFileSchema,
             "GET",
             undefined,
@@ -574,7 +605,7 @@
         }
       })
       .catch((e) => {
-        if (mounted && !aborted(e)) error = (e as Error).message;
+        if (mounted && !aborted(e)) error = errorMessage(e);
       });
     const timer = window.setInterval(() => void check(), 5000);
     const visibility = () => {
@@ -611,7 +642,7 @@
     >
       <p>代码已在独立窗口中显示</p>
       <Button variant="outline" size="sm" onclick={() => popout?.close()}
-        ><IconPictureInPictureOff />收回到此处</Button
+        ><IconPictureInPictureOff aria-hidden="true" />收回到此处</Button
       >
     </div>{/if}
   <section
@@ -634,7 +665,9 @@
               : "文件导航"}
           onclick={() => (navOpen = !navOpen)}
           >{#if navOpen}<IconLayoutSidebarLeftCollapse
+              aria-hidden="true"
             />{:else}<IconLayoutSidebarLeftExpand
+              aria-hidden="true"
             />{/if}{#if navStatus && !navOpen}<span
               class="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-warning"
               aria-hidden="true"
@@ -659,9 +692,13 @@
               variant="tab"
               role="tab"
               aria-selected={active === tab.key}
+              aria-controls={`code-panel-${tab.domId}`}
+              id={`code-tab-${tab.domId}`}
+              tabindex={active === tab.key ? 0 : -1}
               aria-label={`${path} · ${meta}`}
               title={path}
               onclick={() => activate(tab.key)}
+              onkeydown={(event) => tabKeydown(event, tab.key)}
               >{#if image}<IconPhoto
                   class="mr-1 inline size-3.5 align-[-0.125em]"
                   aria-hidden="true"
@@ -670,7 +707,9 @@
             <ListButton
               variant="tab-close"
               aria-label={`关闭 ${path}`}
-              onclick={() => close(tab.key)}>×</ListButton
+              title={`关闭 ${path}`}
+              onclick={() => close(tab.key)}
+              ><IconX aria-hidden="true" /></ListButton
             >
           </div>{/each}
       </div>
@@ -686,7 +725,7 @@
           onclick={() => {
             void load();
             for (const tab of tabs) void refresh(tab);
-          }}><IconRefresh /></Button
+          }}><IconRefresh aria-hidden="true" /></Button
         >
         {#if canPopOut}<Button
             variant="outline"
@@ -697,7 +736,10 @@
             title={popout ? "收回代码窗口" : "在独立窗口中显示代码"}
             onclick={() => void togglePopout()}
             >{#if popout}<IconPictureInPictureOff
-              />{:else}<IconPictureInPictureOn />{/if}</Button
+                aria-hidden="true"
+              />{:else}<IconPictureInPictureOn
+                aria-hidden="true"
+              />{/if}</Button
           >{/if}
         {#if activeMenu}<DropdownMenu.Root>
             <DropdownMenu.Trigger>
@@ -784,6 +826,8 @@
             class="min-h-0 flex-1 overflow-hidden"
             class:hidden={active !== tab.key}
             role="tabpanel"
+            id={`code-panel-${tab.domId}`}
+            aria-labelledby={`code-tab-${tab.domId}`}
           >
             <CodeDocumentView
               {id}

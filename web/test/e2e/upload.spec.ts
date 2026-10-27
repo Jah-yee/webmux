@@ -282,3 +282,50 @@ test("desktop native file paste takes precedence over the clipboard's text", asy
     "DO_NOT_PASTE_FILENAME_TEXT",
   );
 });
+
+test("413, 500 and interrupted uploads report failure and allow a successful retry", async ({
+  page,
+  workDir,
+}, info) => {
+  const id = await createShell(page, "Retry failed uploads", workDir);
+  let attempt = 0;
+  await page.route(`**/api/sessions/${id}/upload`, async (route) => {
+    attempt++;
+    if (attempt <= 2)
+      await route.fulfill({
+        status: attempt === 1 ? 413 : 500,
+        json: { error: `upload rejected ${attempt}` },
+      });
+    else if (attempt === 3) await route.abort();
+    else await route.continue();
+  });
+  async function selectFile() {
+    const chooser = page.waitForEvent("filechooser");
+    await (await headerAction(page, "上传文件")).click();
+    await (
+      await chooser
+    ).setFiles({
+      name: "retry.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("RETRY_UPLOAD_CONTENT\n"),
+    });
+    if (info.project.use.isMobile) await page.keyboard.press("Escape");
+  }
+  for (const message of [
+    "upload rejected 1",
+    "upload rejected 2",
+    "上传失败：网络连接异常",
+  ]) {
+    await selectFile();
+    await expect(page.getByRole("alert")).toContainText(message);
+    await expect(
+      page.getByRole("progressbar", { name: "文件上传进度" }),
+    ).toBeHidden();
+  }
+  await selectFile();
+  await expect(
+    page.getByRole("progressbar", { name: "文件上传进度" }),
+  ).toBeHidden();
+  await expect(page.locator(".xterm-rows")).toContainText("retry.txt");
+  expect(attempt).toBe(4);
+});

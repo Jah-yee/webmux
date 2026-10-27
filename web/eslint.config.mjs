@@ -8,6 +8,7 @@ import tsParser from "@typescript-eslint/parser";
 import { defineConfig } from "eslint/config";
 import svelte from "eslint-plugin-svelte";
 import svelteParser from "svelte-eslint-parser";
+import svelteConfig from "./svelte.config.js";
 
 // Must match `aliases.ui` in components.json.
 const UI_DIR = "src/lib/components/ui";
@@ -70,12 +71,12 @@ export default defineConfig([
       "src/lib/utils.ts",
     ],
   },
-  ...svelte.configs.base,
+  ...svelte.configs.recommended,
   {
     files: ["src/**/*.svelte", "src/**/*.svelte.ts"],
     languageOptions: {
       parser: svelteParser,
-      parserOptions: { parser: tsParser },
+      parserOptions: { parser: tsParser, svelteConfig },
     },
   },
   {
@@ -145,6 +146,11 @@ export default defineConfig([
   {
     files: ["src/**/*.svelte"],
     rules: {
+      // Nested controller interfaces are consumed through an alias in templates.
+      "svelte/no-unused-props": [
+        "error",
+        { allowUnusedNestedProperties: true },
+      ],
       "svelte/no-restricted-html-elements": [
         "error",
         ...Object.keys(RAW_TO_DS).map((element) => ({
@@ -168,5 +174,19 @@ export default defineConfig([
   {
     files: [`${UI_DIR}/**/*.svelte`],
     rules: { "svelte/no-restricted-html-elements": "off" },
+  },
+  {
+    // The rule cannot see nested controller properties accessed through `t`.
+    files: [
+      "src/components/TerminalHeader.svelte",
+      "src/components/TerminalNotices.svelte",
+      "src/components/TerminalViewport.svelte",
+    ],
+    rules: { "svelte/no-unused-props": "off" },
+  },
+  {
+    // marked output is sanitized by the dedicated DOMPurify instance and hooks.
+    files: ["src/components/CodeMarkdownPreview.svelte"],
+    rules: { "svelte/no-at-html-tags": "off" },
   },
 ]);

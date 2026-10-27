@@ -35,6 +35,7 @@ function harness(
   }) => Promise<KittyImage> = async ({ width, height }) =>
     fakeImage(width ?? 2, height ?? 2),
   afterMove?: () => Promise<void>,
+  failWrite = false,
 ) {
   const replies: string[] = [];
   const logs: string[] = [];
@@ -56,6 +57,7 @@ function harness(
       logs.push(`reply:${text}`);
     },
     write: (data, parsed) => {
+      if (failWrite) throw new Error("write failed");
       logs.push(`text:${decoder.decode(data)}`);
       parsed();
     },
@@ -184,7 +186,7 @@ test("a transmitted image is stored and displayed at the cursor", async () => {
     "text:after",
   ]);
   expect(board.placements).toHaveLength(1);
-  expect(board.placements[0].spec).toMatchObject({
+  expect(board.placements[0]!.spec).toMatchObject({
     column: 3,
     line: 5,
     columns: 1,
@@ -213,7 +215,7 @@ test("source rectangles are clipped to the image", async () => {
   await board.send(
     `\x1b_Ga=T,f=32,s=4,v=4,i=1,x=2,y=2,w=100,h=100;${raw(4, 4)}\x1b\\`,
   );
-  expect(board.placements[0].spec).toMatchObject({
+  expect(board.placements[0]!.spec).toMatchObject({
     sourceX: 2,
     sourceY: 2,
     sourceWidth: 2,
@@ -224,16 +226,16 @@ test("source rectangles are clipped to the image", async () => {
 test("delete by screen position follows the placement's current line", async () => {
   const board = harness();
   await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=1;${raw(2, 2)}\x1b\\`);
-  board.placements[0].spec.line = 2;
+  board.placements[0]!.spec.line = 2;
   await board.send("\x1b_Ga=d,d=p,x=1,y=3\x1b\\");
-  expect(board.placements[0].disposed).toBe(true);
+  expect(board.placements[0]!.disposed).toBe(true);
 });
 
 test("delete by image-id range accepts full-width ids", async () => {
   const board = harness();
   await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=1;${raw(2, 2)}\x1b\\`);
   await board.send("\x1b_Ga=d,d=r,x=0,y=4294967295\x1b\\");
-  expect(board.placements[0].disposed).toBe(true);
+  expect(board.placements[0]!.disposed).toBe(true);
 });
 
 test("a dismissed anonymous placement releases its image", async () => {
@@ -244,7 +246,7 @@ test("a dismissed anonymous placement releases its image", async () => {
   }));
   await board.send(`\x1b_Ga=T,f=32,s=2,v=2;${raw(2, 2)}\x1b\\`);
   expect(board.placements).toHaveLength(1);
-  board.placements[0].handle.dispose();
+  board.placements[0]!.handle.dispose();
   expect(dispose).toHaveBeenCalledTimes(1);
 });
 
@@ -288,7 +290,7 @@ test("the C=1 policy leaves the cursor in place", async () => {
 test("placement geometry letterboxes explicit cell rectangles", async () => {
   const board = harness();
   await board.send(`\x1b_Ga=T,f=32,s=4,v=4,i=1,c=2,r=2;${raw(4, 4)}\x1b\\`);
-  expect(board.placements[0].spec).toMatchObject({
+  expect(board.placements[0]!.spec).toMatchObject({
     columns: 2,
     rows: 2,
     drawWidth: 20,
@@ -302,12 +304,12 @@ test("deleting placements keeps image data until an uppercase delete frees it", 
   const board = harness();
   await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=5;${raw(2, 2)}\x1b\\`);
   await board.send("\x1b_Ga=d,d=i,i=5\x1b\\");
-  expect(board.placements[0].disposed).toBe(true);
+  expect(board.placements[0]!.disposed).toBe(true);
   await board.send("\x1b_Ga=p,i=5\x1b\\");
   expect(board.placements).toHaveLength(2);
-  expect(board.placements[1].disposed).toBe(false);
+  expect(board.placements[1]!.disposed).toBe(false);
   await board.send("\x1b_Ga=d,d=I,i=5\x1b\\");
-  expect(board.placements[1].disposed).toBe(true);
+  expect(board.placements[1]!.disposed).toBe(true);
   await board.send("\x1b_Ga=p,i=5\x1b\\");
   expect(board.replies.at(-1)).toBe("\x1b_Gi=5;ENOENT:image not found\x1b\\");
 });
@@ -332,7 +334,7 @@ test("reset disposes placements and stored images", async () => {
   const board = harness();
   await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=1;${raw(2, 2)}\x1b\\`);
   board.graphics.reset();
-  expect(board.placements[0].disposed).toBe(true);
+  expect(board.placements[0]!.disposed).toBe(true);
   await board.send("\x1b_Ga=p,i=1\x1b\\");
   expect(board.replies.at(-1)).toContain("ENOENT");
 });
@@ -390,7 +392,7 @@ test("reset permits new commands without waiting for the stale decoder", async (
   await old;
   expect(dispose).toHaveBeenCalledTimes(1);
   expect(board.placements).toHaveLength(1);
-  expect(board.placements[0].disposed).toBe(false);
+  expect(board.placements[0]!.disposed).toBe(false);
   expect(board.replies).toEqual(["\x1b_Gi=1;OK\x1b\\"]);
   expect(board.logs.filter((line) => line.startsWith("text:"))).toEqual([
     "text:fresh",
@@ -454,7 +456,7 @@ test("source dimensions accept the exact limits and reject oversized headers bef
     [8193, 1],
     [8192, 1025],
     [1, 8193],
-  ]) {
+  ] as Array<[number, number]>) {
     await board.send(`\x1b_Ga=T,f=100,i=2;${pngHeader(width, height)}\x1b\\`);
     expect(board.replies.at(-1)).toContain(
       "EINVAL:image dimensions exceed source limits",
@@ -483,7 +485,7 @@ test("anonymous placements consume aggregate source pixels and release them on d
   expect(decode).toHaveBeenCalledTimes(8);
   expect(board.placements).toHaveLength(8);
   expect(dispose).not.toHaveBeenCalled();
-  board.placements[0].handle.dispose();
+  board.placements[0]!.handle.dispose();
   await board.send(`\x1b_Ga=T,f=100,i=9,C=1;${payload}\x1b\\`);
   expect(board.replies.at(-1)).toBe("\x1b_Gi=9;OK\x1b\\");
   expect(decode).toHaveBeenCalledTimes(9);
@@ -512,7 +514,7 @@ test.each([false, true])(
     if (!anonymous) {
       await board.send("\x1b_Ga=p,i=1,C=1\x1b\\");
       expect(board.replies.at(-1)).toBe("\x1b_Gi=1;OK\x1b\\");
-      expect(board.placements.at(-1)?.image).toBe(board.placements[0].image);
+      expect(board.placements.at(-1)?.image).toBe(board.placements[0]!.image);
     }
     board.graphics.dispose();
     expect(dispose).toHaveBeenCalledTimes(256);
@@ -532,9 +534,9 @@ test("1024 placements of one reusable image are bounded and replacement remains 
   expect(dispose).not.toHaveBeenCalled();
   await board.send("\x1b_Ga=p,i=1,p=1,C=1\x1b\\");
   expect(board.replies.at(-1)).toBe("\x1b_Gi=1,p=1;OK\x1b\\");
-  expect(board.placements[0].disposed).toBe(true);
+  expect(board.placements[0]!.disposed).toBe(true);
   expect(board.placements.filter((item) => !item.disposed)).toHaveLength(1024);
-  board.placements[1].handle.dispose();
+  board.placements[1]!.handle.dispose();
   await board.send("\x1b_Ga=p,i=1,C=1\x1b\\");
   expect(board.replies.at(-1)).toBe("\x1b_Gi=1;OK\x1b\\");
   expect(dispose).not.toHaveBeenCalled();
@@ -546,7 +548,7 @@ test.each([0, 1, 2, 3])(
     const dispose = vi.fn();
     const board = harness(async () => ({ ...fakeImage(), dispose }));
     await board.send(`\x1b_Ga=t,f=32,s=2,v=2,i=1;${raw(2, 2)}\x1b\\`);
-    const positions = [
+    const positions: Array<[number, number]> = [
       [1, 4],
       [1, 5],
       [3, 5],
@@ -560,7 +562,7 @@ test.each([0, 1, 2, 3])(
       board.setCursor(column, line);
       await board.send("\x1b_Ga=p,i=1,c=2,r=2,C=1\x1b\\");
     }
-    board.placements[7].active = false;
+    board.placements[7]!.active = false;
     board.setCursor(4, 5);
     board.graphics.eraseDisplay(mode);
     const expected =
@@ -577,12 +579,12 @@ test.each([0, 1, 2, 3])(
 test("viewport and positional deletion ignore inactive placements but explicit removal still works", async () => {
   const board = harness();
   await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=1,C=1;${raw(2, 2)}\x1b\\`);
-  board.placements[0].active = false;
+  board.placements[0]!.active = false;
   for (const control of ["d=a", "d=c", "d=p,x=1,y=1", "d=x,x=1", "d=y,y=1"])
     await board.send(`\x1b_Ga=d,${control}\x1b\\`);
-  expect(board.placements[0].disposed).toBe(false);
+  expect(board.placements[0]!.disposed).toBe(false);
   await board.send("\x1b_Ga=d,d=I,i=1\x1b\\");
-  expect(board.placements[0].disposed).toBe(true);
+  expect(board.placements[0]!.disposed).toBe(true);
 });
 
 test("screen clear disposes anonymous images but preserves offscreen placements", async () => {
@@ -716,7 +718,7 @@ test("relative placements fail explicitly without moving or displaying the store
   expect(board.placements).toEqual([]);
   expect(board.moves).toEqual([]);
   await board.send("\x1b_Ga=p,i=1,C=1\x1b\\");
-  expect(board.placements[0].image).toMatchObject({ width: 2, height: 2 });
+  expect(board.placements[0]!.image).toMatchObject({ width: 2, height: 2 });
 });
 
 test("base64 whitespace neither changes decoded pixel length nor fabricates pixels", async () => {
@@ -754,4 +756,10 @@ test("reset during asynchronous query validation prevents a late reply", async (
     board.graphics.dispose();
     vi.useRealTimers();
   }
+});
+
+test("an asynchronous write failure replies with the active image id", async () => {
+  const board = harness(undefined, undefined, true);
+  await board.send(`\x1b_Ga=T,f=32,s=2,v=2,i=1;${raw(2, 2)}\x1b\\after`);
+  expect(board.replies).toContain("\x1b_Gi=1;EINVAL:write failed\x1b\\");
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { errorMessage } from "../error";
   import { api } from "../api";
   import { RepositorySchema } from "../schemas";
   import { Button } from "$lib/components/ui/button";
@@ -23,7 +24,7 @@
       onchange();
       onclose();
     } catch (err) {
-      error = (err as Error).message;
+      error = errorMessage(err);
     } finally {
       busy = false;
     }

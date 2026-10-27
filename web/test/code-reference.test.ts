@@ -3,6 +3,7 @@ import { codeReference, nodeId } from "../src/code-reference";
 import { CodeDocumentSchema, CodeFileSchema } from "../src/schemas";
 import { execFileSync } from "node:child_process";
 const doc = CodeDocumentSchema.parse({
+  nodeId: nodeId("src/main.go"),
   path: "src/main.go",
   absolutePath: "/repo/src/main.go",
   source: "worktree",

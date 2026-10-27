@@ -120,7 +120,7 @@
     else return;
     event.preventDefault();
     const direction = event.key === "ArrowUp" || event.key === "End" ? -1 : 1;
-    while (target >= 0 && target < rows.length && !rows[target].change)
+    while (target >= 0 && target < rows.length && !rows[target]?.change)
       target += direction;
     if (target < 0 || target >= rows.length) {
       if (target >= rows.length && nextCursor && !pending && enabled) onmore();

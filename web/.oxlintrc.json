@@ -1,5 +1,8 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "options": {
+    "typeAware": true
+  },
   "categories": {
     "correctness": "error"
   },
@@ -7,10 +10,37 @@
     "browser": true,
     "node": true
   },
+  "rules": {
+    "typescript/await-thenable": "off",
+    "typescript/no-array-delete": "off",
+    "typescript/no-base-to-string": "off",
+    "typescript/no-floating-promises": "off",
+    "typescript/no-implied-eval": "off",
+    "typescript/no-misused-promises": "off",
+    "typescript/no-misused-spread": "off",
+    "typescript/unbound-method": "off"
+  },
   "overrides": [
     {
       "files": ["**/*.svelte", "**/*.svelte.ts"],
       "env": { "svelte": true }
+    },
+    {
+      "files": ["src/**/*.ts", "src/**/*.svelte.ts"],
+      "rules": {
+        "typescript/await-thenable": "error",
+        "typescript/no-array-delete": "error",
+        "typescript/no-base-to-string": "error",
+        "typescript/no-floating-promises": "error",
+        "typescript/no-implied-eval": "error",
+        "typescript/no-misused-promises": "error",
+        "typescript/no-misused-spread": "error",
+        "typescript/unbound-method": "error"
+      }
+    },
+    {
+      "files": ["src/components/codePopout.ts", "src/hooks/terminal.svelte.ts"],
+      "rules": { "typescript/unbound-method": "off" }
     }
   ],
   "ignorePatterns": [
