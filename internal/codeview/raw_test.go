@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/session"
 )
 
 func rawBytes(t *testing.T, s *Service, id, sid, side string) []byte {
@@ -167,7 +169,7 @@ func TestRawRejectsChangesAndInvalidReferences(t *testing.T) {
 	if _, e := s.Raw(context.Background(), id, deleted.Snapshot, "new"); errorKind(e) != ErrNotFound {
 		t.Fatalf("empty side: %v", e)
 	}
-	other, e := s.manager.Create(root, []string{"/bin/sh"}, "", nil, "")
+	other, e := s.manager.Create(session.CreateInput{Cwd: root, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}

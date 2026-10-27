@@ -10,7 +10,7 @@ import (
 
 func TestMapPath(t *testing.T) {
 	base := `C:\work\app`
-	cases := []struct {
+	tests := []struct {
 		path, linux, drive string
 		err                bool
 	}{
@@ -30,13 +30,13 @@ func TestMapPath(t *testing.T) {
 		{"~", "~", "", false},
 		{"~/proj", "~/proj", "", false},
 	}
-	for _, tc := range cases {
-		linux, drive, err := MapPath(tc.path, base, "Ubuntu")
-		if linux != tc.linux || drive != tc.drive || (err != nil) != tc.err {
-			t.Errorf("%s: linux %q drive %q err %v", tc.path, linux, drive, err)
+	for _, tt := range tests {
+		linux, drive, err := MapPath(tt.path, base, "Ubuntu")
+		if linux != tt.linux || drive != tt.drive || (err != nil) != tt.err {
+			t.Errorf("%s: linux %q drive %q err %v", tt.path, linux, drive, err)
 		}
-		if tc.err && !errors.Is(err, ErrUnmappable) {
-			t.Errorf("%s: error %v", tc.path, err)
+		if tt.err && !errors.Is(err, ErrUnmappable) {
+			t.Errorf("%s: error %v", tt.path, err)
 		}
 	}
 	// A relative path inside the distribution's own share stays mapped.

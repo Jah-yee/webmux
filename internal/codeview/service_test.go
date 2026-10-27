@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rainchan/webmux/internal/session"
-	"golang.org/x/sys/unix"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +13,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rainchan/webmux/internal/session"
+	"golang.org/x/sys/unix"
 )
 
 func setup(t *testing.T) (*Service, string, string) {
@@ -22,7 +23,7 @@ func setup(t *testing.T) (*Service, string, string) {
 	root := t.TempDir()
 	root, _ = filepath.EvalSymlinks(root)
 	m := session.NewManager(session.Options{DefaultCwd: root})
-	item, e := m.Create(root, []string{"/bin/sh"}, "", nil, "")
+	item, e := m.Create(session.CreateInput{Cwd: root, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -116,8 +117,8 @@ func TestFileLimitsEncodingAndIdentity(t *testing.T) {
 	t.Parallel()
 	s, id, root := setup(t)
 	c, _ := s.Context(context.Background(), id)
-	cases := map[string]string{"empty": "", "crlf": "a\r\nb\r\n", "nonewline": "last", "binary": "a\x00b", "encoding": "\xff", "bytes": strings.Repeat("x", MaxBytes+1), "lines": strings.Repeat("x\n", MaxLines+1)}
-	for name, text := range cases {
+	tests := map[string]string{"empty": "", "crlf": "a\r\nb\r\n", "nonewline": "last", "binary": "a\x00b", "encoding": "\xff", "bytes": strings.Repeat("x", MaxBytes+1), "lines": strings.Repeat("x\n", MaxLines+1)}
+	for name, text := range tests {
 		write(t, root, name, text)
 		f, e := s.File(context.Background(), id, c.ID, nodeID(name))
 		if e != nil {
@@ -243,7 +244,7 @@ func TestPaginationSearchAndExpiry(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	other, e := s.manager.Create(root, []string{"/bin/sh"}, "", nil, "")
+	other, e := s.manager.Create(session.CreateInput{Cwd: root, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -305,7 +306,7 @@ func TestLinkedSubdirectoryAndNoGitBinding(t *testing.T) {
 	linked := filepath.Join(t.TempDir(), "linked tree")
 	gitTest(t, root, "worktree", "add", "-qb", "linked-test", linked)
 	os.Mkdir(filepath.Join(linked, "src"), 0700)
-	item, e := s.manager.Create(filepath.Join(linked, "src"), []string{"/bin/sh"}, "", nil, "")
+	item, e := s.manager.Create(session.CreateInput{Cwd: filepath.Join(linked, "src"), Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -319,7 +320,7 @@ func TestLinkedSubdirectoryAndNoGitBinding(t *testing.T) {
 	}
 	sub := filepath.Join(root, "plain")
 	os.Mkdir(sub, 0700)
-	plain, e := s.manager.Create(sub, []string{"/bin/sh"}, "", nil, "")
+	plain, e := s.manager.Create(session.CreateInput{Cwd: sub, Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -557,7 +558,7 @@ func TestGitAdministrationCannotBeBrowseRoot(t *testing.T) {
 	t.Parallel()
 	s, _, root := setup(t)
 	gitTest(t, root, "init", "-q")
-	item, e := s.manager.Create(filepath.Join(root, ".git"), []string{"/bin/sh"}, "", nil, "")
+	item, e := s.manager.Create(session.CreateInput{Cwd: filepath.Join(root, ".git"), Cmd: []string{"/bin/sh"}, Name: "", Env: nil, ConfigID: ""})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -674,7 +675,7 @@ func TestLocateResolvesLogicalBasesAgainstCanonicalRoot(t *testing.T) {
 		if host != "" {
 			argv = []string{"/bin/sh", "-c", `printf '\033]7;file://%s%s\007' "$1" "$2"; sleep 30`, "sh", host, filepath.Join(alias, "other")}
 		}
-		item, e := m.Create(filepath.Join(alias, "src"), argv, "", nil, "")
+		item, e := m.Create(session.CreateInput{Cwd: filepath.Join(alias, "src"), Cmd: argv, Name: "", Env: nil, ConfigID: ""})
 		if e != nil {
 			t.Fatal(e)
 		}

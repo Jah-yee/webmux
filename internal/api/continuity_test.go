@@ -41,7 +41,7 @@ func newContinuityFixture(t *testing.T, argv []string) *continuityFixture {
 		defer done()
 		m.Shutdown(shutdown)
 	})
-	item, err := m.Create("", argv, "", nil, "")
+	item, err := m.Create(session.CreateInput{Cwd: "", Cmd: argv, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

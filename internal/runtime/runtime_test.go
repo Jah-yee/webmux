@@ -213,7 +213,7 @@ func TestSocketPathRules(t *testing.T) {
 	env := func(values map[string]string) func(string) string {
 		return func(key string) string { return values[key] }
 	}
-	cases := []struct {
+	tests := []struct {
 		name, state string
 		env         map[string]string
 		want        string
@@ -224,12 +224,12 @@ func TestSocketPathRules(t *testing.T) {
 		{"no runtime dir", long, nil, "", true},
 		{"fallback too long", long, map[string]string{"XDG_RUNTIME_DIR": long}, "", true},
 	}
-	for _, tc := range cases {
-		got, err := SocketPath(tc.state, env(tc.env))
-		if tc.err != (err != nil) || !strings.HasPrefix(got, tc.want) {
-			t.Errorf("%s: got %q %v", tc.name, got, err)
+	for _, tt := range tests {
+		got, err := SocketPath(tt.state, env(tt.env))
+		if tt.err != (err != nil) || !strings.HasPrefix(got, tt.want) {
+			t.Errorf("%s: got %q %v", tt.name, got, err)
 		}
-		if tc.name == "fallback" && (len(got) != len("/run/user/1000/webmux/")+12+len(".sock")) {
+		if tt.name == "fallback" && (len(got) != len("/run/user/1000/webmux/")+12+len(".sock")) {
 			t.Errorf("fallback name %q", got)
 		}
 	}
@@ -244,7 +244,7 @@ func TestTokenFingerprintAndLauncher(t *testing.T) {
 	if TokenFingerprint("") != "" || len(TokenFingerprint("a")) != 16 || TokenFingerprint("a") == TokenFingerprint("b") {
 		t.Fatal("fingerprint")
 	}
-	cases := []struct {
+	tests := []struct {
 		env  map[string]string
 		want string
 	}{
@@ -254,9 +254,9 @@ func TestTokenFingerprintAndLauncher(t *testing.T) {
 		{map[string]string{"XPC_SERVICE_NAME": "0"}, "manual"},
 		{nil, "manual"},
 	}
-	for _, tc := range cases {
-		if got := Launcher(func(k string) string { return tc.env[k] }); got != tc.want {
-			t.Errorf("%v: %s, want %s", tc.env, got, tc.want)
+	for _, tt := range tests {
+		if got := Launcher(func(k string) string { return tt.env[k] }); got != tt.want {
+			t.Errorf("%v: %s, want %s", tt.env, got, tt.want)
 		}
 	}
 }

@@ -83,7 +83,7 @@ type Input struct {
 
 var idPattern = regexp.MustCompile(`^[a-z2-7]{8}$`)
 
-func invalid(format string, args ...any) error {
+func invalidf(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
 }
 
@@ -93,44 +93,44 @@ func normalize(in Input) (Input, error) {
 	switch in.Icon {
 	case "", "terminal", "claudecode", "codex", "geminicli", "opencode", "pi":
 	default:
-		return Input{}, invalid("图标不受支持")
+		return Input{}, invalidf("图标不受支持")
 	}
 	name := strings.TrimSpace(in.Name)
 	if !utf8.ValidString(name) {
-		return Input{}, invalid("名称不是有效的 UTF-8")
+		return Input{}, invalidf("名称不是有效的 UTF-8")
 	}
 	if n := utf8.RuneCountInString(name); n < 1 || n > MaxNameChars {
-		return Input{}, invalid("名称去除首尾空白后须为 1–%d 个字符", MaxNameChars)
+		return Input{}, invalidf("名称去除首尾空白后须为 1–%d 个字符", MaxNameChars)
 	}
 	if len(in.Cmd) < 1 || len(in.Cmd) > MaxCmdItems {
-		return Input{}, invalid("命令须包含 1–%d 项", MaxCmdItems)
+		return Input{}, invalidf("命令须包含 1–%d 项", MaxCmdItems)
 	}
 	if in.Cmd[0] == "" {
-		return Input{}, invalid("命令第一项不能为空")
+		return Input{}, invalidf("命令第一项不能为空")
 	}
 	for i, arg := range in.Cmd {
 		if len(arg) > MaxItemBytes {
-			return Input{}, invalid("命令第 %d 项超过 %d 字节", i+1, MaxItemBytes)
+			return Input{}, invalidf("命令第 %d 项超过 %d 字节", i+1, MaxItemBytes)
 		}
 	}
 	if len(in.Env) > MaxEnvEntries {
-		return Input{}, invalid("环境变量最多 %d 项", MaxEnvEntries)
+		return Input{}, invalidf("环境变量最多 %d 项", MaxEnvEntries)
 	}
 	if err := session.ValidateEnv(in.Env); err != nil {
-		return Input{}, invalid("%v", err)
+		return Input{}, invalidf("%v", err)
 	}
 	for _, name := range slices.Sorted(maps.Keys(in.Env)) {
 		if len(in.Env[name]) > MaxItemBytes {
-			return Input{}, invalid("环境变量 %s 的值超过 %d 字节", name, MaxItemBytes)
+			return Input{}, invalidf("环境变量 %s 的值超过 %d 字节", name, MaxItemBytes)
 		}
 	}
 	preview := clonePreview(in.Preview)
 	if preview != nil {
 		if preview.Lines < MinPreviewLines || preview.Lines > MaxPreviewLines {
-			return Input{}, invalid("预览行数须为 %d–%d", MinPreviewLines, MaxPreviewLines)
+			return Input{}, invalidf("预览行数须为 %d–%d", MinPreviewLines, MaxPreviewLines)
 		}
 		if preview.Skip < MinPreviewSkip || preview.Skip > MaxPreviewSkip {
-			return Input{}, invalid("跳过末尾行数须为 %d–%d", MinPreviewSkip, MaxPreviewSkip)
+			return Input{}, invalidf("跳过末尾行数须为 %d–%d", MinPreviewSkip, MaxPreviewSkip)
 		}
 	}
 	return Input{Name: name, Icon: in.Icon, Cmd: slices.Clone(in.Cmd), Env: cloneEnv(in.Env), Preview: preview}, nil

@@ -320,7 +320,7 @@ func TestDeleteWaitsForInflightLaunchThenRejectsStaleSessionSet(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	item, err := m.Create(tree.Path, []string{"/bin/sh", "-c", "printf EARLIER; read value"}, "", nil, "")
+	item, err := m.Create(session.CreateInput{Cwd: tree.Path, Cmd: []string{"/bin/sh", "-c", "printf EARLIER; read value"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		s.endStart(tree.Path)
 		t.Fatal(err)

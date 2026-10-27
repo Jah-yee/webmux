@@ -97,7 +97,7 @@ func (f *fixture) request(method, path string, body any, want int) []byte {
 	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(resp.Body)
 	must(err)
-	check(resp.StatusCode == want, "%s %s: got %d want %d: %s", method, path, resp.StatusCode, want, data)
+	checkf(resp.StatusCode == want, "%s %s: got %d want %d: %s", method, path, resp.StatusCode, want, data)
 	return data
 }
 func decode[T any](data []byte) T { var v T; must(json.Unmarshal(data, &v)); return v }
@@ -155,7 +155,7 @@ func read(c *websocket.Conn) []byte {
 func readContext(ctx context.Context, c *websocket.Conn) []byte {
 	k, p, err := c.Read(ctx)
 	must(err)
-	check(k == websocket.MessageBinary && len(p) > 0, "invalid terminal frame")
+	checkf(k == websocket.MessageBinary && len(p) > 0, "invalid terminal frame")
 	return p
 }
 func write(c *websocket.Conn, p []byte) {
@@ -170,10 +170,10 @@ func until(c *websocket.Conn, marker []byte) []byte {
 	for !bytes.Contains(output, marker) {
 		p := readContext(ctx, c)
 		if p[0] == 0 || p[0] == 1 {
-			check(len(output)+len(p)-1 <= capacity+65536, "unexpected excess terminal output")
+			checkf(len(output)+len(p)-1 <= capacity+65536, "unexpected excess terminal output")
 			output = append(output, p[1:]...)
 		}
-		check(p[0] != 3, "process exited before expected output")
+		checkf(p[0] != 3, "process exited before expected output")
 	}
 	return output
 }
@@ -184,12 +184,12 @@ func (f *fixture) await(id string, predicate func(session.Info) bool) session.In
 		if predicate(v) {
 			return v
 		}
-		check(time.Now().Before(deadline), "session condition timed out: %+v", v)
+		checkf(time.Now().Before(deadline), "session condition timed out: %+v", v)
 		time.Sleep(5 * time.Millisecond)
 	}
 }
 func (f *fixture) git(args ...string) {
 	cmd := exec.Command("git", args...)
 	b, err := cmd.CombinedOutput()
-	check(err == nil, "git fixture: %v: %s", err, b)
+	checkf(err == nil, "git fixture: %v: %s", err, b)
 }

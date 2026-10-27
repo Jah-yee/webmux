@@ -9,13 +9,13 @@ import (
 	"strings"
 )
 
-const MaxImageBytes = 20 * 1024 * 1024
-const MaxDownloadBytes = 100 * 1024 * 1024
-
-// headerBytes is how much of an image candidate is read to classify it.
-const headerBytes = 4096
-
-const svgMediaType = "image/svg+xml"
+const (
+	MaxImageBytes    = 20 * 1024 * 1024
+	MaxDownloadBytes = 100 * 1024 * 1024
+	// headerBytes is how much of an image candidate is read to classify it.
+	headerBytes  = 4096
+	svgMediaType = "image/svg+xml"
+)
 
 // rasterExtensions maps allowlisted extensions to the type implied by the
 // name alone; it is used for tree icons only, the signature decides documents.

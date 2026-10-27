@@ -20,11 +20,12 @@ import (
 	"github.com/rainchan/webmux/internal/contract"
 )
 
-// BaseURL is the authority used for every request; the dialer ignores it.
-const BaseURL = "http://webmux"
-
-// WSProtocol is the WebSocket subprotocol the server selects.
-const WSProtocol = "webmux"
+const (
+	// BaseURL is the authority used for every request; the dialer ignores it.
+	BaseURL = "http://webmux"
+	// WSProtocol is the WebSocket subprotocol the server selects.
+	WSProtocol = "webmux"
+)
 
 // ErrNotRunning means no server accepts connections on the local API.
 var ErrNotRunning = errors.New("webmux is not running")

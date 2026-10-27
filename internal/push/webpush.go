@@ -17,13 +17,13 @@ import (
 	"time"
 )
 
-// recordSize is the aes128gcm record size; a push message is one record.
-const recordSize = 4096
-
-// MaxPayload leaves room in the single record for the delimiter and tag.
-const MaxPayload = recordSize - 1 - 16
-
-const maxEndpoint = 2048
+const (
+	// recordSize is the aes128gcm record size; a push message is one record.
+	recordSize = 4096
+	// MaxPayload leaves room in the single record for the delimiter and tag.
+	MaxPayload  = recordSize - 1 - 16
+	maxEndpoint = 2048
+)
 
 // decodeClientKeys checks a browser's p256dh (an uncompressed P-256 point) and
 // 16-byte auth secret.

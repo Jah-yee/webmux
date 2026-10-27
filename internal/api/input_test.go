@@ -3,14 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
-	"github.com/coder/websocket"
-	"github.com/rainchan/webmux/internal/config"
-	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/session"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/session"
 )
 
 func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
@@ -23,7 +24,7 @@ func TestDisconnectDuringBlockedInputDetachesClient(t *testing.T) {
 		defer cancel()
 		m.Shutdown(ctx)
 	}()
-	s, err := m.Create("", []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}, "", nil, "")
+	s, err := m.Create(session.CreateInput{Cwd: "", Cmd: []string{"/bin/bash", "-c", "stty raw -echo; printf READY; sleep 30"}, Name: "", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

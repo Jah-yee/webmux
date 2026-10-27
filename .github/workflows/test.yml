@@ -88,7 +88,7 @@ jobs:
       - name: Build embedded frontend
         run: pnpm --dir web exec vite build
       - name: Vet Go
-        run: go vet ./...
+        run: go vet -printf.funcs=problemf,invalidf,usagef,checkf ./...
       - name: Run Go race tests
         run: go test -race -parallel=4 ./...
       # No Windows runner: hosted runners lack a usable WSL 2, so the Windows
@@ -100,7 +100,7 @@ jobs:
             CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -o /dev/null ./cmd/webmux-windows
           done
       - name: Vet the Windows clients
-        run: GOOS=windows go vet ./cmd/webmux-tray ./cmd/webmux-windows ./internal/tray/... ./internal/wslclient/... ./internal/attach/... ./internal/sessioncmd/...
+        run: GOOS=windows go vet -printf.funcs=problemf,invalidf,usagef,checkf ./cmd/webmux-tray ./cmd/webmux-windows ./internal/tray/... ./internal/wslclient/... ./internal/attach/... ./internal/sessioncmd/...
       - name: Warm the E2E backend build cache
         run: go build -o /dev/null ./cmd/webmux
       - name: Save Go cache

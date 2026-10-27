@@ -43,12 +43,14 @@ func (e *Error) Unwrap() []error {
 }
 
 // fail wraps cause, whose text is the message.
-func fail(kind, cause error) error { return &Error{kind, cause, cause.Error()} }
+func fail(kind, cause error) error {
+	return &Error{kind: kind, cause: cause, message: cause.Error()}
+}
 
 // failf formats the message and wraps a %w cause like fmt.Errorf.
 func failf(kind error, format string, args ...any) error {
 	err := fmt.Errorf(format, args...)
-	return &Error{kind, errors.Unwrap(err), err.Error()}
+	return &Error{kind: kind, cause: errors.Unwrap(err), message: err.Error()}
 }
 
 type Service struct {

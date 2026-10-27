@@ -107,7 +107,7 @@ func BenchmarkAttachOutput(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			s, err := manager.Create("", []string{executable, "-test.run=^TestHubOutputProcess$", "--", hubOutputHelper}, "", nil, "")
+			s, err := manager.Create(session.CreateInput{Cwd: "", Cmd: []string{executable, "-test.run=^TestHubOutputProcess$", "--", hubOutputHelper}, Name: "", Env: nil, ConfigID: ""})
 			if err != nil {
 				b.Fatal(err)
 			}

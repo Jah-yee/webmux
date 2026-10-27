@@ -3,10 +3,11 @@ package codeview
 import (
 	"context"
 	"errors"
-	"github.com/rainchan/webmux/internal/workspace"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rainchan/webmux/internal/workspace"
 )
 
 func (b *binding) blob(ctx context.Context, p, source, oid, mode string) (Document, error) {
@@ -25,7 +26,7 @@ func (b *binding) blob(ctx context.Context, p, source, oid, mode string) (Docume
 	}
 	size, e := strconv.ParseInt(strings.TrimSpace(string(sizeBytes)), 10, 64)
 	if e != nil {
-		return Document{}, problem(ErrInternal, "无效对象大小")
+		return Document{}, problemf(ErrInternal, "无效对象大小")
 	}
 	if imageCandidate(p) {
 		header := &headerWriter{}
@@ -99,7 +100,7 @@ func (s *Service) Diff(ctx context.Context, id, cid, changeID string) (Diff, err
 			return Diff{}, e
 		}
 		if c == nil {
-			return Diff{}, problem(ErrConflict, "修改来源已改变，请刷新列表")
+			return Diff{}, problemf(ErrConflict, "修改来源已改变，请刷新列表")
 		}
 		old, next, e := b.capture(ctx, *c)
 		if e != nil {
@@ -110,7 +111,7 @@ func (s *Service) Diff(ctx context.Context, id, cid, changeID string) (Diff, err
 			return Diff{}, e
 		}
 		if after != before {
-			return Diff{}, problem(ErrConflict, "读取期间 Git 来源已改变")
+			return Diff{}, problemf(ErrConflict, "读取期间 Git 来源已改变")
 		}
 		r := Diff{Old: old, New: next, Kind: "text", Checked: time.Now().UTC(), Change: *c}
 		if strings.HasPrefix(c.Status, "U") {
@@ -164,10 +165,10 @@ func (b *binding) sourceFile(ctx context.Context, p, source string) (Document, e
 		return b.read(p)
 	}
 	if source != "index" && source != "head" {
-		return Document{}, problem(ErrInvalid, "无效文件来源")
+		return Document{}, problemf(ErrInvalid, "无效文件来源")
 	}
 	if !b.Diff {
-		return Document{}, problem(ErrConflict, "Git 来源不可用")
+		return Document{}, problemf(ErrConflict, "Git 来源不可用")
 	}
 	if _, e := nodePath(nodeID(p)); e != nil {
 		return Document{}, e
@@ -188,17 +189,17 @@ func (b *binding) sourceFile(ctx context.Context, p, source string) (Document, e
 			}
 			fields := strings.Fields(header)
 			if len(fields) != 3 {
-				return "", "", problem(ErrInternal, "无效来源记录")
+				return "", "", problemf(ErrInternal, "无效来源记录")
 			}
 			if source == "index" {
 				if fields[2] != "0" {
-					return "", "", problem(ErrConflict, "索引处于冲突状态")
+					return "", "", problemf(ErrConflict, "索引处于冲突状态")
 				}
 				return fields[0], fields[1], nil
 			}
 			return fields[0], fields[2], nil
 		}
-		return "", "", problem(ErrNotFound, "此来源中没有该文件")
+		return "", "", problemf(ErrNotFound, "此来源中没有该文件")
 	}
 	mode, oid, e := resolve()
 	if e != nil {
@@ -210,7 +211,7 @@ func (b *binding) sourceFile(ctx context.Context, p, source string) (Document, e
 	}
 	nextMode, nextOID, e := resolve()
 	if e != nil || nextMode != mode || nextOID != oid {
-		return d, problem(ErrConflict, "读取期间来源已改变")
+		return d, problemf(ErrConflict, "读取期间来源已改变")
 	}
 	return d, nil
 }

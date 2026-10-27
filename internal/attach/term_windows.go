@@ -30,21 +30,23 @@ const (
 // UTF-8 and escape sequences (Ctrl+C as 0x03), output is interpreted as VT
 // sequences with the UTF-8 code page.
 type Console struct {
-	in, out   windows.Handle
-	inState   *term.State
-	outMode   uint32
-	codePage  uintptr
-	restoreMu sync.Mutex
-	restored  bool
-	handler   uintptr
+	in, out     windows.Handle
+	inState     *term.State
+	outMode     uint32
+	codePage    uintptr
+	restoreMu   sync.Mutex
+	restored    bool
+	handler     uintptr
+	onInterrupt func()
 }
 
 var _ Terminal = (*Console)(nil)
 
 // OpenConsole enters raw VT mode and installs a console control handler
-// that restores the console on Ctrl+Break and window close.
-func OpenConsole() (*Console, error) {
-	c := &Console{in: windows.Handle(os.Stdin.Fd()), out: windows.Handle(os.Stdout.Fd())}
+// that restores the console on Ctrl+Break and window close, then calls
+// onInterrupt. The caller owns process termination; nil leaves it to Windows.
+func OpenConsole(onInterrupt func()) (*Console, error) {
+	c := &Console{in: windows.Handle(os.Stdin.Fd()), out: windows.Handle(os.Stdout.Fd()), onInterrupt: onInterrupt}
 	var mode uint32
 	if windows.GetConsoleMode(c.in, &mode) != nil || windows.GetConsoleMode(c.out, &c.outMode) != nil {
 		return nil, ErrNotTerminal
@@ -63,7 +65,10 @@ func OpenConsole() (*Console, error) {
 	c.handler = windows.NewCallback(func(event uint32) uintptr {
 		if event == ctrlBreakEvent || event == ctrlCloseEvent {
 			_ = c.Restore()
-			os.Exit(1)
+			if c.onInterrupt != nil {
+				c.onInterrupt()
+				return 1
+			}
 		}
 		return 0
 	})

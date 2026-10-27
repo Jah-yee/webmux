@@ -174,7 +174,7 @@ func configValidate(args []string, stdout, stderr io.Writer) int {
 		err = ensureToken(&c)
 	}
 	if err == nil && c.Tailscale.Provider == "windows" && !wsl.Detected() {
-		err = errors.New("tailscale.provider \"windows\" is only valid inside WSL; use \"linux\" or \"auto\"")
+		err = errors.New(`tailscale.provider "windows" is only valid inside WSL; use "linux" or "auto"`)
 	}
 	if err != nil {
 		result.OK = false

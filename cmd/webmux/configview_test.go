@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/rainchan/webmux/internal/contract"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rainchan/webmux/internal/contract"
 )
 
 func TestConfiguredViewIsReadOnlyAndRedacted(t *testing.T) {

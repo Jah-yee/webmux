@@ -231,7 +231,7 @@ func loadConfig(args []string) (serverRun, error) {
 	c.Tailscale, run.TailscaleWebManaged = run.TailscaleSettings.Effective()
 	if c.Tailscale.Provider == "windows" && !wsl.Detected() {
 		closeSettings()
-		return run, errors.New("tailscale.provider \"windows\" is only valid inside WSL; use \"linux\" or \"auto\"")
+		return run, errors.New(`tailscale.provider "windows" is only valid inside WSL; use "linux" or "auto"`)
 	}
 	hadToken := c.Token != ""
 	if err = ensureStartupToken(&c, run.TunnelWebManaged, run.TailscaleWebManaged); err != nil {
@@ -336,7 +336,11 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	// an entry point reports ready, so a server without one behaves as before.
 	public := &api.PublicOrigins{}
 	tsService := tailscale.New(assemble.TailscaleOptions(c.Config))
-	tsCtl := newTailscaleController(c.Tailscale, c.TailscaleSettings, tsService, c.StateDir, public, c.Token, c.TokenGenerated, out, slog.Default(), wsl.Detected, wsl.NetworkingMode)
+	tsCtl := newTailscaleController(tailscaleControllerOptions{
+		Cfg: c.Tailscale, Store: c.TailscaleSettings, Service: tsService, StateDir: c.StateDir,
+		Public: public, Token: c.Token, TokenGenerated: c.TokenGenerated, Out: out,
+		Logger: slog.Default(), IsWSL: wsl.Detected, NetworkingMode: wsl.NetworkingMode,
+	})
 	defer tsCtl.Close()
 	if err := tsCtl.Prepare(ctx, c.Listen); err != nil {
 		return err
@@ -363,7 +367,10 @@ func serve(ctx context.Context, c serverRun, out io.Writer) error {
 	preferences := settings.Open(c.StateDir)
 	defer preferences.Close()
 	local := localOrigin(listener.Addr())
-	tunnels := newTunnelController(c.Tunnel, c.TunnelSettings, local, c.Token, public, locator.Find, out, slog.Default())
+	tunnels := newTunnelController(tunnelControllerOptions{
+		Cfg: c.Tunnel, Store: c.TunnelSettings, Local: local, Token: c.Token,
+		Public: public, Locate: locator.Find, Out: out, Logger: slog.Default(),
+	})
 	tunnels.defaultEnabledSource = c.BaseSource("tunnel.enabled")
 	tunnels.enabledSource = c.Source("tunnel.enabled")
 	if c.TunnelWebManaged {

@@ -134,12 +134,13 @@ func (s *Session) writeGated(ctx context.Context, origin inputOrigin, p []byte) 
 	return n, err
 }
 
-// maxPendingReplies bounds session-written query replies awaiting the gate;
-// queries beyond it get no reply.
-const maxPendingReplies = 4
-
-// programStatusReply answers the OSC 7501 capability query.
-const programStatusReply = "\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\"
+const (
+	// maxPendingReplies bounds session-written query replies awaiting the gate;
+	// queries beyond it get no reply.
+	maxPendingReplies = 4
+	// programStatusReply answers the OSC 7501 capability query.
+	programStatusReply = "\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\"
+)
 
 // queueProbeReplyLocked queues the OSC 7501 reply. It runs in the read path
 // before the query is published, so every client input sent in response to

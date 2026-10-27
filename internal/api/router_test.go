@@ -4,12 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/coder/websocket"
-	"github.com/rainchan/webmux/internal/config"
-	"github.com/rainchan/webmux/internal/contract"
-	"github.com/rainchan/webmux/internal/files"
-	"github.com/rainchan/webmux/internal/session"
-	"github.com/rainchan/webmux/internal/wire"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +14,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/coder/websocket"
+	"github.com/rainchan/webmux/internal/config"
+	"github.com/rainchan/webmux/internal/contract"
+	"github.com/rainchan/webmux/internal/files"
+	"github.com/rainchan/webmux/internal/session"
+	"github.com/rainchan/webmux/internal/wire"
 )
 
 func TestProtocolAndSecurity(t *testing.T) {

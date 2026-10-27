@@ -54,8 +54,11 @@ esac
 func testTailscaleController(t *testing.T, cli, stateDir string, cfg config.TailscaleConfig) *tailscaleController {
 	t.Helper()
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: cfg.Provider, IsWSL: func() bool { return false }})
-	return newTailscaleController(cfg, nil, service, stateDir, &api.PublicOrigins{}, "token", false,
-		io.Discard, slog.New(slog.DiscardHandler), func() bool { return false }, func(context.Context) string { return "unknown" })
+	return newTailscaleController(tailscaleControllerOptions{
+		Cfg: cfg, Service: service, StateDir: stateDir, Public: &api.PublicOrigins{},
+		Token: "token", Out: io.Discard, Logger: slog.New(slog.DiscardHandler),
+		IsWSL: func() bool { return false }, NetworkingMode: func(context.Context) string { return "unknown" },
+	})
 }
 
 const tailscaleRunning = `{"BackendState":"Running","Self":{"DNSName":"node.tailnet.ts.net."},"CertDomains":["node.tailnet.ts.net"]}`
@@ -164,8 +167,12 @@ func TestUpdateSettingsReplacesEntryAtRuntime(t *testing.T) {
 	store := tailscalesettings.Open(dir, toml)
 	defer store.Close()
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "auto", IsWSL: func() bool { return false }})
-	ctl := newTailscaleController(toml, store, service, dir, &api.PublicOrigins{}, strings.Repeat("t", minTunnelTokenLength), false,
-		io.Discard, slog.New(slog.DiscardHandler), func() bool { return false }, func(context.Context) string { return "unknown" })
+	ctl := newTailscaleController(tailscaleControllerOptions{
+		Cfg: toml, Store: store, Service: service, StateDir: dir, Public: &api.PublicOrigins{},
+		Token: strings.Repeat("t", minTunnelTokenLength), Out: io.Discard,
+		Logger: slog.New(slog.DiscardHandler), IsWSL: func() bool { return false },
+		NetworkingMode: func(context.Context) string { return "unknown" },
+	})
 	if err := ctl.Prepare(context.Background(), ln.Addr().String()); err != nil {
 		t.Fatal(err)
 	}
@@ -290,9 +297,12 @@ func TestPrepareRemovesEntryBeforeProviderChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "linux", IsWSL: func() bool { return true }})
-	ctl := newTailscaleController(config.TailscaleConfig{Mode: "serve", Provider: "linux"}, nil, service, dir,
-		&api.PublicOrigins{}, "token", false, io.Discard, slog.New(slog.DiscardHandler),
-		func() bool { return true }, func(context.Context) string { return "mirrored" })
+	ctl := newTailscaleController(tailscaleControllerOptions{
+		Cfg: config.TailscaleConfig{Mode: "serve", Provider: "linux"}, Service: service, StateDir: dir,
+		Public: &api.PublicOrigins{}, Token: "token", Out: io.Discard,
+		Logger: slog.New(slog.DiscardHandler), IsWSL: func() bool { return true },
+		NetworkingMode: func(context.Context) string { return "mirrored" },
+	})
 	if err := ctl.Prepare(context.Background(), "127.0.0.1:7681"); err != nil {
 		t.Fatal(err)
 	}
@@ -340,9 +350,12 @@ func TestWindowsProviderNATFailsClosed(t *testing.T) {
 	cli, logPath := fakeTailscale(t, tailscaleRunning, `{"Web":{},"AllowFunnel":{}}`)
 	dir := t.TempDir()
 	service := tailscale.New(tailscale.Options{Command: cli, Provider: "windows", IsWSL: func() bool { return true }})
-	ctl := newTailscaleController(config.TailscaleConfig{Mode: "serve", Provider: "windows"}, nil, service, dir,
-		&api.PublicOrigins{}, "token", false, io.Discard, slog.New(slog.DiscardHandler),
-		func() bool { return true }, func(context.Context) string { return "nat" })
+	ctl := newTailscaleController(tailscaleControllerOptions{
+		Cfg: config.TailscaleConfig{Mode: "serve", Provider: "windows"}, Service: service, StateDir: dir,
+		Public: &api.PublicOrigins{}, Token: "token", Out: io.Discard,
+		Logger: slog.New(slog.DiscardHandler), IsWSL: func() bool { return true },
+		NetworkingMode: func(context.Context) string { return "nat" },
+	})
 	ctl.localPort = 7681
 	ctl.apply(context.Background())
 	status := ctl.Status()

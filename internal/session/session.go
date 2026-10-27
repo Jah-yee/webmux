@@ -156,6 +156,10 @@ type startOptions struct {
 }
 
 func start(id, cwd, name string, argv []string, capacity int, options startOptions) (*Session, error) {
+	ring, err := NewRingBuffer(capacity)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = cwd
 	cmd.Env = sessionEnv(os.Environ(), id, options.agentProtocol, options.env)
@@ -200,7 +204,7 @@ func start(id, cwd, name string, argv []string, capacity int, options startOptio
 		userTitle:     name,
 		terminal:      f,
 		cmd:           cmd,
-		ring:          NewRingBuffer(capacity),
+		ring:          ring,
 		subs:          make(map[*Subscriber]struct{}),
 		done:          make(chan struct{}),
 		readerDone:    make(chan struct{}),
@@ -506,7 +510,7 @@ func (s *Session) read() {
 			s.ring.Write(p)
 			s.osc.Feed(p, s.signals)
 			reports := s.preview.colorSchemeReports
-			s.info.Preview = s.preview.Feed(p)
+			s.info.Preview = s.preview.FeedThrottled(p)
 			s.info.LastActiveAt = time.Now()
 			// Latched attention and a program's own status outlive redraws
 			// such as spinners and timers.
@@ -539,9 +543,11 @@ func (s *Session) wait() {
 	} // Drain final PTY bytes before publishing exit.
 	s.Close()
 	<-s.cleanupDone
+	drain := time.NewTimer(time.Second)
 	select {
 	case <-s.readerDone:
-	case <-time.After(time.Second):
+		drain.Stop()
+	case <-drain.C:
 		_ = s.terminal.Close()
 		<-s.readerDone
 	}
@@ -553,6 +559,10 @@ func (s *Session) wait() {
 	}
 	s.info.Status = StatusExited
 	s.info.Attention = nil
+	// Publish the final screen, including output throttled before exit.
+	if s.preview.dirty {
+		s.info.Preview = s.preview.refresh(true)
+	}
 	s.program = nil
 	// A finished program can no longer stand behind its last directory report.
 	s.info.ReportedCwd = nil

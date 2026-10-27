@@ -80,7 +80,7 @@ func must(err error) {
 		panic(err)
 	}
 }
-func check(ok bool, format string, args ...any) {
+func checkf(ok bool, format string, args ...any) {
 	if !ok {
 		panic(fmt.Errorf(format, args...))
 	}

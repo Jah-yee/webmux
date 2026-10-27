@@ -63,7 +63,11 @@ func New(cfg config.PushConfig, stateDir string, m *session.Manager, log *slog.L
 		return nil
 	}
 	if transport == nil {
-		transport = http.DefaultTransport.(*http.Transport).Clone()
+		if base, ok := http.DefaultTransport.(*http.Transport); ok {
+			transport = base.Clone()
+		} else {
+			transport = http.DefaultTransport
+		}
 	}
 	client := &http.Client{
 		Transport:     transport,

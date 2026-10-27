@@ -24,25 +24,27 @@ import (
 	"github.com/rainchan/webmux/internal/localclient"
 )
 
-// inputModeReset turns off what a session's program may have enabled in the
-// native terminal: win32-input-mode, modifyOtherKeys, kitty keyboard flags,
-// mouse and focus reporting, bracketed paste and colour scheme reports; and
-// shows the cursor.
-const inputModeReset = "\x1b[?9001l\x1b[>4;0m\x1b[<99u\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[?2031l\x1b[?25h"
+const (
+	// inputModeReset turns off what a session's program may have enabled in the
+	// native terminal: win32-input-mode, modifyOtherKeys, kitty keyboard flags,
+	// mouse and focus reporting, bracketed paste and colour scheme reports; and
+	// shows the cursor.
+	inputModeReset = "\x1b[?9001l\x1b[>4;0m\x1b[<99u\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l\x1b[?2031l\x1b[?25h"
 
-// backgroundQuery asks the native terminal for its background colour (OSC 11),
-// which nearly every terminal answers, unlike CSI ? 996 n.
-const backgroundQuery = "\x1b]11;?\x1b\\"
+	// backgroundQuery asks the native terminal for its background colour (OSC 11),
+	// which nearly every terminal answers, unlike CSI ? 996 n.
+	backgroundQuery = "\x1b]11;?\x1b\\"
 
-// DetachKey is Ctrl+], which never reaches the session.
-const DetachKey = 0x1d
+	// DetachKey is Ctrl+], which never reaches the session.
+	DetachKey = 0x1d
 
-// TakeControlKey is Enter: while another client controls the session it
-// reclaims control and is not forwarded.
-const TakeControlKey = '\r'
+	// TakeControlKey is Enter: while another client controls the session it
+	// reclaims control and is not forwarded.
+	TakeControlKey = '\r'
 
-// ResizeInterval is how often the terminal size is polled.
-const ResizeInterval = 250 * time.Millisecond
+	// ResizeInterval is how often the terminal size is polled.
+	ResizeInterval = 250 * time.Millisecond
+)
 
 // Frame types of docs/protocol/websocket.md.
 const (

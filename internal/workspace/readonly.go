@@ -92,7 +92,7 @@ func readGitCommand(ctx context.Context, cwd string, limit int, input io.Reader,
 	out := &boundedOutput{limit: limit, cancel: cancel}
 	err := runReadGit(ctx, cwd, input, overrides, out, args...)
 	if out.exceeded {
-		return nil, problem(ErrTooLarge, "Git 输出超过读取限制")
+		return nil, problemf(ErrTooLarge, "Git 输出超过读取限制")
 	}
 	return out.Bytes(), err
 }
@@ -112,10 +112,10 @@ func runReadGit(ctx context.Context, cwd string, input io.Reader, overrides []st
 		stderrLimit: 8192,
 	})
 	if run.stderrExceeded {
-		return problem(ErrTooLarge, "Git 输出超过读取限制")
+		return problemf(ErrTooLarge, "Git 输出超过读取限制")
 	}
 	if run.ctxErr != nil {
-		return problem(ErrTimeout, "Git 读取取消或超时")
+		return problemf(ErrTimeout, "Git 读取取消或超时")
 	}
 	if err := run.err; err != nil {
 		var exit *exec.ExitError

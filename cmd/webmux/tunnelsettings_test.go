@@ -28,7 +28,11 @@ func settingsController(t *testing.T, cfg config.TunnelConfig, locate func(conte
 	dir := t.TempDir()
 	store := tunnelsettings.Open(dir, cfg)
 	t.Cleanup(store.Close)
-	tc := newTunnelController(cfg, store, "http://127.0.0.1:1", tunnelTestToken, &api.PublicOrigins{}, locate, io.Discard, slog.New(slog.DiscardHandler))
+	tc := newTunnelController(tunnelControllerOptions{
+		Cfg: cfg, Store: store, Local: "http://127.0.0.1:1", Token: tunnelTestToken,
+		Public: &api.PublicOrigins{}, Locate: locate, Out: io.Discard,
+		Logger: slog.New(slog.DiscardHandler),
+	})
 	t.Cleanup(tc.Close)
 	return tc, dir
 }
@@ -209,7 +213,11 @@ func TestTunnelStartupWebPrecedenceFlagsAndShortToken(t *testing.T) {
 				if row.token == "" && len(c.Token) != minTunnelTokenLength {
 					t.Fatal("web startup did not generate login token")
 				}
-				tc := newTunnelController(c.Tunnel, c.TunnelSettings, "http://127.0.0.1:1", c.Token, &api.PublicOrigins{}, func(context.Context) (string, error) { return "", errors.New("missing") }, io.Discard, slog.New(slog.DiscardHandler))
+				tc := newTunnelController(tunnelControllerOptions{
+					Cfg: c.Tunnel, Store: c.TunnelSettings, Local: "http://127.0.0.1:1", Token: c.Token,
+					Public: &api.PublicOrigins{}, Locate: func(context.Context) (string, error) { return "", errors.New("missing") },
+					Out: io.Discard, Logger: slog.New(slog.DiscardHandler),
+				})
 				if *tc.Status().Enabled != row.wantEnabled {
 					t.Fatal("tray desired enabled ignored process override")
 				}

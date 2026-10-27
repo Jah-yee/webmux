@@ -39,12 +39,15 @@ type snapshotFlight struct {
 	waiters    int
 }
 type Service struct {
-	manager       *session.Manager
-	launches      *launch.Service
-	defaultCwd    string
-	gitPath       string
-	stateDir      string
-	mu            sync.Mutex
+	manager    *session.Manager
+	launches   *launch.Service
+	defaultCwd string
+	gitPath    string
+	stateDir   string
+	mu         sync.Mutex
+	// saveMu serializes registry read-modify-write cycles without holding mu
+	// across the state file commit.
+	saveMu        sync.Mutex
 	capability    Capability
 	entries       []*repositoryState
 	store         *statefile.Handle[registry]
@@ -131,15 +134,18 @@ func (s *Service) save(entries []*repositoryState) error {
 	if statefile.IsKind(err, statefile.CommitUncertain) {
 		// Rename already published different bytes. Keep the last confirmed
 		// memory state, but never allow it to overwrite the uncertain disk state.
+		message := "清单已替换但目录同步失败，持久结果不确定；仓库管理已停用，请重启重新读取: " + err.Error()
+		s.mu.Lock()
 		s.capability.RegistryAvailable = false
-		s.capability.RegistryError = "清单已替换但目录同步失败，持久结果不确定；仓库管理已停用，请重启重新读取: " + err.Error()
-		return errors.New(s.capability.RegistryError)
+		s.capability.RegistryError = message
+		s.mu.Unlock()
+		return errors.New(message)
 	}
 	return err
 }
 func (s *Service) requireRegistryLocked() error {
 	if !s.capability.RegistryAvailable {
-		return problem(ErrUnavailable, "%s", s.capability.RegistryError)
+		return problemf(ErrUnavailable, "%s", s.capability.RegistryError)
 	}
 	return nil
 }
@@ -154,7 +160,7 @@ func (s *Service) repository(id string) (*repositoryState, error) {
 			return r, nil
 		}
 	}
-	return nil, problem(ErrNotFound, "仓库不存在，请刷新")
+	return nil, problemf(ErrNotFound, "仓库不存在，请刷新")
 }
 func (s *Service) registered(r *repositoryState) bool {
 	s.mu.Lock()
@@ -173,20 +179,23 @@ func (s *Service) Register(ctx context.Context, path string) (Repository, bool, 
 		return Repository{}, false, err
 	}
 	if path == "" {
-		return Repository{}, false, problem(ErrInvalid, "请选择仓库目录")
+		return Repository{}, false, problemf(ErrInvalid, "请选择仓库目录")
 	}
 	common, anchor, err := s.locate(ctx, path)
 	if err != nil {
 		return Repository{}, false, err
 	}
+	s.saveMu.Lock()
 	s.mu.Lock()
 	if err := s.requireRegistryLocked(); err != nil {
 		s.mu.Unlock()
+		s.saveMu.Unlock()
 		return Repository{}, false, err
 	}
 	for _, r := range s.entries {
 		if r.entry.CommonDir == common {
 			s.mu.Unlock()
+			s.saveMu.Unlock()
 			snapshot, err := s.snapshot(ctx, r)
 			s.reassociate(ctx)
 			return snapshot, false, err
@@ -195,15 +204,19 @@ func (s *Service) Register(ctx context.Context, path string) (Repository, bool, 
 	id, err := randomID()
 	if err != nil {
 		s.mu.Unlock()
+		s.saveMu.Unlock()
 		return Repository{}, false, err
 	}
 	r := newRepository(registration{ID: id, CommonDir: common, AnchorPath: anchor, DisplayName: filepath.Base(anchor)})
 	next := append(append([]*repositoryState(nil), s.entries...), r)
+	s.mu.Unlock()
 	err = s.save(next)
 	if err == nil {
+		s.mu.Lock()
 		s.entries = next
+		s.mu.Unlock()
 	}
-	s.mu.Unlock()
+	s.saveMu.Unlock()
 	if err != nil {
 		return Repository{}, false, fmt.Errorf("保存仓库清单: %w", err)
 	}
@@ -221,9 +234,11 @@ func (s *Service) Unregister(id string) error {
 	if err != nil {
 		return err
 	}
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.requireRegistryLocked(); err != nil {
+		s.mu.Unlock()
 		return err
 	}
 	next := make([]*repositoryState, 0, len(s.entries))
@@ -236,12 +251,16 @@ func (s *Service) Unregister(id string) error {
 		}
 	}
 	if !found {
-		return problem(ErrNotFound, "仓库不存在")
+		s.mu.Unlock()
+		return problemf(ErrNotFound, "仓库不存在")
 	}
+	s.mu.Unlock()
 	if err := s.save(next); err != nil {
 		return fmt.Errorf("保存仓库清单: %w", err)
 	}
+	s.mu.Lock()
 	s.entries = next
+	s.mu.Unlock()
 	for _, info := range s.manager.List() {
 		if info.Workspace != nil && info.Workspace.RepositoryID == id {
 			s.manager.SetWorkspace(info.ID, info.Cwd, nil)

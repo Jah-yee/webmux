@@ -18,10 +18,11 @@ import (
 	"github.com/rainchan/webmux/internal/statefile"
 )
 
-// MaxSubscriptions bounds the devices one instance alerts.
-const MaxSubscriptions = 32
-
-const storeFile = "push.json"
+const (
+	// MaxSubscriptions bounds the devices one instance alerts.
+	MaxSubscriptions = 32
+	storeFile        = "push.json"
+)
 
 var ErrFull = errors.New("已有 32 台设备开启推送，请先在其他设备关闭推送")
 

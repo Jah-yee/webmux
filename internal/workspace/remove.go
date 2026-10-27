@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,7 +76,7 @@ func (s *Service) identify(ctx context.Context, r *repositoryState, tree Worktre
 		return id, err
 	}
 	if !within(r.entry.CommonDir, id.adminPath) || id.adminPath == r.entry.CommonDir {
-		return id, fmt.Errorf("linked worktree 管理目录身份无效")
+		return id, errors.New("linked worktree 管理目录身份无效")
 	}
 	id.admin, err = id.hold(id.adminPath)
 	if err != nil {
@@ -91,14 +92,14 @@ func (s *Service) identify(ctx context.Context, r *repositoryState, tree Worktre
 		return id, err
 	}
 	if !id.gitFile.Mode().IsRegular() {
-		return id, fmt.Errorf("linked worktree 的 .git 不是普通文件")
+		return id, errors.New("linked worktree 的 .git 不是普通文件")
 	}
 	held, err := id.hold(file)
 	if err != nil {
 		return id, err
 	}
 	if !os.SameFile(id.gitFile, held) {
-		return id, fmt.Errorf(".git 文件身份在读取期间改变")
+		return id, errors.New(".git 文件身份在读取期间改变")
 	}
 	contents, err := os.ReadFile(file)
 	if err != nil {
@@ -232,7 +233,7 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
 	defer cancel()
 	if req.Mode != "safe" && req.Mode != "force" {
-		return problem(ErrInvalid, "删除模式必须为 safe 或 force")
+		return problemf(ErrInvalid, "删除模式必须为 safe 或 force")
 	}
 	s.coord.Lock()
 	confirmation, ok := s.confirmations[req.ConfirmationID]
@@ -243,10 +244,10 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 		defer confirmation.state.identity.close()
 	}
 	if !ok || !time.Now().Before(confirmation.expires) || confirmation.repositoryID != repositoryID || confirmation.worktreeID != worktreeID {
-		return problem(ErrConflict, "删除确认已失效，请重新预览")
+		return problemf(ErrConflict, "删除确认已失效，请重新预览")
 	}
 	if req.Mode == "force" && (req.ConfirmPath != confirmation.state.tree.Path || !req.CloseSessions) {
-		return problem(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
+		return problemf(ErrInvalid, "强制删除必须输入完整目标路径并明确授权关闭会话")
 	}
 	r, err := s.repository(repositoryID)
 	if err != nil {
@@ -274,13 +275,13 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 	}
 	defer current.identity.close()
 	if !current.supported {
-		return problem(ErrConflict, "不支持删除此工作树: %v", current.blockers)
+		return problemf(ErrConflict, "不支持删除此工作树: %v", current.blockers)
 	}
 	if !sameTarget(confirmation.state, current) || !sameSessions(confirmation.state.sessions, current.sessions, false) {
-		return problem(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
+		return problemf(ErrConflict, "工作树身份、分支、锁或会话集合已变化，请重新预览；尚未关闭任何会话")
 	}
 	if req.Mode == "safe" && len(current.blockers) != 0 {
-		return problem(ErrConflict, "安全删除被阻止: %v", current.blockers)
+		return problemf(ErrConflict, "安全删除被阻止: %v", current.blockers)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -293,7 +294,7 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 			}
 			item, err := s.manager.Get(info.ID)
 			if err != nil {
-				return problem(ErrConflict, "会话集合已变化，请重新预览")
+				return problemf(ErrConflict, "会话集合已变化，请重新预览")
 			}
 			active = append(active, item)
 		}
@@ -304,7 +305,7 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 			select {
 			case <-item.Done():
 			case <-ctx.Done():
-				return problem(ErrTimeout, "关闭会话未在期限内完成，工作树未删除；部分会话可能已关闭")
+				return problemf(ErrTimeout, "关闭会话未在期限内完成，工作树未删除；部分会话可能已关闭")
 			}
 		}
 	}
@@ -314,15 +315,15 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 	}
 	defer final.identity.close()
 	if !final.supported || !sameTarget(current, final) || !sameSessions(current.sessions, final.sessions, req.Mode == "force") {
-		return problem(ErrConflict, "关闭期间目标身份或会话集合变化，工作树未删除；部分会话可能已关闭")
+		return problemf(ErrConflict, "关闭期间目标身份或会话集合变化，工作树未删除；部分会话可能已关闭")
 	}
 	for _, info := range final.sessions {
 		if info.Status != session.StatusExited {
-			return problem(ErrConflict, "仍有运行会话，工作树未删除")
+			return problemf(ErrConflict, "仍有运行会话，工作树未删除")
 		}
 	}
 	if req.Mode == "safe" && len(final.blockers) != 0 {
-		return problem(ErrConflict, "安全删除被最新状态阻止: %v", final.blockers)
+		return problemf(ErrConflict, "安全删除被最新状态阻止: %v", final.blockers)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -333,7 +334,7 @@ func (s *Service) RemoveWorktree(ctx context.Context, repositoryID, worktreeID s
 	}
 	argv = append(argv, "--", path)
 	if _, err := s.git(ctx, r.entry.AnchorPath, argv...); err != nil {
-		return problem(errorKind(err), "%v；删除未完整成功，部分会话可能已关闭，请刷新实际状态", err)
+		return problemf(errorKind(err), "%v；删除未完整成功，部分会话可能已关闭，请刷新实际状态", err)
 	}
 	return nil
 }

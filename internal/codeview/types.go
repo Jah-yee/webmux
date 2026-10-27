@@ -5,15 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rainchan/webmux/internal/workspace"
 	"os"
 	"time"
+
+	"github.com/rainchan/webmux/internal/workspace"
 )
 
-const MaxBytes = 2 * 1024 * 1024
-const MaxLines = 20000
-const CacheBytes = 64 * 1024 * 1024
-const Lifetime = 10 * time.Minute
+const (
+	MaxBytes   = 2 * 1024 * 1024
+	MaxLines   = 20000
+	CacheBytes = 64 * 1024 * 1024
+	Lifetime   = 10 * time.Minute
+)
 
 // Error kinds. Each wraps a transport-neutral category; the controller maps
 // kinds to HTTP statuses.
@@ -39,8 +42,8 @@ type Error struct {
 
 func (e *Error) Error() string { return e.message }
 func (e *Error) Unwrap() error { return e.kind }
-func problem(kind error, format string, args ...any) error {
-	return &Error{kind, fmt.Sprintf(format, args...)}
+func problemf(kind error, format string, args ...any) error {
+	return &Error{kind: kind, message: fmt.Sprintf(format, args...)}
 }
 
 // errorKind classifies err like the controller does. Workspace size and timeout

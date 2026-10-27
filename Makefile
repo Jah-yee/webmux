@@ -3,6 +3,8 @@ GO ?= go
 PNPM ?= pnpm
 GOFMT ?= gofmt
 GO_TEST_PARALLEL ?= 4
+# Extra printf wrappers beyond vet's automatic *f-name detection.
+GO_VET_FLAGS ?= -printf.funcs=problemf,invalidf,usagef,checkf
 GOLANGCI_LINT ?= golangci-lint
 GOLANGCI_LINT_VERSION := 2.15.0
 BASELINE_SAMPLES ?= 30
@@ -52,7 +54,7 @@ check: web format-check docs-check persistence-check
 	$(PNPM) --dir web check:test
 	$(PNPM) --dir web lint
 	$(PNPM) --dir web check:arch
-	$(GO) vet ./...
+	$(GO) vet $(GO_VET_FLAGS) ./...
 	$(MAKE) go-lint
 
 # Keep local checks on the same linter release as CI.

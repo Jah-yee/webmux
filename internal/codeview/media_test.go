@@ -48,7 +48,7 @@ func TestSniffSignatures(t *testing.T) {
 	t.Parallel()
 	avifHeader := append([]byte{0, 0, 0, 0x1c}, []byte("ftypmif1\x00\x00\x00\x00mif1avifmiaf")...)
 	avisCompat := append([]byte{0, 0, 0, 0x18}, []byte("ftypmsf1\x00\x00\x00\x00avis")...)
-	cases := map[string]struct {
+	tests := map[string]struct {
 		header []byte
 		want   string
 	}{
@@ -69,7 +69,7 @@ func TestSniffSignatures(t *testing.T) {
 		"short png":   {[]byte("\x89PN"), ""},
 		"empty":       {nil, ""},
 	}
-	for name, c := range cases {
+	for name, c := range tests {
 		if got := sniff(c.header); got != c.want {
 			t.Errorf("%s: %q want %q", name, got, c.want)
 		}
@@ -136,7 +136,7 @@ func TestImageDocumentsAndLimits(t *testing.T) {
 		kind, media, reason string
 		download            bool
 	}
-	cases := map[string]want{
+	tests := map[string]want{
 		"a.png":        {"image", "image/png", "", true},
 		"UPPER.PNG":    {"image", "image/png", "", true},
 		"photo.JPG":    {"image", "image/jpeg", "", true},
@@ -161,7 +161,7 @@ func TestImageDocumentsAndLimits(t *testing.T) {
 		"big.txt":      {"too-large", "", "超过 2 MiB", true},
 		"lines.txt":    {"too-large", "", "超过 20000 行", true},
 	}
-	for name, w := range cases {
+	for name, w := range tests {
 		f, e := s.File(context.Background(), id, c.ID, nodeID(name))
 		if e != nil {
 			t.Fatalf("%s: %v", name, e)

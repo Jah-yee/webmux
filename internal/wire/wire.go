@@ -92,13 +92,15 @@ func Repository(r workspace.Repository) contract.Repository {
 func Repositories(in []workspace.Repository) []contract.Repository { return each(in, Repository) }
 
 func Branches(b workspace.Branches) contract.Branches {
+	branches := each(b.Branches, func(v workspace.Branch) contract.Branch {
+		return contract.Branch{Name: v.Name, Head: v.Head, WorktreePaths: required(v.WorktreePaths)}
+	})
+	bases := each(b.Bases, func(v workspace.Base) contract.BranchBase {
+		return contract.BranchBase{Name: v.Name, Head: v.Head}
+	})
 	return contract.Branches{
-		Branches: each(b.Branches, func(v workspace.Branch) contract.Branch {
-			b := contract.Branch(v)
-			b.WorktreePaths = required(v.WorktreePaths)
-			return b
-		}),
-		Bases:         each(b.Bases, func(v workspace.Base) contract.BranchBase { return contract.BranchBase(v) }),
+		Branches:      branches,
+		Bases:         bases,
 		DefaultBase:   b.DefaultBase,
 		DefaultParent: b.DefaultParent,
 	}

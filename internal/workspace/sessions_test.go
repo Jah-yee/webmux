@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,18 @@ import (
 
 	"github.com/rainchan/webmux/internal/session"
 )
+
+func TestSessionCreateErrorKinds(t *testing.T) {
+	if got := errorKind(sessionCreateError(session.ErrInvalid)); got != ErrInvalid {
+		t.Fatalf("invalid input mapped to %v", got)
+	}
+	if got := errorKind(sessionCreateError(session.ErrShuttingDown)); got != ErrUnavailable {
+		t.Fatalf("shutdown mapped to %v", got)
+	}
+	if got := errorKind(sessionCreateError(errors.New("fork failed"))); got != ErrInternal {
+		t.Fatalf("unknown failure mapped to %v", got)
+	}
+}
 
 func TestMultiplePTYsKeepRealChildCwdAndIndependentBuffers(t *testing.T) {
 	t.Parallel()

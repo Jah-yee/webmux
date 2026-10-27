@@ -31,7 +31,7 @@ func TestLinks(t *testing.T) {
 		remote("http://100.64.0.5:7681", "tailscale0", "tailscale"),
 		remote("http://192.168.1.20:7681", "eth0", "lan"),
 	}
-	cases := []struct {
+	tests := []struct {
 		listen   string
 		token    bool
 		local    string
@@ -47,13 +47,13 @@ func TestLinks(t *testing.T) {
 		{"100.64.0.5:7681", false, "http://100.64.0.5:7681", []contract.RemoteURL{remote("http://100.64.0.5:7681", "tailscale0", "tailscale")}, 0},
 		{"192.168.1.20:7681", false, "http://192.168.1.20:7681", []contract.RemoteURL{remote("http://192.168.1.20:7681", "eth0", "lan")}, 0},
 	}
-	for _, tc := range cases {
-		urls, warnings := Links(tc.listen, tc.token, hosts)
-		if urls.Local != tc.local || !reflect.DeepEqual(urls.Remote, tc.remote) || len(warnings) != tc.warnings {
-			t.Errorf("%s: %+v %q", tc.listen, urls, warnings)
+	for _, tt := range tests {
+		urls, warnings := Links(tt.listen, tt.token, hosts)
+		if urls.Local != tt.local || !reflect.DeepEqual(urls.Remote, tt.remote) || len(warnings) != tt.warnings {
+			t.Errorf("%s: %+v %q", tt.listen, urls, warnings)
 		}
 		if strings.Contains(urls.Local, "token") {
-			t.Errorf("%s: link carries a token", tc.listen)
+			t.Errorf("%s: link carries a token", tt.listen)
 		}
 	}
 }

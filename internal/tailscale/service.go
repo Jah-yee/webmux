@@ -19,8 +19,10 @@ import (
 // ErrNotFound means no usable Tailscale CLI was found.
 var ErrNotFound = errors.New("tailscale CLI not found")
 
-const defaultTimeout = 3 * time.Second
-const defaultCacheTTL = 2 * time.Second
+const (
+	defaultTimeout  = 3 * time.Second
+	defaultCacheTTL = 2 * time.Second
+)
 
 // Service detects Tailscale and executes Serve/Funnel commands. Detection is
 // cached and coalesced; writes are serialized by the owning controller.

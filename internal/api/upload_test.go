@@ -31,7 +31,7 @@ func uploadAPI(t *testing.T) (http.Handler, *session.Manager, *session.Session, 
 		defer cancel()
 		m.Shutdown(ctx)
 	})
-	item, err := m.Create(cwd, []string{"/bin/sh"}, "upload", nil, "")
+	item, err := m.Create(session.CreateInput{Cwd: cwd, Cmd: []string{"/bin/sh"}, Name: "upload", Env: nil, ConfigID: ""})
 	if err != nil {
 		t.Fatal(err)
 	}

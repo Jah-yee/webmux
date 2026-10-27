@@ -72,7 +72,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Connect:        c.connect,
 		Stdout:         stdout,
 		Stderr:         stderr,
-		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole() },
+		OpenConsole:    func() (sessioncmd.Console, error) { return attach.OpenConsole(func() { os.Exit(1) }) },
 		OpenBrowser:    openBrowser,
 		ResolveCwd:     c.resolveCwd,
 		NotRunningHint: "start it from the WebMux tray or run `webmux serve` inside WSL",

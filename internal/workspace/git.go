@@ -23,7 +23,7 @@ const (
 
 func (s *Service) git(ctx context.Context, cwd string, args ...string) ([]byte, error) {
 	if s.gitPath == "" {
-		return nil, problem(ErrUnavailable, "%s", s.Capability().GitError)
+		return nil, problemf(ErrUnavailable, "%s", s.Capability().GitError)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -37,16 +37,16 @@ func (s *Service) git(ctx context.Context, cwd string, args ...string) ([]byte, 
 	})
 	if err := run.err; err != nil {
 		if stdout.exceeded || run.stderrExceeded {
-			return nil, problem(ErrTooLarge, "Git 输出超过限制，实际状态可能已变化；请刷新")
+			return nil, problemf(ErrTooLarge, "Git 输出超过限制，实际状态可能已变化；请刷新")
 		}
 		if run.ctxErr != nil {
-			return nil, problem(ErrTimeout, "Git 操作取消或超时，实际状态可能已变化: %v", run.ctxErr)
+			return nil, problemf(ErrTimeout, "Git 操作取消或超时，实际状态可能已变化: %v", run.ctxErr)
 		}
 		var launch *exec.Error
 		if errors.As(err, &launch) || errors.Is(err, os.ErrNotExist) || errors.Is(err, os.ErrPermission) {
-			return nil, problem(ErrUnavailable, "Git 无法执行: %v", err)
+			return nil, problemf(ErrUnavailable, "Git 无法执行: %v", err)
 		}
-		return nil, problem(ErrInternal, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(run.stderr), err)
+		return nil, problemf(ErrInternal, "Git %s 失败: %s (%v)", args[0], strings.TrimSpace(run.stderr), err)
 	}
 	return stdout.Bytes(), nil
 }
@@ -97,12 +97,12 @@ func (s *Service) common(ctx context.Context, path string) (string, error) {
 func (s *Service) locate(ctx context.Context, path string) (string, string, error) {
 	path, err := canonical(path)
 	if err != nil {
-		return "", "", problem(ErrInvalid, "仓库目录不可访问: %v", err)
+		return "", "", problemf(ErrInvalid, "仓库目录不可访问: %v", err)
 	}
 	common, err := s.common(ctx, path)
 	if err != nil {
 		if errorKind(err) == ErrInternal {
-			err = problem(ErrInvalid, "无法识别 Git 仓库（请检查目录权限和信任设置）: %v", err)
+			err = problemf(ErrInvalid, "无法识别 Git 仓库（请检查目录权限和信任设置）: %v", err)
 		}
 		return "", "", err
 	}
@@ -112,7 +112,7 @@ func (s *Service) locate(ctx context.Context, path string) (string, string, erro
 	}
 	trees, err := parseWorktrees(out, "")
 	if err != nil || len(trees) == 0 {
-		return "", "", problem(ErrUnavailable, "Git 不支持所需 worktree 机器输出: %v", err)
+		return "", "", problemf(ErrUnavailable, "Git 不支持所需 worktree 机器输出: %v", err)
 	}
 	return common, trees[0].Path, nil
 }
@@ -311,14 +311,14 @@ func (s *Service) readRepository(ctx context.Context, r *repositoryState) Reposi
 }
 func (s *Service) current(ctx context.Context, r *repositoryState) (Repository, error) {
 	if !s.registered(r) {
-		return Repository{}, problem(ErrNotFound, "仓库已移除")
+		return Repository{}, problemf(ErrNotFound, "仓库已移除")
 	}
 	repository := s.readRepository(ctx, r)
 	if repository.Availability != "available" {
 		if ctx.Err() != nil {
 			return repository, ctx.Err()
 		}
-		return repository, problem(ErrUnavailable, "%s", repository.Error)
+		return repository, problemf(ErrUnavailable, "%s", repository.Error)
 	}
 	return repository, nil
 }
@@ -328,7 +328,7 @@ func findTree(repository Repository, id string) (Worktree, error) {
 			return tree, nil
 		}
 	}
-	return Worktree{}, problem(ErrNotFound, "工作树不存在，请刷新")
+	return Worktree{}, problemf(ErrNotFound, "工作树不存在，请刷新")
 }
 func (s *Service) branches(ctx context.Context, r *repositoryState, repository Repository) (Branches, error) {
 	result := Branches{Branches: []Branch{}, Bases: []Base{}, DefaultParent: filepath.Join(filepath.Dir(r.entry.AnchorPath), filepath.Base(r.entry.AnchorPath)+".worktrees")}

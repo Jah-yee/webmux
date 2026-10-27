@@ -3,9 +3,10 @@
 package session
 
 import (
-	"github.com/creack/pty"
 	"os"
 	"os/exec"
+
+	"github.com/creack/pty"
 )
 
 func startPTY(cmd *exec.Cmd, size *pty.Winsize) (*os.File, error) {

@@ -10,7 +10,7 @@ func TestPublicOriginsPortsAndSources(t *testing.T) {
 	if err := public.Set("tailscale", "https://node.tailnet.ts.net:8443"); err != nil {
 		t.Fatal(err)
 	}
-	cases := []struct {
+	tests := []struct {
 		name, host, origin string
 		want               bool
 	}{
@@ -23,7 +23,7 @@ func TestPublicOriginsPortsAndSources(t *testing.T) {
 		{"http origin", "term.example.com", "http://term.example.com", false},
 		{"unknown host", "evil.example.com", "https://evil.example.com", false},
 	}
-	for _, row := range cases {
+	for _, row := range tests {
 		if got := public.hostAllowed(row.host) && public.originAllowed(row.origin, row.host); got != row.want {
 			t.Errorf("%s: allowed=%v, want %v", row.name, got, row.want)
 		}
