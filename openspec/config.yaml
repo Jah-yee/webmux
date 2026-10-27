@@ -8,5 +8,5 @@ context: |
   The frontend uses Svelte 5, TypeScript, Vite, xterm.js, and shadcn-svelte.
   Use pnpm 12.11.2 for frontend dependencies.
   README.md and docs/ are overview documentation; do not add tasks to update them for every change.
-  make test runs Go race tests, Vitest unit/browser tests, and Playwright E2E tests.
+  make test is the full gate: Go race tests plus Vitest unit/browser, Storybook, Playwright E2E, and performance tests. make test-fast runs Go race tests plus Vitest unit/browser tests only.
   Do not use existing developer terminal sessions for automated tests.

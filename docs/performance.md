@@ -1,6 +1,6 @@
 # 布局稳定性与 4× CPU 回归
 
-`pnpm --dir web test:performance` 用独立的单 worker 测量嵌入式生产应用，不与普通 E2E 或 Vite 开发服务器共享浏览器、后端、HOME、工作目录或端口。每次调用先在私有临时目录构建前端和 Go 可执行文件，测试结束后清理。
+`pnpm --dir web test:performance` 用独立的单 worker 测量嵌入式生产应用，不与普通 E2E 或 Vite 开发服务器共享浏览器、后端、HOME、工作目录或端口。直接运行该命令时每次调用先在私有临时目录构建前端和 Go 可执行文件，测试结束后清理；`make test` 与 `make test-performance` 则复用 `.cache/webmux-e2e/webmux`。
 
 ## 判定条件
 

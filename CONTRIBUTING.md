@@ -55,7 +55,8 @@ pnpm --dir web dev    # http://127.0.0.1:5173
 | --------------------------- | --------------------------------------------------------------------------------- |
 | `make build`                | 构建前端并编译内嵌前端的 `bin/webmux`                                             |
 | `make release`              | 交叉编译 Linux / macOS 的 amd64 与 arm64 二进制                                   |
-| `make test`                 | Go race 测试 + 前端全部测试                                                       |
+| `make test`                 | 完整门禁：Go race 测试 + 前端全部测试（Storybook、E2E 与性能）                    |
+| `make test-fast`            | 快速迭代：Go race 测试 + Vitest 单元与组件测试，不含 Storybook、E2E 与性能        |
 | `make test-unit`            | Vitest 单元测试（Node）                                                           |
 | `make test-browser`         | Vitest 组件测试（无头 Chromium）                                                  |
 | `make test-e2e`             | Playwright 端到端测试（桌面 + Pixel 7）                                           |
@@ -76,10 +77,12 @@ pnpm --dir web exec playwright test test/e2e/terminal.spec.ts
 
 ## 测试
 
-- **Go**：标准 `testing` 包，始终使用 `-race`。
+`make test` 始终是完整门禁；日常迭代可用 `make test-fast`，或在需要时单独运行某一层。
+
+- **Go**：标准 `testing` 包，始终使用 `-race`；默认 `-parallel=4`，多核本机可提高 `GO_TEST_PARALLEL`（例如 `make test GO_TEST_PARALLEL=8`）。
 - **单元测试**：Vitest 在 Node 中运行。
 - **组件测试**：真实 Svelte / Tailwind / xterm 渲染，不需要后端。
-- **端到端测试**：每轮构建一次真实的生产前端和 Go 程序，各 worker 使用独立后端、临时 HOME、配置、工作目录与动态端口，结束后自动清理进程。测试不会连接你正在使用的 WebMux 服务。
+- **端到端测试**：`make test` 与 `make test-e2e` 先构建一次真实的生产前端和 `.cache/webmux-e2e/webmux`，并在本次调用内复用；直接运行 `pnpm --dir web test:e2e` 时仍在私有临时目录构建。各 worker 使用独立后端、临时 HOME、配置、工作目录与动态端口，结束后自动清理进程。本地默认最多 2 个 worker，可用 `WEBMUX_E2E_WORKERS=1` 回退串行；直接运行 Playwright 时可加 `--workers=N`。CI 保持 Ubuntu 2 个、macOS 4 个。测试不会连接你正在使用的 WebMux 服务。
 
 E2E 失败时的截图、trace 和日志位于 `web/playwright-report/` 与 `web/test-results/`，可通过 `pnpm --dir web test:e2e:report` 查看。
 
